@@ -7,7 +7,8 @@
   },
   "scripts": {
     "build-one": "tsx --env-file=../.env src/cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "serve": "tsx --env-file=../.env src/server.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
