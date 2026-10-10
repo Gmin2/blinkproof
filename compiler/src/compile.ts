@@ -8,6 +8,7 @@ export const BOARDS = {
   uno: { image: 'bp-avr', fqbn: 'arduino:avr:uno' },
   nano: { image: 'bp-avr', fqbn: 'arduino:avr:nano:cpu=atmega328' },
   mega: { image: 'bp-avr', fqbn: 'arduino:avr:mega' },
+  pico: { image: 'bp-pico', fqbn: 'rp2040:rp2040:rpipico' },
 } as const
 
 export type Board = keyof typeof BOARDS
@@ -23,6 +24,8 @@ export type Diagnostic = {
 export type CompileResult = {
   ok: boolean
   hex?: string
+  // the pico's firmware, a uf2 file as base64
+  uf2?: string
   // bytes used, from arduino-cli's summary
   flash?: number
   ram?: number
@@ -44,12 +47,15 @@ const LIBRARY_HEADERS = new Set([
   'stdint.h', 'stdlib.h', 'string.h', 'math.h', 'stdio.h', 'stdbool.h', 'ctype.h', 'limits.h',
 ])
 const HEADER_DIRS = ['avr/', 'util/', 'Fonts/']
+// the pico image has fewer libraries, its core brings its own Servo
+const NOT_ON_PICO = new Set(['Adafruit_Sensor.h', 'DHT.h', 'DHT_U.h', 'LiquidCrystal_I2C.h', 'SoftwareSerial.h', 'EEPROM.h'])
 
 const FILE_NAME = /^[A-Za-z0-9_-]+\.(ino|h|cpp|c)$/
 const MAX_BYTES = 200_000
 const CACHE = resolve(import.meta.dirname, '../../.cache/compile')
+const CORES = resolve(import.meta.dirname, '../../.cache/cores')
 
-export function checkSources(files: Record<string, string>) {
+export function checkSources(files: Record<string, string>, board: Board = 'uno') {
   const out: Diagnostic[] = []
   const bad = (file: string, line: number, message: string) =>
     out.push({ file, line, col: 1, severity: 'error', message })
@@ -64,6 +70,9 @@ export function checkSources(files: Record<string, string>) {
       if (!m) return
       const [, quote, header] = m
       if (quote === '"' && header in files) return
+      const pico = board === 'pico'
+      if (pico && NOT_ON_PICO.has(header)) return bad(name, i + 1, `library not available on the pico: ${header}`)
+      if (pico && header.startsWith('avr/')) return bad(name, i + 1, `${header} is for avr boards, the pico is an rp2040`)
       if (LIBRARY_HEADERS.has(header) || HEADER_DIRS.some((d) => header.startsWith(d))) return
       bad(name, i + 1, `library not available: ${header}. available: ${[...LIBRARY_HEADERS].filter((h) => /^[A-Z]/.test(h)).join(', ')}`)
     })
@@ -126,7 +135,7 @@ export async function compile(board: Board, files: Record<string, string>): Prom
   if (!target) {
     return { ok: false, diagnostics: [{ file: '', line: 0, col: 0, severity: 'error', message: `unknown board ${board}` }], log: '', ms: ms(), cached: false }
   }
-  const refused = checkSources(files)
+  const refused = checkSources(files, board)
   if (refused.length) return { ok: false, diagnostics: refused, log: '', ms: ms(), cached: false }
 
   // bump when the result shape changes, old cache entries are then ignored
@@ -139,22 +148,31 @@ export async function compile(board: Board, files: Record<string, string>): Prom
     return { ...hit, ms: ms(), cached: true }
   } catch {}
 
+  await mkdir(join(CORES, target.image), { recursive: true })
   const result = await slot(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-'))
     const sketch = join(dir, 'sketch')
     try {
       await mkdir(sketch)
       for (const [name, text] of Object.entries(files)) await writeFile(join(sketch, name), text)
+      const avr = target.image === 'bp-avr'
       const script = [
         `arduino-cli compile -b ${target.fqbn} --warnings default --output-dir /w/sketch/build /w/sketch`,
-        '/root/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-nm /w/sketch/build/sketch.ino.elf > /w/sketch/build/symbols.txt',
-      ].join(' && ')
+        avr && '/root/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-nm /w/sketch/build/sketch.ino.elf > /w/sketch/build/symbols.txt',
+      ].filter(Boolean).join(' && ')
       const { code, out } = await run('docker', [
         'run', '--rm', '--network', 'none', '--memory', '1g', '--cpus', '2',
+        // arduino-cli keeps compiled cores here, so a new sketch only compiles itself
+        '-v', `${CORES}/${target.image}:/root/.cache/arduino`,
         '-v', `${sketch}:/w/sketch`, target.image, 'sh', '-c', script,
       ], 90_000)
-      const hex = code === 0 ? await readFile(join(sketch, 'build', 'sketch.ino.hex'), 'utf8').catch(() => undefined) : undefined
-      const nm = hex ? await readFile(join(sketch, 'build', 'symbols.txt'), 'utf8').catch(() => '') : ''
+      const built = (f: string) => readFile(join(sketch, 'build', f)).catch(() => undefined)
+      if (!avr) {
+        const uf2 = code === 0 ? (await built('sketch.ino.uf2'))?.toString('base64') : undefined
+        return { ok: !!uf2, uf2, ...parseSizes(out), diagnostics: parseDiagnostics(out), log: out.trim(), ms: 0, cached: false }
+      }
+      const hex = code === 0 ? (await built('sketch.ino.hex'))?.toString('utf8') : undefined
+      const nm = hex ? ((await built('symbols.txt'))?.toString('utf8') ?? '') : ''
       return { ok: !!hex, hex, ...parseSizes(out), symbols: parseSymbols(nm), diagnostics: parseDiagnostics(out), log: out.trim(), ms: 0, cached: false }
     } finally {
       await rm(dir, { recursive: true, force: true })
