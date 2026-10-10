@@ -114,6 +114,24 @@ export class Circuit {
     return { circuit: new Circuit(d as Diagram), errors }
   }
 
+  // every part pin on the same copper as this one, itself included
+  peers(ref: string, throughResistors = false) {
+    const sets = throughResistors ? this.dc : this.wires
+    const root = sets.find(ref)
+    const out: string[] = []
+    for (const p of this.diagram.parts) {
+      for (const pin of PARTS[p.type].pins as string[]) {
+        if (sets.find(`${p.id}:${pin}`) === root) out.push(`${p.id}:${pin}`)
+      }
+    }
+    return out
+  }
+
+  // is anything at all wired to this pin
+  wired(ref: string) {
+    return this.peers(ref).length > 1
+  }
+
   attr(id: string, name: string) {
     return this.parts.get(id)?.attrs?.[name]
   }

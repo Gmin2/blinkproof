@@ -6,3 +6,4 @@ export { Circuit, type Diagram, type DiagramPart, type Connection } from './circ
 export { Bench, type PartState } from './bench'
 export { PARTS, type PartType } from './catalog'
 export { parseScenario, play, run, colorName, STEPS, type Scenario, type Step, type Report, type StepResult } from './scenario'
+export { checkRules, readSketch, type Finding } from './rules'
