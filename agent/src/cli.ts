@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { init, shutdown } from 'neatlogs'
+import { flush, init, shutdown } from 'neatlogs'
 import { build, type Event } from './agent.ts'
 
 // pnpm -C agent build-one "a night light that turns on when you press a button" [--model claude-haiku]
@@ -15,7 +15,7 @@ async function main() {
   if (!request) throw new Error('say what to build')
   if (!process.env.LITELLM_API_KEY) throw new Error('LITELLM_API_KEY missing, put it in blinkproof/.env')
 
-  await init({ apiKey: process.env.NEATLOGS_API_KEY, workflowName: 'blinkproof', flushInterval: 1 })
+  await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1 })
   if (!process.env.NEATLOGS_API_KEY) console.log('(no NEATLOGS_API_KEY, traces are not sent)')
 
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -31,7 +31,14 @@ async function main() {
     if (e.type === 'done') console.log(e.ok ? `done in ${e.turns} turns, ${e.tokens} tokens\n${e.summary}` : `gave up: ${e.reason}, ${e.tokens} tokens`)
   }
 
-  const result = await build(request, { model, sessionId: id, onEvent: show })
+  let result: Awaited<ReturnType<typeof build>>
+  try {
+    result = await build(request, { model, sessionId: id, onEvent: show })
+  } finally {
+    // a one-shot process, spans still in the batch are lost unless flushed before exit
+    await flush()
+    await shutdown()
+  }
   const out = resolve(import.meta.dirname, '../../tmp/claude/builds', id)
   mkdirSync(out, { recursive: true })
   const ws = result.workspace
@@ -40,7 +47,6 @@ async function main() {
   if (ws.test) writeFileSync(join(out, 'test.yaml'), ws.test)
   writeFileSync(join(out, 'result.json'), JSON.stringify({ request, passed: result.passed, turns: result.turns, tokens: result.tokens, tools: result.tools, report: ws.report }, null, 2))
   console.log(`saved to ${out}`)
-  await shutdown()
 }
 
 main().catch((e) => {
