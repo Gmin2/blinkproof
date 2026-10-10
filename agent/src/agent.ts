@@ -1,5 +1,6 @@
 import { PromptTemplate, span, trace, wrapOpenAI } from 'neatlogs'
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
+import { client as clientFor, findModel } from './models.ts'
 import { TOOLS, callTool, type Workspace } from './tools.ts'
 
 export const PROMPT_VERSION = 'v1'
@@ -37,7 +38,8 @@ export async function build(request: string, opts: Options = {}) {
   const model = opts.model ?? 'claude-sonnet-4.6'
   const maxTurns = opts.maxTurns ?? 30
   const emit = opts.onEvent ?? (() => {})
-  const client = wrapOpenAI(new OpenAI({ apiKey: process.env.LITELLM_API_KEY, baseURL: process.env.LITELLM_BASE_URL }))
+  const { provider } = await findModel(model)
+  const client = wrapOpenAI(clientFor(provider))
   const ws: Workspace = {}
   const counts: Record<string, number> = {}
 
@@ -52,7 +54,7 @@ export async function build(request: string, opts: Options = {}) {
       promptTemplate: SYSTEM,
       version: PROMPT_VERSION,
       tags: ['blinkproof', PROMPT_VERSION, ...(opts.tags ?? [])],
-      metadata: { request, model, board: 'uno' },
+      metadata: { request, model, provider, board: 'uno' },
     },
     async () => {
       emit({ type: 'start', request, model, version: PROMPT_VERSION })
@@ -67,7 +69,8 @@ export async function build(request: string, opts: Options = {}) {
       for (; turns < maxTurns && !summary; turns++) {
         const res = await client.chat.completions.create({
           model,
-          max_tokens: 8000,
+          // openai's newer models take max_completion_tokens and refuse max_tokens
+          ...(provider === 'openai' ? { max_completion_tokens: 8000 } : { max_tokens: 8000 }),
           messages,
           tools: TOOLS.map((t) => ({ type: 'function' as const, function: t as any })),
         })
