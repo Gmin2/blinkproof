@@ -1,6 +1,7 @@
 import { PinState } from 'avr8js'
 import { Circuit } from './circuit'
 import { Buzzer } from './parts/buzzer'
+import { Duty } from './parts/duty'
 import { HCSR04 } from './parts/hcsr04'
 import { Servo } from './parts/servo'
 import { SSD1306 } from './parts/ssd1306'
@@ -10,7 +11,7 @@ import { MHZ, Uno, type Symbols } from './uno'
 // what each part is doing, read by the canvas and by tests. a part that is not powered
 // or not wired to a pin it can use has null where its model would be
 export type PartState =
-  | { type: 'wokwi-led'; lit: boolean }
+  | { type: 'wokwi-led'; lit: boolean; brightness: number }
   | { type: 'wokwi-ssd1306'; oled: SSD1306 | null }
   | { type: 'wokwi-potentiometer'; position: number }
   | { type: 'wokwi-pushbutton'; pressed: boolean; presses: number }
@@ -75,11 +76,26 @@ export class Bench {
   }
 
   private led(id: string) {
-    const state = { type: 'wokwi-led' as const, lit: false }
+    const c = this.circuit
+    const state = { type: 'wokwi-led' as const, lit: false, brightness: 0 }
     this.parts[id] = state
-    // lit when current can flow from A to C, so a led put in backwards stays dark
+    const anode = `${id}:A`
+    const cathode = `${id}:C`
+    // a pin driving the led, high to light it (A side) or low to light it (C side, A on a rail)
+    const high = c.onGround(cathode, true) ? c.signal(anode, true) : undefined
+    const low = c.supply(anode, true) ? c.signal(cathode, true) : undefined
+    const pin = high ?? low
+    const duty = pin ? new Duty(this.uno, pin) : undefined
+    const window = MHZ / 50
     this.updates.push(() => {
-      state.lit = this.level(`${id}:A`) === true && this.level(`${id}:C`) === false
+      if (duty) {
+        const d = duty.over(this.uno.cpu.cycles, window)
+        state.brightness = Math.round((high ? d : 1 - d) * 100) / 100
+      } else {
+        // lit when current can flow from A to C, so a led put in backwards stays dark
+        state.brightness = this.level(anode) === true && this.level(cathode) === false ? 1 : 0
+      }
+      state.lit = state.brightness > 0.02
     })
   }
 
@@ -197,7 +213,7 @@ export class Bench {
   describe() {
     const out: string[] = []
     for (const [id, p] of Object.entries(this.parts)) {
-      if (p.type === 'wokwi-led') out.push(`${id}: ${p.lit ? 'lit' : 'dark'}`)
+      if (p.type === 'wokwi-led') out.push(`${id}: ${p.lit ? `lit ${Math.round(p.brightness * 100)}%` : 'dark'}`)
       if (p.type === 'wokwi-ssd1306') {
         const text = p.oled?.text()
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)

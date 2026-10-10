@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-nano", "id": "nano", "left": 0, "top": 0 },
+    { "type": "wokwi-resistor", "id": "r1", "left": 260, "top": -90, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led1", "left": 380, "top": -120, "attrs": { "color": "yellow" } },
+    { "type": "wokwi-potentiometer", "id": "knob", "left": 60, "top": 180, "attrs": { "value": "0" } }
+  ],
+  "connections": [
+    ["nano:9", "r1:1", "#f59e0b", []],
+    ["r1:2", "led1:A", "#f59e0b", []],
+    ["led1:C", "nano:GND.2", "#94a3b8", []],
+    ["knob:VCC", "nano:5V", "#ef4444", []],
+    ["knob:GND", "nano:GND.1", "#94a3b8", []],
+    ["knob:SIG", "nano:A7", "#22c55e", []]
+  ]
+}
