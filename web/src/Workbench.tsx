@@ -3,7 +3,8 @@ import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Fin
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
 import { Speaker } from './lib/speaker'
-import { route, split } from './lib/wires'
+import { routeAll, type Rect } from './lib/router'
+import { rounded, route, split, type Point } from './lib/wires'
 
 type Wokwi = HTMLElement & { pinInfo?: { name: string; x: number; y: number }[] } & Record<string, any>
 
@@ -82,21 +83,14 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   // wires come from where each part sits plus its pin offsets, so they stay put while parts animate in
   useLayoutEffect(() => {
     const id = requestAnimationFrame(() => {
-      let w = 0
-      let h = 0
+
+      const rects: Record<string, Rect> = {}
       for (const p of diagram.parts) {
         const el = els.current[p.id]
-        if (!el) continue
-        w = Math.max(w, (p.left ?? 0) + el.offsetWidth)
-        h = Math.max(h, (p.top ?? 0) + el.offsetHeight + (p.type === 'wokwi-hc-sr04' ? 40 : 0))
+        if (el) rects[p.id] = { x: p.left ?? 0, y: p.top ?? 0, w: el.offsetWidth, h: el.offsetHeight }
       }
-      const minX = Math.min(0, ...diagram.parts.map((p) => p.left ?? 0))
-      const minY = Math.min(0, ...diagram.parts.map((p) => p.top ?? 0))
-      const area = box.current!.getBoundingClientRect()
-      const scale = Math.min(1.25, (area.width - 80) / Math.max(1, w - minX), (area.height - 100) / Math.max(1, h - minY))
-      setFit({ x: 40 - minX * scale, y: 40 - minY * scale, scale })
-
       const out: { key: string; d: string; color: string }[] = []
+      const auto: { key: string; color: string; a: Point; b: Point; ra?: Rect; rb?: Rect }[] = []
       for (const c of diagram.connections) {
         const [from, to, color, hints] = c
         if (!color) continue
@@ -104,13 +98,32 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           const [id, pin] = split(ref)
           const p = diagram.parts.find((q) => q.id === id)
           const info = els.current[id]?.pinInfo?.find((q) => q.name === pin)
-          return p && info ? { x: (p.left ?? 0) + info.x, y: (p.top ?? 0) + info.y } : null
+          return p && info ? { at: { x: (p.left ?? 0) + info.x, y: (p.top ?? 0) + info.y }, rect: rects[id] } : null
         }
         const a = end(from)
         const b = end(to)
-        if (a && b) out.push({ key: wireKey(c), d: route(a, b, hints), color })
+        if (!a || !b) continue
+        // hand placed wires keep their wokwi hints, the rest go around the parts
+        if (hints?.length) out.push({ key: wireKey(c), d: route(a.at, b.at, hints), color })
+        else auto.push({ key: wireKey(c), color, a: a.at, b: b.at, ra: a.rect, rb: b.rect })
+      }
+      const points: Point[] = []
+      if (auto.length) {
+        const routes = routeAll(auto, Object.values(rects))
+        auto.forEach((w, i) => out.push({ key: w.key, d: rounded(routes[i], 6), color: w.color }))
+        points.push(...routes.flat())
       }
       setPaths(out)
+
+      // fit the parts and every wire into the canvas
+      const xs = [...Object.values(rects).flatMap((r) => [r.x, r.x + r.w]), ...points.map((p) => p.x)]
+      const ys = [...Object.values(rects).flatMap((r) => [r.y, r.y + r.h + 40]), ...points.map((p) => p.y)]
+      if (xs.length) {
+        const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+        const area = box.current!.getBoundingClientRect()
+        const scale = Math.min(1.25, (area.width - 80) / Math.max(1, maxX - minX), (area.height - 100) / Math.max(1, maxY - minY))
+        setFit({ x: 40 - minX * scale, y: 40 - minY * scale, scale })
+      }
     })
     return () => cancelAnimationFrame(id)
   }, [diagram])
