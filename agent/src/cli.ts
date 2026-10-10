@@ -15,7 +15,7 @@ async function main() {
   if (!request) throw new Error('say what to build')
   if (!process.env.LITELLM_API_KEY) throw new Error('LITELLM_API_KEY missing, put it in blinkproof/.env')
 
-  await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1 })
+  await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1, debug: !!process.env.NEATLOGS_DEBUG })
   if (!process.env.NEATLOGS_API_KEY) console.log('(no NEATLOGS_API_KEY, traces are not sent)')
 
   const id = new Date().toISOString().replace(/[:.]/g, '-')

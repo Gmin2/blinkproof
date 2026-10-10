@@ -41,6 +41,14 @@ export function BuildView({ sound }: { sound: boolean }) {
   const [request, setRequest] = useState(IDEAS[0])
   const [busy, setBusy] = useState(false)
   const [model, setModel] = useState('claude-haiku')
+  const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
+
+  useEffect(() => {
+    fetch('/agent/models')
+      .then((r) => r.json())
+      .then((list) => list.length && setModels(list))
+      .catch(() => {})
+  }, [])
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [diagram, setDiagram] = useState<Diagram | null>(null)
   const [source, setSource] = useState<string>()
@@ -226,8 +234,18 @@ export function BuildView({ sound }: { sound: boolean }) {
               {busy ? 'building...' : 'build it'}
             </button>
             <select value={model} onChange={(e) => setModel(e.target.value)} className="rounded-md bg-line px-2 font-mono text-[11px] text-dim outline-none">
-              <option value="claude-haiku">haiku</option>
-              <option value="claude-sonnet-4.6">sonnet</option>
+              {['litellm', 'anthropic', 'openai'].map((p) => {
+                const group = models.filter((m) => m.provider === p)
+                return group.length ? (
+                  <optgroup key={p} label={p === 'litellm' ? 'neatHack credits' : p}>
+                    {group.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null
+              })}
             </select>
             {canReplay && (
               <button onClick={replay} disabled={busy} className="rounded-md bg-line px-3 py-2 font-mono text-xs text-dim hover:text-ink disabled:opacity-50">

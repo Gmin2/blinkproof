@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { flush, init, shutdown } from 'neatlogs'
 import { build } from './agent.ts'
+import { listModels } from './models.ts'
 
 const PORT = Number(process.env.PORT ?? 5201)
 
@@ -14,6 +15,10 @@ async function main() {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' })
       return res.end(JSON.stringify({ ok: true, busy }))
+    }
+    if (req.method === 'GET' && req.url === '/models') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify(await listModels()))
     }
     if (req.method !== 'POST' || req.url !== '/build') {
       res.writeHead(404)
