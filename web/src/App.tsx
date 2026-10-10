@@ -1,5 +1,5 @@
 import '@wokwi/elements'
-import { Bench, Circuit, parseScenario, play, type Diagram, type Report, type StepResult } from '@blinkproof/sim'
+import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import blinkDiagram from '../../sketches/blink/diagram.json'
 import blinkSrc from '../../sketches/blink/blink.ino?raw'
@@ -120,6 +120,8 @@ class Speaker {
   }
 }
 
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 const split = (ref: string) => [ref.slice(0, ref.indexOf(':')), ref.slice(ref.indexOf(':') + 1)]
 
 export default function App() {
@@ -146,6 +148,7 @@ export default function App() {
   const benchRef = useRef<Bench | null>(null)
 
   const parsed = Circuit.parse(diagram)
+  const findings = parsed.circuit ? checkRules(parsed.circuit, source) : []
 
   useEffect(() => {
     let stale = false
@@ -385,6 +388,24 @@ export default function App() {
         </div>
 
         <aside className="flex w-80 flex-col border-l border-line bg-panel">
+          <div className="border-b border-line">
+            <div className="flex items-center justify-between px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-dim">
+              <span>wiring checks</span>
+              <span className={findings.some((f) => f.severity === 'error') ? 'text-[#f87171]' : 'text-accent'}>
+                {count(findings.filter((f) => f.severity === 'error').length, 'error')} · {count(findings.filter((f) => f.severity === 'warning').length, 'warning')}
+              </span>
+            </div>
+            {findings.length > 0 && (
+              <ul className="max-h-40 space-y-1.5 overflow-auto px-4 pb-3 font-mono text-[11px] leading-4">
+                {findings.map((f, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${f.severity === 'error' ? 'bg-[#f87171]' : f.severity === 'warning' ? 'bg-[#f59e0b]' : 'bg-dim'}`} />
+                    <span className={f.severity === 'info' ? 'text-dim' : 'text-ink'}>{f.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {testRun > 0 && (
             <div className="border-b border-line">
               <div className="flex items-center justify-between px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-dim">
