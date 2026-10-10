@@ -26,6 +26,9 @@ importers:
         specifier: 0.21.1
         version: 0.21.1
     devDependencies:
+      '@blinkproof/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2

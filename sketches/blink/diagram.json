@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "left": 60, "top": 150 },
+    { "type": "wokwi-resistor", "id": "r1", "left": 380, "top": 40, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led1", "left": 470, "top": 70, "attrs": { "color": "red" } }
+  ],
+  "connections": [
+    ["uno:13", "r1:1", "#f59e0b", []],
+    ["r1:2", "led1:A", "#f59e0b", []],
+    ["led1:C", "uno:GND.1", "#94a3b8", []]
+  ]
+}
