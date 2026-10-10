@@ -1,0 +1,22 @@
+name: parts tour reacts to distance and the button
+version: 1
+author: blinkproof
+steps:
+  - wait-serial: parts tour
+  - set-control: { part-id: sonar1, control: distance, value: 200 }
+  - delay: 300ms
+  - name: far away, nothing lit
+    expect-pixels: { part-id: ring1, lit: 0 }
+  - set-control: { part-id: sonar1, control: distance, value: 50 }
+  - delay: 300ms
+  - name: halfway, only green
+    expect-pixels: { part-id: ring1, min-lit: 6, max-lit: 10 }
+  - set-control: { part-id: sonar1, control: distance, value: 5 }
+  - delay: 300ms
+  - name: close, the last pixel is red
+    expect-pixels: { part-id: ring1, index: 15, color: red }
+  - expect-servo: { part-id: servo1, angle: 0 }
+  - set-control: { part-id: btn1, control: pressed, value: 1 }
+  - delay: 300ms
+  - name: button opens the gate
+    expect-servo: { part-id: servo1, angle: 90 }

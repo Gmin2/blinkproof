@@ -64,7 +64,7 @@ export class Bench {
   }
 
   // copper to a rail wins, then a pin the sketch drives, then a rail through a resistor
-  private level(ref: string) {
+  level(ref: string) {
     const c = this.circuit
     if (c.supply(ref)) return true
     if (c.onGround(ref)) return false
@@ -191,6 +191,31 @@ export class Bench {
 
   update() {
     for (const u of this.updates) u()
+  }
+
+  // one line per part, what a person looking at the bench would say. goes into test failures
+  describe() {
+    const out: string[] = []
+    for (const [id, p] of Object.entries(this.parts)) {
+      if (p.type === 'wokwi-led') out.push(`${id}: ${p.lit ? 'lit' : 'dark'}`)
+      if (p.type === 'wokwi-ssd1306') {
+        const text = p.oled?.text()
+        out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
+      }
+      if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
+      if (p.type === 'wokwi-pushbutton') out.push(`${id}: ${p.pressed ? 'pressed' : 'released'}, ${p.presses} presses`)
+      if (p.type === 'wokwi-neopixel' || p.type === 'wokwi-led-ring') {
+        if (!p.strip) out.push(`${id}: not powered or DIN not on a digital pin`)
+        else {
+          const lit = p.strip.pixels.filter((c) => c.some((v) => v > 0)).length
+          out.push(`${id}: ${lit} of ${p.strip.pixels.length} lit, ${p.strip.frames} frames${p.strip.bad ? `, ${p.strip.bad} bad pulses` : ''}`)
+        }
+      }
+      if (p.type === 'wokwi-servo') out.push(`${id}: ${!p.servo ? 'not powered or PWM not on a pin' : p.servo.pulses ? `${p.servo.angle} degrees` : 'no pulses yet'}`)
+      if (p.type === 'wokwi-hc-sr04') out.push(`${id}: ${!p.sensor ? 'not working (needs 5V, GND, TRIG and ECHO on pins)' : `${p.distance} cm away, ${p.sensor.pings} pings${p.sensor.short ? `, ${p.sensor.short} triggers too short` : ''}`}`)
+      if (p.type === 'wokwi-buzzer') out.push(`${id}: ${!p.buzzer ? 'not wired to a pin and GND' : p.buzzer.hz ? `${p.buzzer.hz} hz` : 'silent'}`)
+    }
+    return out.join('\n')
   }
 
   run(ms: number) {

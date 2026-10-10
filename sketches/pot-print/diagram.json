@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "left": 60, "top": 150 },
+    { "type": "wokwi-potentiometer", "id": "pot1", "left": 380, "top": 200 }
+  ],
+  "connections": [
+    ["pot1:VCC", "uno:5V", "red", []],
+    ["pot1:GND", "uno:GND.1", "black", []],
+    ["pot1:SIG", "uno:A0", "green", []]
+  ]
+}
