@@ -54,7 +54,7 @@ export const TOOLS = [
 - set-control: { part-id: btn1, control: pressed, value: 1 }
 - set-control: { part-id: sonar1, control: distance, value: 20 }
 - expect-pin: { part-id: led1, name: A, value: 1 }
-- expect-led: { part-id: led1, lit: true }
+- expect-led: { part-id: led1, lit: true } or for pwm { part-id: led1, min-brightness: 0.4, max-brightness: 0.6 }
 - wait-text: { part-id: oled1, contains: 'STOP', timeout: 1s }
 - expect-text: { part-id: oled1, contains: '20 cm' }
 - expect-pixels: { part-id: ring1, lit: 16 } or { part-id: ring1, min-lit: 4, max-lit: 8 } or { part-id: ring1, index: 0, color: red }
