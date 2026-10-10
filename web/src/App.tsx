@@ -1,11 +1,22 @@
 import '@wokwi/elements'
 import { SSD1306, Uno } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import blinkHex from '../../sketches/blink/build/blink.ino.hex?raw'
-import oledHex from '../../sketches/hello-oled/build/hello-oled.ino.hex?raw'
+import blinkSrc from '../../sketches/blink/blink.ino?raw'
+import oledSrc from '../../sketches/hello-oled/hello-oled.ino?raw'
 
-const SKETCHES = { blink: blinkHex, 'hello-oled': oledHex } as const
+const SKETCHES = { blink: blinkSrc, 'hello-oled': oledSrc } as const
 type Sketch = keyof typeof SKETCHES
+
+type Build = { ok: boolean; hex?: string; flash?: number; ram?: number; ms: number; cached: boolean; diagnostics: { line: number; message: string }[] }
+
+async function compile(source: string): Promise<Build> {
+  const res = await fetch('/api/compile', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ board: 'uno', files: { 'sketch.ino': source } }),
+  })
+  return res.json()
+}
 
 type Part = { id: string; tag: string; x: number; y: number; attrs?: Record<string, string> }
 
@@ -61,8 +72,24 @@ export default function App() {
   const [paths, setPaths] = useState<{ d: string; color: string }[]>([])
   const [sketch, setSketch] = useState<Sketch>('hello-oled')
   const [running, setRunning] = useState(true)
+  const runningRef = useRef(running)
+  runningRef.current = running
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
+  const [build, setBuild] = useState<Build | null>(null)
+  const [compileError, setCompileError] = useState('')
+
+  useEffect(() => {
+    let stale = false
+    setBuild(null)
+    setCompileError('')
+    compile(SKETCHES[sketch])
+      .then((b) => !stale && setBuild(b))
+      .catch(() => !stale && setCompileError('compiler not running, start it with pnpm -C compiler start'))
+    return () => {
+      stale = true
+    }
+  }, [sketch])
 
   useLayoutEffect(() => {
     // the elements size themselves after they upgrade, so measure on the next frame
@@ -82,7 +109,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const uno = new Uno(SKETCHES[sketch])
+    if (!build?.hex) return
+    const uno = new Uno(build.hex)
     const oled = uno.i2c.add(new SSD1306()) as SSD1306
     const { led, oled: screen, pot, uno: board } = els.current
     const image = screen.imageData as ImageData
@@ -97,7 +125,7 @@ export default function App() {
     const tick = (now: number) => {
       const dt = Math.min(50, now - last)
       last = now
-      if (running) uno.run(dt)
+      if (runningRef.current) uno.run(dt)
       led.value = uno.read('D13')
       board.led13 = uno.read('D13')
       board.ledPower = true
@@ -115,13 +143,21 @@ export default function App() {
       cancelAnimationFrame(raf)
       pot.removeEventListener('input', setPot)
     }
-  }, [sketch, running])
+  }, [build])
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
         <span className="font-mono text-sm font-semibold tracking-tight text-accent">blinkproof</span>
         <span className="text-xs text-dim">wokwi for agents</span>
+        <span className="font-mono text-[11px] text-dim">
+          {compileError ||
+            (!build
+              ? 'compiling...'
+              : build.ok
+                ? `compiled in ${(build.ms / 1000).toFixed(1)}s${build.cached ? ' (cached)' : ''} · flash ${build.flash} b · ram ${build.ram} of 2048 b`
+                : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           {(Object.keys(SKETCHES) as Sketch[]).map((s) => (
             <button
