@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "left": 60, "top": 220 },
+    { "type": "wokwi-led-ring", "id": "ring1", "left": 470, "top": 30, "attrs": { "pixels": "16" } },
+    { "type": "wokwi-hc-sr04", "id": "sonar1", "left": 470, "top": 420, "attrs": { "distance": "60" } },
+    { "type": "wokwi-servo", "id": "servo1", "left": 760, "top": 230 },
+    { "type": "wokwi-pushbutton", "id": "btn1", "left": 230, "top": 540, "attrs": { "color": "green" } },
+    { "type": "wokwi-buzzer", "id": "bz1", "left": 80, "top": 520 }
+  ],
+  "connections": [
+    ["ring1:DIN", "uno:6", "#22c55e", []],
+    ["ring1:VCC", "uno:5V", "#ef4444", []],
+    ["ring1:GND", "uno:GND.1", "#94a3b8", []],
+    ["sonar1:TRIG", "uno:9", "#f59e0b", []],
+    ["sonar1:ECHO", "uno:10", "#a78bfa", []],
+    ["sonar1:VCC", "uno:5V", "#ef4444", []],
+    ["sonar1:GND", "uno:GND.2", "#94a3b8", []],
+    ["servo1:PWM", "uno:3", "#f97316", []],
+    ["servo1:V+", "uno:5V", "#ef4444", []],
+    ["servo1:GND", "uno:GND.3", "#94a3b8", []],
+    ["btn1:1.l", "uno:2", "#38bdf8", []],
+    ["btn1:2.l", "uno:GND.3", "#94a3b8", []],
+    ["bz1:2", "uno:8", "#eab308", []],
+    ["bz1:1", "uno:GND.2", "#94a3b8", []]
+  ]
+}

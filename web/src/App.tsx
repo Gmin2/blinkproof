@@ -5,10 +5,13 @@ import blinkDiagram from '../../sketches/blink/diagram.json'
 import blinkSrc from '../../sketches/blink/blink.ino?raw'
 import oledDiagram from '../../sketches/hello-oled/diagram.json'
 import oledSrc from '../../sketches/hello-oled/hello-oled.ino?raw'
+import tourDiagram from '../../sketches/parts-tour/diagram.json'
+import tourSrc from '../../sketches/parts-tour/parts-tour.ino?raw'
 
 const SKETCHES = {
   blink: { source: blinkSrc, diagram: blinkDiagram as unknown as Diagram },
   'hello-oled': { source: oledSrc, diagram: oledDiagram as unknown as Diagram },
+  'parts-tour': { source: tourSrc, diagram: tourDiagram as unknown as Diagram },
 }
 type Sketch = keyof typeof SKETCHES
 
@@ -77,6 +80,35 @@ function rounded(points: Point[], r = 8) {
   return `${d} L ${last.x} ${last.y}`
 }
 
+// a passive buzzer through the speakers, quiet, a square wave like the real thing
+class Speaker {
+  private ctx: AudioContext | null = null
+  private osc: OscillatorNode | null = null
+  private gain: GainNode | null = null
+  on = false
+  play(hz: number) {
+    if (!this.on || !hz) return this.stop()
+    if (!this.ctx) {
+      this.ctx = new AudioContext()
+      this.gain = this.ctx.createGain()
+      this.gain.gain.value = 0.04
+      this.gain.connect(this.ctx.destination)
+    }
+    if (!this.osc) {
+      this.osc = this.ctx.createOscillator()
+      this.osc.type = 'square'
+      this.osc.connect(this.gain!)
+      this.osc.start()
+    }
+    this.osc.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.005)
+  }
+  stop() {
+    this.osc?.stop()
+    this.osc?.disconnect()
+    this.osc = null
+  }
+}
+
 const split = (ref: string) => [ref.slice(0, ref.indexOf(':')), ref.slice(ref.indexOf(':') + 1)]
 
 export default function App() {
@@ -92,6 +124,11 @@ export default function App() {
   const [simMs, setSimMs] = useState(0)
   const [build, setBuild] = useState<Build | null>(null)
   const [problem, setProblem] = useState('')
+  const speaker = useRef(new Speaker())
+  const [sound, setSound] = useState(false)
+  speaker.current.on = sound
+  const [sonars, setSonars] = useState<Record<string, number>>({})
+  const benchRef = useRef<Bench | null>(null)
 
   const parsed = Circuit.parse(diagram)
 
@@ -128,6 +165,9 @@ export default function App() {
   useEffect(() => {
     if (!build?.hex || !parsed.circuit) return
     const bench = new Bench(parsed.circuit, build.hex)
+    benchRef.current = bench
+    const strips = new Map<string, number>()
+    const distances: Record<string, number> = {}
     const cleanups: (() => void)[] = []
     const frames = new Map<string, number>()
 
@@ -138,6 +178,14 @@ export default function App() {
         el.addEventListener('input', onInput)
         cleanups.push(() => el.removeEventListener('input', onInput))
       }
+      if (part.type === 'wokwi-pushbutton') {
+        const down = () => bench.control(id, 'pressed', 1)
+        const up = () => bench.control(id, 'pressed', 0)
+        el.addEventListener('button-press', down)
+        el.addEventListener('button-release', up)
+        cleanups.push(() => (el.removeEventListener('button-press', down), el.removeEventListener('button-release', up)))
+      }
+      if (part.type === 'wokwi-hc-sr04') distances[id] = part.distance
       if (part.type === 'wokwi-ssd1306') {
         // dark until the sketch draws on it
         const px = (el.imageData as ImageData).data
@@ -145,6 +193,7 @@ export default function App() {
         el.redraw()
       }
     }
+    setSonars(distances)
     setSerial('')
     let raf = 0
     let last = performance.now()
@@ -156,6 +205,17 @@ export default function App() {
       for (const [id, part] of Object.entries(bench.parts)) {
         const el = els.current[id]
         if (part.type === 'wokwi-led') el.value = part.lit
+        if (part.type === 'wokwi-servo' && part.servo) el.angle = part.servo.angle
+        if (part.type === 'wokwi-buzzer') {
+          el.hasSignal = !!part.buzzer?.hz
+          speaker.current.play(part.buzzer?.hz ?? 0)
+        }
+        if ((part.type === 'wokwi-led-ring' || part.type === 'wokwi-neopixel') && part.strip && part.strip.frames !== strips.get(id)) {
+          strips.set(id, part.strip.frames)
+          const [first] = part.strip.pixels
+          if (part.type === 'wokwi-neopixel') Object.assign(el, { r: first[0] / 255, g: first[1] / 255, b: first[2] / 255 })
+          else part.strip.pixels.forEach(([r, g, b], i) => el.setPixel(i, { r: r / 255, g: g / 255, b: b / 255 }))
+        }
         if (part.type === 'wokwi-ssd1306' && part.oled && part.oled.frames !== frames.get(id)) {
           frames.set(id, part.oled.frames)
           part.oled.paint((el.imageData as ImageData).data)
@@ -172,6 +232,8 @@ export default function App() {
     raf = requestAnimationFrame(tick)
     return () => {
       cancelAnimationFrame(raf)
+      speaker.current.stop()
+      benchRef.current = null
       for (const c of cleanups) c()
     }
   }, [build])
@@ -203,6 +265,12 @@ export default function App() {
             </button>
           ))}
           <button
+            onClick={() => setSound((v) => !v)}
+            className="rounded-md bg-line px-3 py-1.5 font-mono text-xs text-ink hover:bg-[#283246]"
+          >
+            {sound ? 'sound on' : 'sound off'}
+          </button>
+          <button
             onClick={() => setRunning((r) => !r)}
             className="rounded-md bg-line px-3 py-1.5 font-mono text-xs text-ink hover:bg-[#283246]"
           >
@@ -229,6 +297,27 @@ export default function App() {
               </g>
             ))}
           </svg>
+          {Object.entries(sonars).map(([id, cm]) => {
+            const p = diagram.parts.find((q) => q.id === id)!
+            return (
+              <label key={id} className="absolute flex items-center gap-2 rounded-md bg-panel/90 px-2 py-1 font-mono text-[11px] text-dim" style={{ left: p.left ?? 0, top: (p.top ?? 0) + 95 }}>
+                distance
+                <input
+                  type="range"
+                  min={2}
+                  max={400}
+                  value={cm}
+                  className="w-32 accent-[#7cf29a]"
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setSonars((s) => ({ ...s, [id]: v }))
+                    benchRef.current?.control(id, 'distance', v)
+                  }}
+                />
+                <span className="w-12 text-ink">{cm} cm</span>
+              </label>
+            )
+          })}
           <div className="absolute bottom-3 left-4 font-mono text-[11px] text-dim">sim {(simMs / 1000).toFixed(2)}s</div>
         </div>
 
