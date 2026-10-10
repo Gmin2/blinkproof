@@ -31,7 +31,8 @@ const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = 
 }
 
 // what the sketch says, read crudely: constants, pinMode, analogWrite, Servo, tone, i2c addresses
-export function readSketch(src = '') {
+// on a pico a bare number is a GP pin, and A0 to A2 are GP26 to GP28
+export function readSketch(src = '', pico = false) {
   const code = src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
   const consts = new Map<string, string>()
   for (const m of code.matchAll(/(?:const\s+)?(?:int|byte|uint8_t|short|long)\s+(\w+)\s*=\s*(A?\d+)\s*;/g)) consts.set(m[1], m[2])
@@ -39,7 +40,9 @@ export function readSketch(src = '') {
   const pin = (expr: string) => {
     const e = expr.trim()
     const v = consts.get(e) ?? e
-    return /^A?\d+$/.test(v) ? (v.startsWith('A') ? v : `D${v}`) : undefined
+    if (!/^A?\d+$/.test(v)) return undefined
+    if (pico) return v.startsWith('A') ? `GP${26 + Number(v.slice(1))}` : `GP${v}`
+    return v.startsWith('A') ? v : `D${v}`
   }
   const modes = new Map<string, string>()
   for (const m of code.matchAll(/pinMode\s*\(\s*([^,]+?)\s*,\s*(\w+)\s*\)/g)) {
@@ -54,9 +57,13 @@ export function readSketch(src = '') {
 export function checkRules(c: Circuit, sketch?: string): Finding[] {
   const out: Finding[] = []
   const add = (rule: string, severity: Finding['severity'], parts: string[], message: string) => out.push({ rule, severity, parts, message })
-  const code = readSketch(sketch)
+  const pico = c.board.type === 'wokwi-pi-pico'
+  const code = readSketch(sketch, pico)
   const board = c.board.id
-  const boardName = c.board.type === 'wokwi-arduino-nano' ? 'nano' : 'uno'
+  const boardName = pico ? 'pico' : c.board.type === 'wokwi-arduino-nano' ? 'nano' : 'uno'
+  // what a gpio drives an led with
+  const logic = pico ? 3.3 : 5
+  const [SDA, SCL] = pico ? ['GP4', 'GP5'] : ['A4', 'A5']
 
   for (const p of c.diagram.parts) {
     const id = p.id
@@ -86,8 +93,13 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
         const series = c.diagram.parts.filter((r) => r.type === 'wokwi-resistor' && [anode, cathode].some((end) => c.peers(end).some((q) => q.startsWith(`${r.id}:`))))
         for (const r of series) {
           const ohms = Number(r.attrs?.value ?? 1000)
-          const ma = Math.round(((5 - (VF[color] ?? 2)) / ohms) * 1000)
-          if (ma > 20) add('led-resistor-small', 'warning', [id, r.id], `${r.id} is ${ohms} ohm, ${id} gets about ${ma} mA, over the 20 mA pin rating. use at least 220 ohm`)
+          const ma = Math.round(((logic - (VF[color] ?? 2)) / ohms) * 1000)
+          // the rp2040 drives 4 ma by default, 12 at most
+          const limit = pico ? 12 : 20
+          if (ma > limit) add('led-resistor-small', 'warning', [id, r.id], `${r.id} is ${ohms} ohm, ${id} gets about ${ma} mA, over the ${limit} mA a ${boardName} pin is good for. use at least ${pico ? 150 : 220} ohm`)
+        }
+        if (pico && ['blue', 'white'].includes(color) && c.signal(anode, true)) {
+          add('led-vf', 'warning', [id], `a ${color} led needs about 3.3 V forward, a 3.3 V pico pin barely lights it. use red or green, or switch it from VBUS with a transistor`)
         }
       }
       if (c.onGround(anode) && (c.signal(cathode, true) || c.supply(cathode, true))) {
@@ -118,8 +130,8 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
     if (p.type === 'wokwi-ssd1306') {
       const sda = c.signal(`${id}:DATA`)
       const scl = c.signal(`${id}:CLK`)
-      if ((sda && sda !== 'A4') || (scl && scl !== 'A5')) {
-        add('i2c-pins', 'error', [id], `the ${boardName} i2c pins are fixed: ${id}:DATA (SDA) to A4 and ${id}:CLK (SCL) to A5. now DATA is on ${sda ?? 'nothing'}, CLK on ${scl ?? 'nothing'}`)
+      if ((sda && sda !== SDA) || (scl && scl !== SCL)) {
+        add('i2c-pins', 'error', [id], `Wire on the ${boardName} is ${SDA} and ${SCL}: ${id}:DATA (SDA) to ${SDA} and ${id}:CLK (SCL) to ${SCL}. now DATA is on ${sda ?? 'nothing'}, CLK on ${scl ?? 'nothing'}`)
       }
       const address = Number(attrs.i2cAddress ?? '0x3c')
       for (const a of code.addresses) {
@@ -128,7 +140,7 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
     }
 
     if (p.type === 'wokwi-hc-sr04' && c.supply(`${id}:VCC`) && c.supply(`${id}:VCC`) < 5) {
-      add('sonar-5v', 'error', [id], `${id} is a 5 V part and does not range at 3.3 V. wire ${id}:VCC to 5V`)
+      add('sonar-5v', 'error', [id], `${id} is a 5 V part and does not range at 3.3 V. wire ${id}:VCC to ${pico ? 'VBUS' : '5V'}`)
     }
 
     if ((p.type === 'wokwi-led-ring' || p.type === 'wokwi-neopixel') && c.signal(`${id}:DIN`)) {
@@ -168,15 +180,38 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
     if (/^A[67]$/.test(pin) && ids.some((id) => c.parts.get(id)?.type !== 'wokwi-potentiometer')) {
       add('analog-only', 'error', ids, `${pin} on the nano is analog input only, it cannot drive or read a digital part. move ${ids.join(', ')} to a digital pin`)
     }
-    if (pin === 'D0' || pin === 'D1') add('serial-pins', 'warning', ids, `${pin} is the usb serial line, using it breaks Serial and can fail uploads. move ${ids.join(', ')} to another pin`)
+    if (!pico && (pin === 'D0' || pin === 'D1')) add('serial-pins', 'warning', ids, `${pin} is the usb serial line, using it breaks Serial and can fail uploads. move ${ids.join(', ')} to another pin`)
     if (ids.length > 1 && !(pin === 'A4' || pin === 'A5')) add('shared-pin', 'warning', ids, `${ids.join(' and ')} share ${pin}, give each its own pin`)
+  }
+
+  if (pico) {
+    for (const p of c.diagram.parts) {
+      // the rp2040 is not 5 v tolerant, a pin holds IOVDD + 0.5 = 3.8 V at most
+      const outputs: [string, string][] =
+        p.type === 'wokwi-hc-sr04' ? [['ECHO', 'VCC']] : p.type === 'wokwi-ssd1306' ? [['DATA', 'VIN'], ['CLK', 'VIN']] : []
+      for (const [out, vcc] of outputs) {
+        const gp = c.signal(`${p.id}:${out}`)
+        if (gp && c.supply(`${p.id}:${vcc}`) === 5) {
+          const why = p.type === 'wokwi-hc-sr04' ? 'its ECHO swings to 5 V' : 'the module pulls SDA and SCL up to its VIN'
+          add('five-volt-pin', 'error', [p.id], `${p.id} is on 5 V and ${why}, straight into ${gp}. the rp2040 takes 3.8 V at most. ${p.type === 'wokwi-hc-sr04' ? `put a divider on ECHO (1k from ECHO to ${gp}, 2k from ${gp} to GND)` : `power ${p.id} from 3V3`}`)
+        }
+      }
+      if (p.type === 'wokwi-potentiometer') {
+        const sig = c.signal(`${p.id}:SIG`)
+        if (sig && !/^GP2[678]$/.test(sig)) add('adc-pin', 'error', [p.id], `${p.id}:SIG is on ${sig}, the pico reads analog only on GP26, GP27 and GP28`)
+      }
+    }
+    for (const [pin, ids] of users) {
+      if (pin === 'GP25') add('onboard-led', 'warning', ids, 'GP25 drives the onboard led on a pico, pick another pin for parts')
+    }
   }
 
   for (const [pin, mode] of code.modes) {
     if (/^A[67]$/.test(pin)) add('analog-only', 'error', [board], `pinMode(${pin}, ${mode}) does nothing, A6 and A7 on the nano are analog input only. use analogRead(${pin})`)
   }
 
-  for (const pin of code.pwm) {
+  // every pico gpio has pwm
+  for (const pin of pico ? [] : code.pwm) {
     const n = Number(pin.replace(/^D/, ''))
     if (!pin.startsWith('D') || !UNO_PWM.includes(n)) add('pwm-pin', 'error', [board], `analogWrite on ${pin} does not fade, the ${boardName} has pwm on ${UNO_PWM.join(', ')} only`)
     else if (code.servo && (n === 9 || n === 10)) add('pwm-pin', 'warning', [board], `the Servo library takes timer1, analogWrite on ${pin} stops working. use pin 3, 5, 6 or 11`)

@@ -1,6 +1,7 @@
 export type Build = {
   ok: boolean
   hex?: string
+  uf2?: string
   symbols?: { brkval?: number; heapStart?: number }
   flash?: number
   ram?: number

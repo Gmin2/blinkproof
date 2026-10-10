@@ -186,7 +186,8 @@ export class Bench {
   private sonar(id: string) {
     const c = this.circuit
     const trig = c.signal(`${id}:TRIG`)
-    const echo = c.signal(`${id}:ECHO`)
+    // through resistors too: on a pico ECHO goes through a divider
+    const echo = c.signal(`${id}:ECHO`, true)
     const distance = Number(c.attr(id, 'distance') ?? 400)
     const sensor = trig && echo && this.powered(id, 'VCC', 'GND', 5) ? new HCSR04(this.board, trig, echo, distance) : null
     this.parts[id] = { type: 'wokwi-hc-sr04', sensor, distance }
