@@ -40,6 +40,7 @@ function note(name: string, r: Record<string, any>) {
 export function BuildView({ sound }: { sound: boolean }) {
   const [request, setRequest] = useState(IDEAS[0])
   const [busy, setBusy] = useState(false)
+  const [model, setModel] = useState('claude-haiku')
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [diagram, setDiagram] = useState<Diagram | null>(null)
   const [source, setSource] = useState<string>()
@@ -60,7 +61,9 @@ export function BuildView({ sound }: { sound: boolean }) {
     } catch {}
   }, [])
 
-  useEffect(() => feedEnd.current?.scrollIntoView({ block: 'end' }), [feed])
+  useEffect(() => {
+    feedEnd.current?.scrollIntoView({ block: 'end' })
+  }, [feed])
 
   const onState = (s: BenchState) => {
     setBench(s)
@@ -155,7 +158,7 @@ export function BuildView({ sound }: { sound: boolean }) {
       }
     })()
     try {
-      const res = await fetch('/agent/build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request }) })
+      const res = await fetch('/agent/build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request, model }) })
       if (!res.ok || !res.body) throw new Error(res.status === 409 ? 'a build is already running' : 'agent server not running, start it with pnpm -C agent serve')
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       let buf = ''
@@ -196,7 +199,9 @@ export function BuildView({ sound }: { sound: boolean }) {
     setBusy(false)
   }
 
-  useEffect(() => codeEnd.current?.scrollIntoView({ block: 'end' }), [code])
+  useEffect(() => {
+    codeEnd.current?.scrollIntoView({ block: 'end' })
+  }, [code])
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -220,6 +225,10 @@ export function BuildView({ sound }: { sound: boolean }) {
             <button onClick={start} disabled={busy} className="flex-1 rounded-md bg-accent px-3 py-2 font-mono text-xs font-semibold text-canvas disabled:opacity-50">
               {busy ? 'building...' : 'build it'}
             </button>
+            <select value={model} onChange={(e) => setModel(e.target.value)} className="rounded-md bg-line px-2 font-mono text-[11px] text-dim outline-none">
+              <option value="claude-haiku">haiku</option>
+              <option value="claude-sonnet-4.6">sonnet</option>
+            </select>
             {canReplay && (
               <button onClick={replay} disabled={busy} className="rounded-md bg-line px-3 py-2 font-mono text-xs text-dim hover:text-ink disabled:opacity-50">
                 replay last
@@ -253,7 +262,7 @@ export function BuildView({ sound }: { sound: boolean }) {
           </div>
         )}
         {verdict && (
-          <div className={`rise absolute left-1/2 top-4 w-[560px] max-w-[90%] -translate-x-1/2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${verdict.ok ? 'border-accent/40 bg-[#0f1f17]' : 'border-[#f87171]/40 bg-[#1f1012]'}`}>
+          <div className={`rise absolute bottom-10 left-1/2 w-[560px] max-w-[90%] -translate-x-1/2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${verdict.ok ? 'border-accent/40 bg-[#0f1f17]' : 'border-[#f87171]/40 bg-[#1f1012]'}`}>
             <div className={`font-mono text-xs font-semibold ${verdict.ok ? 'text-accent' : 'text-[#f87171]'}`}>
               {verdict.ok ? 'proven: the test passed' : 'not proven'} · {verdict.turns} turns · {verdict.tokens?.toLocaleString()} tokens
             </div>
