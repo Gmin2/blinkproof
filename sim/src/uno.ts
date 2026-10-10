@@ -51,6 +51,11 @@ export interface PinEvent {
   ms: number
 }
 
+// where avr-libc keeps its heap pointer, from the compiler's symbol table
+export type Symbols = { brkval?: number; heapStart?: number }
+
+const RAMEND = 0x8ff
+
 // enough history for a test to look back a few seconds without the browser filling up
 const TIMELINE = 20_000
 
@@ -65,8 +70,14 @@ export class Uno {
   private listeners: ((e: PinEvent) => void)[] = []
   private serialListeners: ((text: string) => void)[] = []
   private line = ''
+  private symbols: Symbols
+  // the lowest the stack pointer has been
+  minSp = RAMEND
+  // when the stack first grew down into the heap, the moment memory got corrupted
+  collidedAtMs?: number
 
-  constructor(hex: string) {
+  constructor(hex: string, symbols: Symbols = {}) {
+    this.symbols = symbols
     // 2k of ram like the real chip, avr8js defaults to 8k which hides out of memory bugs
     this.cpu = new CPU(loadHex(hex), 2048)
     new AVRTimer(this.cpu, timer0Config)
@@ -103,6 +114,21 @@ export class Uno {
         })
       })
     }
+  }
+
+  // the top of the heap: what malloc has handed out so far
+  heapEnd() {
+    const { brkval, heapStart } = this.symbols
+    if (brkval === undefined || heapStart === undefined) return undefined
+    const v = this.cpu.data[brkval] | (this.cpu.data[brkval + 1] << 8)
+    return v || heapStart
+  }
+
+  // bytes between the heap and the stack, now and at the tightest moment so far
+  memory() {
+    const heap = this.heapEnd()
+    if (heap === undefined) return undefined
+    return { free: this.cpu.SP - heap, leastFree: this.minSp - heap, heapBytes: heap - this.symbols.heapStart! }
   }
 
   get ms() {
@@ -159,6 +185,14 @@ export class Uno {
     while (cpu.cycles < end) {
       avrInstruction(cpu)
       cpu.tick()
+      const sp = cpu.SP
+      if (sp < this.minSp) {
+        this.minSp = sp
+        if (this.collidedAtMs === undefined) {
+          const heap = this.heapEnd()
+          if (heap !== undefined && sp < heap) this.collidedAtMs = this.ms
+        }
+      }
     }
   }
 

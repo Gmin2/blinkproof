@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "left": 60, "top": 220 },
+    { "type": "wokwi-hc-sr04", "id": "sonar1", "left": 470, "top": 470, "attrs": { "distance": "200" } },
+    { "type": "wokwi-led-ring", "id": "ring1", "left": 470, "top": 30, "attrs": { "pixels": "16" } },
+    { "type": "wokwi-ssd1306", "id": "oled1", "left": 720, "top": 250 },
+    { "type": "wokwi-buzzer", "id": "bz1", "left": 110, "top": 560 }
+  ],
+  "connections": [
+    ["sonar1:TRIG", "uno:9", "#f59e0b", []],
+    ["sonar1:ECHO", "uno:10", "#a78bfa", []],
+    ["sonar1:VCC", "uno:5V", "#ef4444", []],
+    ["sonar1:GND", "uno:GND.2", "#94a3b8", []],
+    ["ring1:DIN", "uno:6", "#22c55e", []],
+    ["ring1:VCC", "uno:5V", "#ef4444", []],
+    ["ring1:GND", "uno:GND.1", "#94a3b8", []],
+    ["oled1:DATA", "uno:A4", "#38bdf8", []],
+    ["oled1:CLK", "uno:A5", "#818cf8", []],
+    ["oled1:VIN", "uno:5V", "#ef4444", []],
+    ["oled1:GND", "uno:GND.3", "#94a3b8", []],
+    ["bz1:2", "uno:8", "#eab308", []],
+    ["bz1:1", "uno:GND.3", "#94a3b8", []]
+  ]
+}

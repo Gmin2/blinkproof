@@ -1,0 +1,23 @@
+name: parking sensor guides the car in
+version: 1
+author: blinkproof
+steps:
+  - wait-serial: parking sensor ready
+  - set-control: { part-id: sonar1, control: distance, value: 200 }
+  - delay: 300ms
+  - name: empty garage says OK, ring dark, quiet
+    expect-text: { part-id: oled1, contains: OK }
+  - expect-pixels: { part-id: ring1, lit: 0 }
+  - expect-tone: { part-id: bz1, silent: true }
+  - set-control: { part-id: sonar1, control: distance, value: 60 }
+  - delay: 400ms
+  - name: car coming in, slow down
+    wait-text: { part-id: oled1, contains: SLOW, timeout: 500ms }
+  - expect-text: { part-id: oled1, contains: 59 cm }
+  - expect-pixels: { part-id: ring1, min-lit: 4, max-lit: 10 }
+  - set-control: { part-id: sonar1, control: distance, value: 6 }
+  - delay: 300ms
+  - name: stop, ring all red at the end, long tone
+    expect-text: { part-id: oled1, contains: STOP }
+  - expect-pixels: { part-id: ring1, index: 15, color: red }
+  - expect-tone: { part-id: bz1, hz: 1500 }
