@@ -1,5 +1,5 @@
 import { PinState } from 'avr8js'
-import { ConsoleLogger, GPIOPinState, LogLevel, Simulator, USBCDC } from 'rp2040js'
+import { GPIOPinState, Simulator, USBCDC } from 'rp2040js'
 import type { Board, PinEvent } from './board'
 import type { I2CDevice } from './i2c'
 import { bootromB1 } from './pico-bootrom'
@@ -76,7 +76,9 @@ export class Pico implements Board {
 
   constructor(uf2: string | Uint8Array) {
     const mcu = this.mcu
-    mcu.logger = new ConsoleLogger(LogLevel.Error)
+    // firmware pokes registers rp2040js does not model, it says so on every write. keep the console quiet
+    const quiet = () => {}
+    mcu.logger = { debug: quiet, info: quiet, warn: quiet, error: quiet }
     mcu.loadBootrom(bootromB1)
     const bytes = typeof uf2 === 'string' ? Uint8Array.from(atob(uf2), (c) => c.charCodeAt(0)) : uf2
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
