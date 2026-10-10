@@ -142,8 +142,8 @@ export class Circuit {
 
   // the rail a pin is on, 5 or 3.3, or 0 when it reaches no supply. VIN is not one: on usb
   // power the uno feeds nothing back out of it
-  supply(ref: string) {
-    const pins = this.boardPins(ref)
+  supply(ref: string, throughResistors = false) {
+    const pins = this.boardPins(ref, throughResistors)
     if (pins.includes('5V')) return 5
     if (pins.includes('3.3V')) return 3.3
     return 0

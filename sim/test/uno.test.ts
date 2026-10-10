@@ -6,7 +6,8 @@ describe('uno', async () => {
   it('blinks d13 every 500ms and prints on serial', async () => {
     const uno = new Uno(await hex('blink'))
     uno.run(2100)
-    const d13 = uno.timeline.filter((e) => e.pin === 'D13')
+    // the first change is pinMode making it an output
+    const d13 = uno.timeline.filter((e) => e.pin === 'D13').slice(1)
     expect(d13.length).toBeGreaterThanOrEqual(4)
     const gaps = d13.slice(1).map((e, i) => e.ms - d13[i].ms)
     for (const g of gaps) expect(g).toBeCloseTo(500, -1)

@@ -44,9 +44,15 @@ export function pinOf(name: string) {
 
 export interface PinEvent {
   pin: string
+  // what the pin does now: driven low or high, or an input with or without its pull-up
+  state: PinState
   high: boolean
+  cycles: number
   ms: number
 }
+
+// enough history for a test to look back a few seconds without the browser filling up
+const TIMELINE = 20_000
 
 export class Uno {
   cpu: CPU
@@ -83,10 +89,18 @@ export class Uno {
     this.adc = new AVRADC(this.cpu, adcConfig)
     this.i2c = new I2CBus(new AVRTWI(this.cpu, twiConfig, MHZ))
 
-    for (const [name, [port, bit]] of Object.entries(PINS)) {
-      if (name.startsWith('D') && Number(name.slice(1)) >= 14) continue
-      this.ports[port].addListener((value, old) => {
-        if (((value ^ old) >> bit) & 1) this.emit(name, ((value >> bit) & 1) === 1)
+    // the port tells us when PORT or DDR is written, we report the pins whose state changed
+    for (const port of ['B', 'C', 'D'] as Port[]) {
+      const pins = Object.entries(PINS).filter(([n, [p]]) => p === port && !(n.startsWith('D') && Number(n.slice(1)) >= 14))
+      const last = pins.map(([, [, bit]]) => this.ports[port].pinState(bit))
+      this.ports[port].addListener(() => {
+        pins.forEach(([name, [, bit]], i) => {
+          const state = this.ports[port].pinState(bit)
+          if (state !== last[i]) {
+            last[i] = state
+            this.emit(name, state)
+          }
+        })
       })
     }
   }
@@ -95,9 +109,10 @@ export class Uno {
     return (this.cpu.cycles / MHZ) * 1000
   }
 
-  private emit(pin: string, high: boolean) {
-    const e = { pin, high, ms: this.ms }
+  private emit(pin: string, state: PinState) {
+    const e = { pin, state, high: state === PinState.High, cycles: this.cpu.cycles, ms: this.ms }
     this.timeline.push(e)
+    if (this.timeline.length > TIMELINE * 1.5) this.timeline.splice(0, this.timeline.length - TIMELINE)
     for (const l of this.listeners) l(e)
   }
 
@@ -106,8 +121,18 @@ export class Uno {
     return () => (this.listeners = this.listeners.filter((l) => l !== fn))
   }
 
+  // something outside the chip, at an exact cycle, like an echo coming back
+  at(cycles: number, fn: () => void) {
+    this.cpu.addClockEvent(fn, Math.max(1, Math.round(cycles - this.cpu.cycles)))
+  }
+
   onSerialLine(fn: (line: string) => void) {
     this.serialListeners.push(fn)
+  }
+
+  state(name: string) {
+    const [port, bit] = pinOf(name)
+    return this.ports[port].pinState(bit)
   }
 
   // the level the sketch drives on a pin
