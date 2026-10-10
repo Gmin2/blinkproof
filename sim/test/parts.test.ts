@@ -27,7 +27,7 @@ describe('neopixel ring', () => {
     const b = bench([ring], wires, await build(source('parts-ring')))
     b.run(50)
     const strip = get<'wokwi-led-ring'>(b, 'ring1').strip!
-    expect(b.uno.serial).toContain('shown')
+    expect(b.board.serial).toContain('shown')
     expect(strip.frames).toBe(1)
     expect(strip.bad).toBe(0)
     expect(strip.pixels[0]).toEqual([255, 0, 0])
@@ -40,7 +40,7 @@ describe('neopixel ring', () => {
   it('stays dark when the sketch forgets begin(), the pin never becomes an output', async () => {
     const b = bench([ring], wires, await build(source('parts-ring').replace('ring.begin();', '')))
     b.run(50)
-    expect(b.uno.serial).toContain('shown')
+    expect(b.board.serial).toContain('shown')
     expect(get<'wokwi-led-ring'>(b, 'ring1').strip!.frames).toBe(0)
   })
 
@@ -78,19 +78,19 @@ describe('hc-sr04', () => {
     const b = bench([{ id: 'sonar', type: 'wokwi-hc-sr04', attrs: { distance: '100' } }], wires, await build(source('parts-sonar')))
     b.run(200)
     // pulseIn counts loop passes and reads a hair short, 5800 us comes back as 99 cm like on a real board
-    for (const d of cm(b.uno.serial)) expect(d).toBeGreaterThanOrEqual(99), expect(d).toBeLessThanOrEqual(100)
+    for (const d of cm(b.board.serial)) expect(d).toBeGreaterThanOrEqual(99), expect(d).toBeLessThanOrEqual(100)
     b.control('sonar', 'distance', 12)
-    const from = b.uno.serial.length
+    const from = b.board.serial.length
     b.run(200)
-    expect(cm(b.uno.serial.slice(from)).at(-1)).toBeOneOf([11, 12])
+    expect(cm(b.board.serial.slice(from)).at(-1)).toBeOneOf([11, 12])
   })
 
   it('gives nothing on 3.3 v, pulseIn times out and the sketch prints 0', async () => {
     const b = bench([{ id: 'sonar', type: 'wokwi-hc-sr04', attrs: { distance: '100' } }], [...wires.slice(0, 2), ['sonar:VCC', 'uno:3.3V'], wires[3]], await build(source('parts-sonar')))
     b.run(300)
     expect(get<'wokwi-hc-sr04'>(b, 'sonar').sensor).toBeNull()
-    expect(b.uno.serial).toContain('cm 0')
-    expect(b.uno.serial).not.toContain('cm 99')
+    expect(b.board.serial).toContain('cm 0')
+    expect(b.board.serial).not.toContain('cm 99')
   })
 
   it('ignores a trigger shorter than 10 us', async () => {
@@ -129,14 +129,14 @@ describe('pushbutton', () => {
       b.control('btn', 'pressed', 0)
       b.run(100)
     }
-    expect(b.uno.serial.trim().split('\n').pop()).toBe('presses 3')
+    expect(b.board.serial.trim().split('\n').pop()).toBe('presses 3')
   })
 
   it('reads noise when the pin floats with plain INPUT', async () => {
     const b = bench([{ id: 'btn', type: 'wokwi-pushbutton' }], wires, await build(source('parts-button').replace('INPUT_PULLUP', 'INPUT')))
     b.run(2000)
     // nobody pressed it, but a floating pin counts presses anyway
-    expect(b.uno.serial).toMatch(/presses \d+/)
+    expect(b.board.serial).toMatch(/presses \d+/)
   })
 
   it('a button to 5v with a pull-down resistor works too', async () => {
@@ -150,6 +150,6 @@ describe('pushbutton', () => {
     b.run(100)
     b.control('btn', 'pressed', 0)
     b.run(100)
-    expect(b.uno.serial.trim()).toBe('presses 1')
+    expect(b.board.serial.trim()).toBe('presses 1')
   })
 })

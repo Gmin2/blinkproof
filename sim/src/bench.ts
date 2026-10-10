@@ -6,7 +6,9 @@ import { HCSR04 } from './parts/hcsr04'
 import { Servo } from './parts/servo'
 import { SSD1306 } from './parts/ssd1306'
 import { WS2812 } from './parts/ws2812'
-import { MHZ, Uno, type Symbols } from './uno'
+import type { Board } from './board'
+import { Pico } from './pico'
+import { Uno, type Symbols } from './uno'
 
 // what each part is doing, read by the canvas and by tests. a part that is not powered
 // or not wired to a pin it can use has null where its model would be
@@ -19,7 +21,10 @@ export type PartState =
   | { type: 'wokwi-servo'; servo: Servo | null }
   | { type: 'wokwi-hc-sr04'; sensor: HCSR04 | null; distance: number }
   | { type: 'wokwi-buzzer'; buzzer: Buzzer | null }
-  | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' }
+  | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' | 'wokwi-pi-pico' }
+
+const isDigital = (pin: string) => /^(D\d+|GP\d+)$/.test(pin)
+const isAnalog = (pin: string) => /^(A\d|GP2[678])$/.test(pin)
 
 // same seed every run, so a floating pin or a bouncing button reads the same in every test
 function noise(seed: number) {
@@ -33,15 +38,18 @@ function noise(seed: number) {
 // a circuit and a sketch on the bench: the uno runs the hex, every part behaves the way it is wired.
 // a part on the wrong pin does what it would do on a real board, which is usually nothing
 export class Bench {
-  uno: Uno
+  board: Board
   circuit: Circuit
   parts: Record<string, PartState> = {}
   private updates: (() => void)[] = []
   private random = noise(7)
+  private pico: boolean
 
-  constructor(circuit: Circuit, hex: string, symbols?: Symbols) {
+  // firmware is an intel hex for the uno and nano, a base64 uf2 for the pico
+  constructor(circuit: Circuit, firmware: string, symbols?: Symbols) {
     this.circuit = circuit
-    this.uno = new Uno(hex, symbols)
+    this.pico = circuit.board.type === 'wokwi-pi-pico'
+    this.board = this.pico ? new Pico(firmware) : new Uno(firmware, symbols)
     for (const p of circuit.diagram.parts) {
       const id = p.id
       switch (p.type) {
@@ -70,7 +78,7 @@ export class Bench {
     if (c.supply(ref)) return true
     if (c.onGround(ref)) return false
     const pin = c.signal(ref, true)
-    if (pin) return this.uno.read(pin)
+    if (pin) return this.board.read(pin)
     if (c.onGround(ref, true)) return false
     return undefined
   }
@@ -85,11 +93,11 @@ export class Bench {
     const high = c.onGround(cathode, true) ? c.signal(anode, true) : undefined
     const low = c.supply(anode, true) ? c.signal(cathode, true) : undefined
     const pin = high ?? low
-    const duty = pin ? new Duty(this.uno, pin) : undefined
-    const window = MHZ / 50
+    const duty = pin ? new Duty(this.board, pin) : undefined
+    const window = this.board.hz / 50
     this.updates.push(() => {
       if (duty) {
-        const d = duty.over(this.uno.cpu.cycles, window)
+        const d = duty.over(this.board.cycles, window)
         state.brightness = Math.round((high ? d : 1 - d) * 100) / 100
       } else {
         // lit when current can flow from A to C, so a led put in backwards stays dark
@@ -102,10 +110,11 @@ export class Bench {
   private oled(id: string) {
     const c = this.circuit
     const powered = this.powered(id, 'VIN', 'GND') || this.powered(id, '3V3', 'GND')
-    const sda = c.signal(`${id}:DATA`) === 'A4'
-    const scl = c.signal(`${id}:CLK`) === 'A5'
+    // Wire is on A4 and A5 on the arduinos, GP4 and GP5 on the pico
+    const sda = c.signal(`${id}:DATA`) === (this.pico ? 'GP4' : 'A4')
+    const scl = c.signal(`${id}:CLK`) === (this.pico ? 'GP5' : 'A5')
     const address = Number(c.attr(id, 'i2cAddress') ?? '0x3c')
-    const oled = powered && sda && scl ? (this.uno.i2c.add(new SSD1306(address)) as SSD1306) : null
+    const oled = powered && sda && scl ? (this.board.i2c.add(new SSD1306(address)) as SSD1306) : null
     this.parts[id] = { type: 'wokwi-ssd1306', oled }
   }
 
@@ -115,11 +124,11 @@ export class Bench {
     const state = { type: 'wokwi-potentiometer' as const, position: start }
     this.parts[id] = state
     const pin = c.signal(`${id}:SIG`)
-    if (!pin?.startsWith('A')) return
+    if (!pin || !isAnalog(pin)) return
     const vcc = c.supply(`${id}:VCC`)
     const grounded = c.onGround(`${id}:GND`)
     this.updates.push(() => {
-      this.uno.setVolts(pin, vcc && grounded ? state.position * vcc : 0)
+      this.board.setVolts(pin, vcc && grounded ? state.position * vcc : 0)
     })
   }
 
@@ -146,30 +155,30 @@ export class Bench {
         was = state.pressed
         if (state.pressed) state.presses++
         // contacts chatter for a millisecond or two after they move
-        if (bounces) settle = this.uno.cpu.cycles + (1 + this.random() * 2) * (MHZ / 1000)
+        if (bounces) settle = this.board.cycles + (1 + this.random() * 2) * (this.board.hz / 1000)
       }
-      const mode = this.uno.state(pin)
+      const mode = this.board.state(pin)
       if (mode === PinState.High || mode === PinState.Low) return
       const resting = pull ?? (mode === PinState.InputPullUp ? true : this.random() < 0.5)
       let level = state.pressed && far !== undefined ? far : resting
-      if (this.uno.cpu.cycles < settle && this.random() < 0.5) level = !level
+      if (this.board.cycles < settle && this.random() < 0.5) level = !level
       if (level !== driven) {
         driven = level
-        this.uno.drive(pin, level)
+        this.board.drive(pin, level)
       }
     })
   }
 
   private strip(id: string, type: 'wokwi-neopixel' | 'wokwi-led-ring', vcc: string, gnd: string, count: number) {
     const pin = this.circuit.signal(`${id}:DIN`)
-    const strip = pin?.startsWith('D') && this.powered(id, vcc, gnd) ? new WS2812(this.uno, pin, count) : null
+    const strip = pin && isDigital(pin) && this.powered(id, vcc, gnd) ? new WS2812(this.board, pin, count) : null
     this.parts[id] = { type, strip }
-    if (strip) this.updates.push(() => strip.check(this.uno.cpu.cycles))
+    if (strip) this.updates.push(() => strip.check(this.board.cycles))
   }
 
   private servo(id: string) {
     const pin = this.circuit.signal(`${id}:PWM`)
-    const servo = pin && this.powered(id, 'V+', 'GND', 4.8) ? new Servo(this.uno, pin) : null
+    const servo = pin && this.powered(id, 'V+', 'GND', 4.8) ? new Servo(this.board, pin) : null
     this.parts[id] = { type: 'wokwi-servo', servo }
   }
 
@@ -179,7 +188,7 @@ export class Bench {
     const trig = c.signal(`${id}:TRIG`)
     const echo = c.signal(`${id}:ECHO`)
     const distance = Number(c.attr(id, 'distance') ?? 400)
-    const sensor = trig && echo && this.powered(id, 'VCC', 'GND', 5) ? new HCSR04(this.uno, trig, echo, distance) : null
+    const sensor = trig && echo && this.powered(id, 'VCC', 'GND', 5) ? new HCSR04(this.board, trig, echo, distance) : null
     this.parts[id] = { type: 'wokwi-hc-sr04', sensor, distance }
   }
 
@@ -187,9 +196,9 @@ export class Bench {
     const c = this.circuit
     const [pin, gnd] = c.signal(`${id}:2`) ? [`${id}:2`, `${id}:1`] : [`${id}:1`, `${id}:2`]
     const signal = c.signal(pin)
-    const buzzer = signal && c.onGround(gnd) ? new Buzzer(this.uno, signal) : null
+    const buzzer = signal && c.onGround(gnd) ? new Buzzer(this.board, signal) : null
     this.parts[id] = { type: 'wokwi-buzzer', buzzer }
-    if (buzzer) this.updates.push(() => buzzer.check(this.uno.cpu.cycles))
+    if (buzzer) this.updates.push(() => buzzer.check(this.board.cycles))
   }
 
   // a person turning a knob, pressing a button, or moving the car closer
@@ -231,10 +240,10 @@ export class Bench {
       if (p.type === 'wokwi-hc-sr04') out.push(`${id}: ${!p.sensor ? 'not working (needs 5V, GND, TRIG and ECHO on pins)' : `${p.distance} cm away, ${p.sensor.pings} pings${p.sensor.short ? `, ${p.sensor.short} triggers too short` : ''}`}`)
       if (p.type === 'wokwi-buzzer') out.push(`${id}: ${!p.buzzer ? 'not wired to a pin and GND' : p.buzzer.hz ? `${p.buzzer.hz} hz` : 'silent'}`)
     }
-    const mem = this.uno.memory()
+    const mem = this.board.memory()
     if (mem) {
-      out.push(this.uno.collidedAtMs !== undefined
-        ? `ram: the stack ran into the heap at ${Math.round(this.uno.collidedAtMs)}ms, memory is corrupted`
+      out.push(this.board.collidedAtMs !== undefined
+        ? `ram: the stack ran into the heap at ${Math.round(this.board.collidedAtMs)}ms, memory is corrupted`
         : `ram: ${mem.leastFree} bytes free at the tightest moment, heap ${mem.heapBytes} bytes`)
     }
     return out.join('\n')
@@ -242,9 +251,9 @@ export class Bench {
 
   run(ms: number) {
     // parts look at the pins every millisecond of sim time, timed parts act on exact cycles
-    const end = this.uno.ms + ms
-    while (this.uno.ms < end) {
-      this.uno.run(Math.min(1, end - this.uno.ms))
+    const end = this.board.ms + ms
+    while (this.board.ms < end) {
+      this.board.run(Math.min(1, end - this.board.ms))
       this.update()
     }
   }

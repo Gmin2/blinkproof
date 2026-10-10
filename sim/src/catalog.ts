@@ -18,6 +18,13 @@ export const PARTS = {
     same: [['GND.1', 'GND.2', 'GND.3'], ['5V', '5V.2'], ['11', '11.2'], ['12', '12.2'], ['13', '13.2'], ['RESET', 'RESET.2', 'RESET.3']],
     board: true,
   },
+  // diagram type as wokwi names it, we draw it ourselves
+  'wokwi-pi-pico': {
+    pins: [...Array.from({ length: 23 }, (_, i) => `GP${i}`), 'GP26', 'GP27', 'GP28',
+      ...Array.from({ length: 8 }, (_, i) => `GND.${i + 1}`), 'VBUS', 'VSYS', '3V3_EN', '3V3', 'ADC_VREF', 'RUN'],
+    same: [Array.from({ length: 8 }, (_, i) => `GND.${i + 1}`)],
+    board: true,
+  },
   'wokwi-led': { pins: ['A', 'C'] },
   'wokwi-resistor': { pins: ['1', '2'] },
   'wokwi-pushbutton': { pins: ['1.l', '2.l', '1.r', '2.r'], same: [['1.l', '1.r'], ['2.l', '2.r']] },

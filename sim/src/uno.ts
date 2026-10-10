@@ -17,6 +17,7 @@ import {
   twiConfig,
   usart0Config,
 } from 'avr8js'
+import type { Board, PinEvent } from './board'
 import { loadHex } from './hex'
 import { I2CBus } from './i2c'
 
@@ -45,14 +46,7 @@ export function pinOf(name: string) {
   return p
 }
 
-export interface PinEvent {
-  pin: string
-  // what the pin does now: driven low or high, or an input with or without its pull-up
-  state: PinState
-  high: boolean
-  cycles: number
-  ms: number
-}
+export type { PinEvent } from './board'
 
 // where avr-libc keeps its heap pointer, from the compiler's symbol table
 export type Symbols = { brkval?: number; heapStart?: number }
@@ -62,7 +56,8 @@ const RAMEND = 0x8ff
 // enough history for a test to look back a few seconds without the browser filling up
 const TIMELINE = 20_000
 
-export class Uno {
+export class Uno implements Board {
+  readonly hz = MHZ
   cpu: CPU
   ports: Record<Port, AVRIOPort>
   usart: AVRUSART
@@ -132,6 +127,14 @@ export class Uno {
     const heap = this.heapEnd()
     if (heap === undefined) return undefined
     return { free: this.cpu.SP - heap, leastFree: this.minSp - heap, heapBytes: heap - this.symbols.heapStart! }
+  }
+
+  get cycles() {
+    return this.cpu.cycles
+  }
+
+  writeSerial(byte: number) {
+    this.usart.writeByte(byte)
   }
 
   get ms() {

@@ -20,11 +20,11 @@ describe('parking sensor', () => {
   it('guides a car in: OK, SLOW with the distance, STOP with a red ring and a long tone', async () => {
     const { report, bench } = await prove(source('parking'))
     expect(report.failed).toBeUndefined()
-    const mem = bench.uno.memory()!
+    const mem = bench.board.memory()!
     // the oled buffer and the ring both come out of the heap
     expect(mem.heapBytes).toBeGreaterThanOrEqual(1024 + 48)
     expect(mem.leastFree).toBeGreaterThan(100)
-    expect(bench.uno.collidedAtMs).toBeUndefined()
+    expect(bench.board.collidedAtMs).toBeUndefined()
   })
 
   it('runs out of ram once a 100 sample average is added, and the test catches it', async () => {
@@ -32,7 +32,7 @@ describe('parking sensor', () => {
     // arduino-cli is happy, its number leaves out the 1k the oled mallocs
     expect(fw.ram).toBeLessThan(1100)
     expect(report.ok).toBe(false)
-    expect(bench.uno.serial).toContain('oled failed')
+    expect(bench.board.serial).toContain('oled failed')
     expect(report.failed!.index).toBe(1)
     expect(report.failed!.bench).toMatch(/ram: /)
   })

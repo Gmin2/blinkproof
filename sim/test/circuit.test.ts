@@ -31,7 +31,7 @@ describe('circuit file', () => {
   it('leaves the screen dark when DATA is moved off A4, like a real board', async () => {
     const b = new Bench(load(rewire(diagram('hello-oled'), 'uno:A4', 'uno:A3')), await hex('hello-oled'))
     b.run(400)
-    expect(b.uno.serial).toContain('oled ok')
+    expect(b.board.serial).toContain('oled ok')
     expect(screen(b)).toBeNull()
   })
 

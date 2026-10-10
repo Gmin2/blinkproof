@@ -177,8 +177,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       const dt = Math.min(50, now - last)
       last = now
       if (playing) {
-        const until = bench.uno.ms + dt * 2
-        while (bench.uno.ms < until) {
+        const until = bench.board.ms + dt * 2
+        while (bench.board.ms < until) {
           const next = playing.next()
           if (next.done) {
             setReport(next.value)
@@ -219,13 +219,13 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       }
       const board = els.current[parsed.circuit!.board.id]
       if (board) {
-        board.led13 = bench.uno.read('D13')
+        board.led13 = bench.board.read('D13')
         board.ledPower = true
       }
-      setSerial(bench.uno.serial)
-      setSimMs(bench.uno.ms)
-      const mem = bench.uno.memory()
-      setRam(mem ? { ...mem, crashed: bench.uno.collidedAtMs !== undefined } : null)
+      setSerial(bench.board.serial)
+      setSimMs(bench.board.ms)
+      const mem = bench.board.memory()
+      setRam(mem ? { ...mem, crashed: bench.board.collidedAtMs !== undefined } : null)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)

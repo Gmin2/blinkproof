@@ -1,8 +1,6 @@
 import { PinState } from 'avr8js'
-import type { PinEvent, Uno } from '../uno'
-import { MHZ } from '../uno'
+import type { Board, PinEvent } from '../board'
 
-const us = (n: number) => (n * MHZ) / 1e6
 
 // trigger high for 10 us, it sends 8 pulses at 40 khz, then holds ECHO high for 58 us per cm.
 // nothing in range holds it for 38 ms
@@ -13,14 +11,14 @@ export class HCSR04 {
   short = 0
   private rise = -1
   private busy = false
-  private uno: Uno
+  private board: Board
   private echo: string
 
-  constructor(uno: Uno, trig: string, echo: string, distance = 400) {
-    this.uno = uno
+  constructor(board: Board, trig: string, echo: string, distance = 400) {
+    this.board = board
     this.echo = echo
     this.distance = distance
-    uno.onPin((e) => e.pin === trig && this.edge(e))
+    board.onPin((e) => e.pin === trig && this.edge(e))
   }
 
   private edge(e: PinEvent) {
@@ -29,6 +27,7 @@ export class HCSR04 {
       return
     }
     if (this.rise < 0) return
+    const us = (n: number) => (n * this.board.hz) / 1e6
     const width = e.cycles - this.rise
     this.rise = -1
     if (this.busy) return
@@ -42,9 +41,9 @@ export class HCSR04 {
     const start = e.cycles + us(200)
     const cm = this.distance
     const high = cm >= 2 && cm <= 400 ? cm * 58 : 38_000
-    this.uno.at(start, () => this.uno.drive(this.echo, true))
-    this.uno.at(start + us(high), () => {
-      this.uno.drive(this.echo, false)
+    this.board.at(start, () => this.board.drive(this.echo, true))
+    this.board.at(start + us(high), () => {
+      this.board.drive(this.echo, false)
       this.busy = false
     })
   }
