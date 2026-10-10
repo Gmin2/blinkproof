@@ -67,18 +67,20 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   const parsed = useMemo(() => Circuit.parse(diagram), [diagram])
   const findings = useMemo(() => (parsed.circuit ? checkRules(parsed.circuit, source) : []), [parsed, source])
 
+  const board = diagram.parts.some((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno'
+
   useEffect(() => {
     if (!source) return
     let stale = false
     setBuild(null)
     setProblem('')
-    compile(source)
+    compile(source, board)
       .then((b) => !stale && setBuild(b))
       .catch(() => !stale && setProblem('compiler not running, start it with pnpm -C compiler start'))
     return () => {
       stale = true
     }
-  }, [source])
+  }, [source, board])
 
   // wires come from where each part sits plus its pin offsets, so they stay put while parts animate in
   useLayoutEffect(() => {
@@ -188,7 +190,10 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       for (const [id, part] of Object.entries(bench.parts)) {
         const el = els.current[id]
         if (!el) continue
-        if (part.type === 'wokwi-led') el.value = part.lit
+        if (part.type === 'wokwi-led') {
+          el.value = part.lit
+          el.brightness = part.brightness
+        }
         if (part.type === 'wokwi-servo' && part.servo) el.angle = part.servo.angle
         if (part.type === 'wokwi-pushbutton' && playing) el.pressed = part.pressed
         // a test moves the car too, keep the slider with it

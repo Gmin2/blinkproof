@@ -9,11 +9,11 @@ export type Build = {
   diagnostics: { line: number; message: string }[]
 }
 
-export async function compile(source: string): Promise<Build> {
+export async function compile(source: string, board = 'uno'): Promise<Build> {
   const res = await fetch('/api/compile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ board: 'uno', files: { 'sketch.ino': source } }),
+    body: JSON.stringify({ board, files: { 'sketch.ino': source } }),
   })
   return res.json()
 }
