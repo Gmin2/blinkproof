@@ -16,6 +16,7 @@ export type Workspace = {
 const NOTES: Record<string, string> = {
   'wokwi-arduino-uno': 'the board. digital pins "0".."13", analog "A0".."A5", power "5V" "3.3V", ground "GND.1" "GND.2" "GND.3". i2c is A4 (SDA) and A5 (SCL). pwm on 3 5 6 9 10 11',
   'wokwi-arduino-nano': 'a smaller board, same chip as the uno. digital pins "0".."13", analog "A0".."A7" (A6 and A7 are analog input only, no digital, no pinMode), power "5V" "3.3V", ground "GND.1" "GND.2". i2c is A4 (SDA) and A5 (SCL). pwm on 3 5 6 9 10 11',
+  'wokwi-pi-pico': 'raspberry pi pico (rp2040), 3.3 V logic. pins "GP0".."GP22", "GP26".."GP28" (in the sketch just the number, 15 means GP15). analog only on GP26 GP27 GP28 (analogRead(26), 0..1023). power "3V3" (3.3 V out), "VBUS" (5 V from usb), ground "GND.1".."GND.8". Wire (i2c) is GP4 SDA and GP5 SCL. every pin does pwm. GP25 is the onboard led. NOT 5 V tolerant: a part on 5 V must not drive a pico pin (power i2c parts from 3V3, put a divider on a 5 V sensor output). Serial is usb: after Serial.begin(115200) add while (!Serial) delay(10); or the first lines are lost. Servo.h and tone() work, NeoPixel works',
   'wokwi-led': 'A is the anode (long leg, toward the pin), C the cathode (to GND). needs a series resistor. attrs: color (red green blue yellow white)',
   'wokwi-resistor': 'pins 1 and 2. attrs: value in ohms as a string, like "220"',
   'wokwi-pushbutton': '1.l and 1.r are one contact, 2.l and 2.r the other, pressed joins them. wire one side to a pin and the other to GND, use INPUT_PULLUP, pressed reads LOW. test control: pressed (1 or 0)',
@@ -91,7 +92,10 @@ function findings(ws: Workspace) {
 }
 
 // the board in the circuit decides what the sketch is compiled for
-const boardOf = (ws: Workspace) => (ws.diagram?.parts.find((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno')
+const boardOf = (ws: Workspace) => {
+  const types = ws.diagram?.parts.map((p) => p.type) ?? []
+  return types.includes('wokwi-pi-pico') ? 'pico' : types.includes('wokwi-arduino-nano') ? 'nano' : 'uno'
+}
 
 const fingerprint = (ws: Workspace) => JSON.stringify([ws.diagram, ws.sketch, ws.test])
 
@@ -137,8 +141,9 @@ export async function callTool(ws: Workspace, name: string, args: any): Promise<
       if (!ws.sketch) return { ok: false, errors: ['write_sketch first'] }
       ws.build = await compile(boardOf(ws), { 'sketch.ino': ws.sketch })
       const b = ws.build
+      const pico = boardOf(ws) === 'pico'
       return b.ok
-        ? { ok: true, flash: `${b.flash} of 32256 bytes`, ram: `${b.ram} of 2048 bytes before malloc`, warnings: b.diagnostics.filter((d) => d.severity === 'warning').slice(0, 5) }
+        ? { ok: true, flash: pico ? `${b.flash} bytes` : `${b.flash} of 32256 bytes`, ram: pico ? `${b.ram} of 264 kb` : `${b.ram} of 2048 bytes before malloc`, warnings: b.diagnostics.filter((d) => d.severity === 'warning').slice(0, 5) }
         : { ok: false, errors: b.diagnostics.length ? b.diagnostics.slice(0, 8) : [b.log.slice(-1500)] }
     }
 
@@ -146,7 +151,7 @@ export async function callTool(ws: Workspace, name: string, args: any): Promise<
       if (!ws.diagram || !ws.sketch || !ws.test) return { ok: false, errors: [`missing: ${[!ws.diagram && 'circuit', !ws.sketch && 'sketch', !ws.test && 'test'].filter(Boolean).join(', ')}`] }
       if (!ws.build) ws.build = await compile(boardOf(ws), { 'sketch.ino': ws.sketch })
       if (!ws.build.ok) return { ok: false, compile_errors: ws.build.diagnostics.slice(0, 8) }
-      const bench = new Bench(Circuit.parse(ws.diagram).circuit!, ws.build.hex!, ws.build.symbols)
+      const bench = new Bench(Circuit.parse(ws.diagram).circuit!, ws.build.hex ?? ws.build.uf2!, ws.build.symbols)
       const report = run(bench, parseScenario(ws.test).scenario!)
       ws.report = report
       if (report.ok) ws.passed = fingerprint(ws)

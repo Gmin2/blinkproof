@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "avr8js": "0.21.1",
+    "rp2040js": "1.4.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

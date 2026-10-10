@@ -1,14 +1,14 @@
 import { PinState } from 'avr8js'
-import type { Uno } from '../uno'
+import type { Board } from '../board'
 
 // how much of the last few milliseconds a pin was high, so a pwm led looks dim and a fade looks like a fade
 export class Duty {
   private edges: { cycles: number; high: boolean }[] = []
   private before: boolean
 
-  constructor(uno: Uno, pin: string) {
-    this.before = uno.read(pin)
-    uno.onPin((e) => e.pin === pin && this.edges.push({ cycles: e.cycles, high: e.state === PinState.High }))
+  constructor(board: Board, pin: string) {
+    this.before = board.read(pin)
+    board.onPin((e) => e.pin === pin && this.edges.push({ cycles: e.cycles, high: e.state === PinState.High }))
   }
 
   over(now: number, window: number) {

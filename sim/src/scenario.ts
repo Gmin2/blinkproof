@@ -1,5 +1,6 @@
 import { parse as parseYaml } from 'yaml'
 import type { Bench, PartState } from './bench'
+import { PARTS } from './catalog'
 
 // wokwi's automation scenario shape: name, version 1, steps. each step is one key, plus an optional name.
 // wokwi's steps mean what they mean there. ours are new keys, so a wokwi scenario reads the same here
@@ -79,13 +80,13 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
   const results: StepResult[] = []
   // where the last wait-serial matched, so one line is not matched twice
   let cursor = 0
-  const sim = () => Math.round(bench.uno.ms)
+  const sim = () => Math.round(bench.board.ms)
 
   // wait until check() passes, a few ms of sim time at a time
   function* until(check: () => boolean, limitMs: number, what: string) {
-    const end = bench.uno.ms + limitMs
+    const end = bench.board.ms + limitMs
     while (!check()) {
-      if (bench.uno.ms >= end) throw new Fail(`waited ${Math.round(limitMs)}ms of sim time for ${what}`)
+      if (bench.board.ms >= end) throw new Fail(`waited ${Math.round(limitMs)}ms of sim time for ${what}`)
       bench.run(5)
       yield null
     }
@@ -99,9 +100,9 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
       switch (kind) {
         case 'delay': {
           const ms = parseDuration(arg)
-          const end = bench.uno.ms + ms
-          while (bench.uno.ms < end) {
-            bench.run(Math.min(20, end - bench.uno.ms))
+          const end = bench.board.ms + ms
+          while (bench.board.ms < end) {
+            bench.run(Math.min(20, end - bench.board.ms))
             yield null
           }
           result.detail = `${ms}ms`
@@ -110,21 +111,21 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
         case 'wait-serial': {
           const text = String(arg)
           const limit = WAIT_LIMIT_MS
-          yield* until(() => bench.uno.serial.indexOf(text, cursor) >= 0, limit, `serial to print ${JSON.stringify(text)}`)
-          cursor = bench.uno.serial.indexOf(text, cursor) + text.length
+          yield* until(() => bench.board.serial.indexOf(text, cursor) >= 0, limit, `serial to print ${JSON.stringify(text)}`)
+          cursor = bench.board.serial.indexOf(text, cursor) + text.length
           result.detail = text
           break
         }
         case 'expect-serial': {
           const text = String(arg?.contains ?? arg)
-          if (!bench.uno.serial.includes(text)) throw new Fail(`serial never printed ${JSON.stringify(text)}`)
+          if (!bench.board.serial.includes(text)) throw new Fail(`serial never printed ${JSON.stringify(text)}`)
           result.detail = text
           break
         }
         case 'write-serial': {
           const bytes = typeof arg === 'string' ? [...arg].map((c) => c.charCodeAt(0)) : (arg as number[])
           for (const b of bytes) {
-            bench.uno.usart.writeByte(b)
+            bench.board.writeSerial(b)
             bench.run(2)
           }
           result.detail = `${bytes.length} bytes`
@@ -147,7 +148,7 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
           const pin = String(arg?.name ?? arg?.pin)
           const want = Number(arg?.value ?? arg?.expected)
           const p = part(bench, id)
-          const level = p.type === 'wokwi-arduino-uno' ? bench.uno.read(/^\d+$/.test(pin) ? `D${pin}` : pin) : bench.level(`${id}:${pin}`)
+          const level = 'board' in PARTS[p.type as keyof typeof PARTS] ? bench.board.read(/^\d+$/.test(pin) ? `D${pin}` : pin) : bench.level(`${id}:${pin}`)
           const got = level ? 1 : 0
           if (got !== want) throw new Fail(`${id}:${pin} is ${got}, expected ${want}`)
           result.detail = `${id}:${pin} = ${got}`
@@ -202,7 +203,7 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
           if (!buzzer) throw new Fail(`${id} is not wired to a pin and GND`)
           // beeps come and go, so a window asks "did it sound at all in the last second"
           if (arg?.within !== undefined) {
-            const since = bench.uno.ms - parseDuration(arg.within)
+            const since = bench.board.ms - parseDuration(arg.within)
             const heard = buzzer.notes.filter((n) => n.startMs + n.ms >= since)
             const right = heard.filter((n) => arg?.hz === undefined || Math.abs(n.hz - Number(arg.hz)) <= Number(arg.hz) * 0.02)
             if (arg?.silent && heard.length) throw new Fail(`${id} played ${Math.round(heard[0].hz)} hz in the last ${arg.within}, expected silence`)
@@ -242,7 +243,7 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
     results.push(result)
     yield result
     if (!result.ok) {
-      const serialTail = bench.uno.serial.split('\n').slice(-8).join('\n')
+      const serialTail = bench.board.serial.split('\n').slice(-8).join('\n')
       return { ok: false, scenario: scenario.name, steps: results, failed: { ...result, bench: bench.describe(), serialTail }, simMs: sim() }
     }
   }

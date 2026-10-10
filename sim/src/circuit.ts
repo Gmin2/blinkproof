@@ -147,7 +147,7 @@ export class Circuit {
   signal(ref: string, throughResistors = false) {
     // a header repeated elsewhere on the board is called 13.2 or A4.2, the same pin
     for (const pin of this.boardPins(ref, throughResistors)) {
-      const m = pin.match(/^(\d+|A\d)(\.\d)?$/)
+      const m = pin.match(/^(\d+|A\d|GP\d+)(\.\d)?$/)
       if (m) return /^\d/.test(m[1]) ? `D${m[1]}` : m[1]
     }
     return undefined
@@ -161,8 +161,9 @@ export class Circuit {
   // power the uno feeds nothing back out of it
   supply(ref: string, throughResistors = false) {
     const pins = this.boardPins(ref, throughResistors)
-    if (pins.some((p) => p.startsWith('5V'))) return 5
-    if (pins.some((p) => p.startsWith('3.3V'))) return 3.3
+    // the pico's VBUS is the usb 5 v, VSYS is that through a diode
+    if (pins.some((p) => p.startsWith('5V') || p === 'VBUS' || p === 'VSYS')) return 5
+    if (pins.some((p) => p.startsWith('3.3V') || p === '3V3')) return 3.3
     return 0
   }
 }

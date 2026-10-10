@@ -1,0 +1,16 @@
+name: the plant asks for water when the soil is dry
+version: 1
+author: blinkproof
+steps:
+  - wait-serial: plant monitor ready
+  - set-control: { part-id: soil, control: position, value: 0.8 }
+  - delay: 300ms
+  - name: wet soil, happy, green
+    expect-text: { part-id: oled1, contains: HAPPY }
+  - expect-pixels: { part-id: light, index: 0, color: green }
+  - set-control: { part-id: soil, control: position, value: 0.1 }
+  - delay: 300ms
+  - name: dry soil, asks for water, red
+    expect-text: { part-id: oled1, contains: WATER ME }
+  - expect-text: { part-id: oled1, contains: soil 9% }
+  - expect-pixels: { part-id: light, index: 0, color: red }

@@ -1,4 +1,5 @@
 import '@wokwi/elements'
+import './elements/pico'
 import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Finding, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
@@ -29,6 +30,9 @@ type Props = {
   reveal?: boolean
   onState?: (s: BenchState) => void
 }
+
+// diagram types we draw ourselves
+const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
@@ -67,7 +71,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   const parsed = useMemo(() => Circuit.parse(diagram), [diagram])
   const findings = useMemo(() => (parsed.circuit ? checkRules(parsed.circuit, source) : []), [parsed, source])
 
-  const board = diagram.parts.some((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno'
+  const board = diagram.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'pico' : diagram.parts.some((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno'
 
   useEffect(() => {
     if (!source) return
@@ -131,8 +135,9 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   }, [diagram])
 
   useEffect(() => {
-    if (!build?.hex || !parsed.circuit) return
-    const bench = new Bench(parsed.circuit, build.hex, build.symbols)
+    const firmware = build?.hex ?? build?.uf2
+    if (!firmware || !parsed.circuit) return
+    const bench = new Bench(parsed.circuit, firmware, build?.symbols)
     benchRef.current = bench
     // a test plays on a fresh bench at twice real time, so people can watch it
     const scenario = testRun && test ? parseScenario(test).scenario : undefined
@@ -177,8 +182,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       const dt = Math.min(50, now - last)
       last = now
       if (playing) {
-        const until = bench.uno.ms + dt * 2
-        while (bench.uno.ms < until) {
+        const until = bench.board.ms + dt * 2
+        while (bench.board.ms < until) {
           const next = playing.next()
           if (next.done) {
             setReport(next.value)
@@ -219,13 +224,16 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       }
       const board = els.current[parsed.circuit!.board.id]
       if (board) {
-        board.led13 = bench.uno.read('D13')
-        board.ledPower = true
+        if (parsed.circuit!.board.type === 'wokwi-pi-pico') board.led = bench.board.read('GP25')
+        else {
+          board.led13 = bench.board.read('D13')
+          board.ledPower = true
+        }
       }
-      setSerial(bench.uno.serial)
-      setSimMs(bench.uno.ms)
-      const mem = bench.uno.memory()
-      setRam(mem ? { ...mem, crashed: bench.uno.collidedAtMs !== undefined } : null)
+      setSerial(bench.board.serial)
+      setSimMs(bench.board.ms)
+      const mem = bench.board.memory()
+      setRam(mem ? { ...mem, crashed: bench.board.collidedAtMs !== undefined } : null)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -260,7 +268,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     <div ref={box} className="dots relative h-full w-full overflow-hidden">
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`, transition: 'transform .5s ease' }}>
         {diagram.parts.map((p) => {
-          const Tag = p.type as any
+          const Tag = (TAGS[p.type] ?? p.type) as any
           const isNew = reveal && fresh.parts.includes(p.id)
           return (
             <div

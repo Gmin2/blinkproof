@@ -1,6 +1,5 @@
 import { PinState } from 'avr8js'
-import type { PinEvent, Uno } from '../uno'
-import { MHZ } from '../uno'
+import type { Board, PinEvent } from '../board'
 
 // the arduino Servo library maps 0..180 degrees to 544..2400 us, a pulse every 20 ms
 const MIN_US = 544
@@ -12,10 +11,12 @@ export class Servo {
   // the last pulse width in us, what the horn is told
   width = 0
   private rise = -1
+  private hz: number
 
-  constructor(uno: Uno, pin: string, start = 90) {
+  constructor(board: Board, pin: string, start = 90) {
+    this.hz = board.hz
     this.angle = start
-    uno.onPin((e) => e.pin === pin && this.edge(e))
+    board.onPin((e) => e.pin === pin && this.edge(e))
   }
 
   private edge(e: PinEvent) {
@@ -24,7 +25,7 @@ export class Servo {
       return
     }
     if (this.rise < 0) return
-    const us = ((e.cycles - this.rise) / MHZ) * 1e6
+    const us = ((e.cycles - this.rise) / this.hz) * 1e6
     this.rise = -1
     // a real servo ignores pulses far outside its range, like pwm on the pin
     if (us < 400 || us > 2600) return
