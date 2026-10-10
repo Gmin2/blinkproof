@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "left": 60, "top": 150 },
+    { "type": "wokwi-led", "id": "led1", "left": 470, "top": 70, "attrs": { "color": "red" } },
+    { "type": "wokwi-resistor", "id": "r1", "left": 380, "top": 40, "attrs": { "value": "220" } },
+    { "type": "wokwi-ssd1306", "id": "oled1", "left": 560, "top": 300 },
+    { "type": "wokwi-potentiometer", "id": "pot1", "left": 330, "top": 470, "attrs": { "value": "512" } }
+  ],
+  "connections": [
+    ["uno:13", "r1:1", "#f59e0b", []],
+    ["r1:2", "led1:A", "#f59e0b", []],
+    ["led1:C", "uno:GND.1", "#94a3b8", []],
+    ["oled1:VIN", "uno:5V", "#ef4444", []],
+    ["oled1:GND", "uno:GND.2", "#94a3b8", []],
+    ["oled1:CLK", "uno:A5", "#38bdf8", []],
+    ["oled1:DATA", "uno:A4", "#a78bfa", []],
+    ["pot1:VCC", "uno:5V", "#ef4444", []],
+    ["pot1:GND", "uno:GND.3", "#94a3b8", []],
+    ["pot1:SIG", "uno:A0", "#22c55e", []]
+  ]
+}

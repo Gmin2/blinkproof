@@ -7,3 +7,7 @@ tmp/
 !.env.example
 .DS_Store
 .cache
+docs/
+research/
+business.md
+hackathon.md

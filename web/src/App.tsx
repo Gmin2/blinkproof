@@ -1,10 +1,15 @@
 import '@wokwi/elements'
-import { SSD1306, Uno } from '@blinkproof/sim'
+import { Bench, Circuit, type Diagram } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import blinkDiagram from '../../sketches/blink/diagram.json'
 import blinkSrc from '../../sketches/blink/blink.ino?raw'
+import oledDiagram from '../../sketches/hello-oled/diagram.json'
 import oledSrc from '../../sketches/hello-oled/hello-oled.ino?raw'
 
-const SKETCHES = { blink: blinkSrc, 'hello-oled': oledSrc } as const
+const SKETCHES = {
+  blink: { source: blinkSrc, diagram: blinkDiagram as unknown as Diagram },
+  'hello-oled': { source: oledSrc, diagram: oledDiagram as unknown as Diagram },
+}
 type Sketch = keyof typeof SKETCHES
 
 type Build = { ok: boolean; hex?: string; flash?: number; ram?: number; ms: number; cached: boolean; diagnostics: { line: number; message: string }[] }
@@ -18,146 +23,175 @@ async function compile(source: string): Promise<Build> {
   return res.json()
 }
 
-type Part = { id: string; tag: string; x: number; y: number; attrs?: Record<string, string> }
+type Point = { x: number; y: number }
+type Wokwi = HTMLElement & { pinInfo?: { name: string; x: number; y: number }[] } & Record<string, any>
 
-const PARTS: Part[] = [
-  { id: 'uno', tag: 'wokwi-arduino-uno', x: 60, y: 150 },
-  { id: 'led', tag: 'wokwi-led', x: 470, y: 70, attrs: { color: 'red' } },
-  { id: 'oled', tag: 'wokwi-ssd1306', x: 560, y: 300 },
-  { id: 'pot', tag: 'wokwi-potentiometer', x: 330, y: 470 },
-]
-
-// [from, to, colour]
-const WIRES: [string, string, string][] = [
-  ['uno:13', 'led:A', '#f59e0b'],
-  ['led:C', 'uno:GND.1', '#94a3b8'],
-  ['oled:VIN', 'uno:5V', '#ef4444'],
-  ['oled:GND', 'uno:GND.2', '#94a3b8'],
-  ['oled:CLK', 'uno:A5', '#38bdf8'],
-  ['oled:DATA', 'uno:A4', '#a78bfa'],
-  ['pot:VCC', 'uno:5V', '#ef4444'],
-  ['pot:GND', 'uno:GND.3', '#94a3b8'],
-  ['pot:SIG', 'uno:A0', '#22c55e'],
-]
-
-type Pin = { name: string; x: number; y: number }
-type Wokwi = HTMLElement & { pinInfo?: Pin[] } & Record<string, any>
-
-function pinPoint(el: Wokwi, name: string, root: DOMRect) {
-  const pin = el.pinInfo?.find((p) => p.name === name)
-  if (!pin) return null
+function pinPoint(el: Wokwi | undefined, name: string, root: DOMRect) {
+  const pin = el?.pinInfo?.find((p) => p.name === name)
+  if (!el || !pin) return null
   const box = el.getBoundingClientRect()
   return { x: box.left - root.left + pin.x, y: box.top - root.top + pin.y }
 }
 
-// leave the pin straight up or down first, then across, then into the other pin
-function wirePath(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const midY = a.y + (b.y - a.y) / 2
-  const r = Math.min(8, Math.abs(b.y - a.y) / 2, Math.abs(b.x - a.x) / 2)
-  const sx = Math.sign(b.x - a.x) || 1
-  const sy = Math.sign(b.y - a.y) || 1
-  return [
-    `M ${a.x} ${a.y}`,
-    `L ${a.x} ${midY - sy * r}`,
-    `Q ${a.x} ${midY} ${a.x + sx * r} ${midY}`,
-    `L ${b.x - sx * r} ${midY}`,
-    `Q ${b.x} ${midY} ${b.x} ${midY + sy * r}`,
-    `L ${b.x} ${b.y}`,
-  ].join(' ')
+// wokwi hints: v<n> moves down, h<n> moves right. the ones before "*" walk out of the source pin,
+// the ones after it walk back out of the target pin. the loose ends are joined with one elbow
+function route(a: Point, b: Point, hints: string[] = []) {
+  const star = hints.indexOf('*')
+  const head = star < 0 ? hints : hints.slice(0, star)
+  const tail = star < 0 ? [] : hints.slice(star + 1)
+  const walk = (from: Point, steps: string[]) => {
+    const pts = [from]
+    let p = from
+    for (const s of steps) {
+      const n = Number(s.slice(1))
+      if (!Number.isFinite(n)) continue
+      p = s[0] === 'v' ? { x: p.x, y: p.y + n } : s[0] === 'h' ? { x: p.x + n, y: p.y } : p
+      pts.push(p)
+    }
+    return pts
+  }
+  const start = walk(a, head)
+  const end = walk(b, [...tail].reverse()).reverse()
+  const s = start[start.length - 1]
+  const e = end[0]
+  // with no hints, leave a pin straight out first, then across, then into the other pin
+  const middle = hints.length ? [{ x: e.x, y: s.y }] : [{ x: s.x, y: (s.y + e.y) / 2 }, { x: e.x, y: (s.y + e.y) / 2 }]
+  return rounded([...start, ...middle, ...end])
 }
+
+function rounded(points: Point[], r = 8) {
+  const pts = points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y)
+  let d = `M ${pts[0].x} ${pts[0].y}`
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [p, c, n] = [pts[i - 1], pts[i], pts[i + 1]]
+    const k = Math.min(r, Math.hypot(c.x - p.x, c.y - p.y) / 2, Math.hypot(n.x - c.x, n.y - c.y) / 2)
+    const toward = (q: Point) => {
+      const len = Math.hypot(q.x - c.x, q.y - c.y) || 1
+      return { x: c.x + ((q.x - c.x) / len) * k, y: c.y + ((q.y - c.y) / len) * k }
+    }
+    const a = toward(p)
+    const b = toward(n)
+    d += ` L ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`
+  }
+  const last = pts[pts.length - 1]
+  return `${d} L ${last.x} ${last.y}`
+}
+
+const split = (ref: string) => [ref.slice(0, ref.indexOf(':')), ref.slice(ref.indexOf(':') + 1)]
 
 export default function App() {
   const canvas = useRef<HTMLDivElement>(null)
   const els = useRef<Record<string, Wokwi>>({})
-  const [paths, setPaths] = useState<{ d: string; color: string }[]>([])
   const [sketch, setSketch] = useState<Sketch>('hello-oled')
+  const { diagram, source } = SKETCHES[sketch]
+  const [paths, setPaths] = useState<{ d: string; color: string }[]>([])
   const [running, setRunning] = useState(true)
   const runningRef = useRef(running)
   runningRef.current = running
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
   const [build, setBuild] = useState<Build | null>(null)
-  const [compileError, setCompileError] = useState('')
+  const [problem, setProblem] = useState('')
+
+  const parsed = Circuit.parse(diagram)
 
   useEffect(() => {
     let stale = false
     setBuild(null)
-    setCompileError('')
-    compile(SKETCHES[sketch])
+    setProblem('')
+    compile(source)
       .then((b) => !stale && setBuild(b))
-      .catch(() => !stale && setCompileError('compiler not running, start it with pnpm -C compiler start'))
+      .catch(() => !stale && setProblem('compiler not running, start it with pnpm -C compiler start'))
     return () => {
       stale = true
     }
-  }, [sketch])
+  }, [source])
 
   useLayoutEffect(() => {
     // the elements size themselves after they upgrade, so measure on the next frame
     const id = requestAnimationFrame(() => {
       const root = canvas.current!.getBoundingClientRect()
       const out: { d: string; color: string }[] = []
-      for (const [from, to, color] of WIRES) {
-        const [fa, fp] = from.split(':')
-        const [ta, tp] = to.split(':')
+      for (const [from, to, color, hints] of diagram.connections) {
+        if (!color) continue
+        const [fa, fp] = split(from)
+        const [ta, tp] = split(to)
         const a = pinPoint(els.current[fa], fp, root)
         const b = pinPoint(els.current[ta], tp, root)
-        if (a && b) out.push({ d: wirePath(a, b), color })
+        if (a && b) out.push({ d: route(a, b, hints), color })
       }
       setPaths(out)
     })
     return () => cancelAnimationFrame(id)
-  }, [])
+  }, [diagram])
 
   useEffect(() => {
-    if (!build?.hex) return
-    const uno = new Uno(build.hex)
-    const oled = uno.i2c.add(new SSD1306()) as SSD1306
-    const { led, oled: screen, pot, uno: board } = els.current
-    const image = screen.imageData as ImageData
-    const setPot = () => uno.setVolts('A0', (Number(pot.value ?? 0) / 1023) * 5)
-    setPot()
-    pot.addEventListener('input', setPot)
+    if (!build?.hex || !parsed.circuit) return
+    const bench = new Bench(parsed.circuit, build.hex)
+    const cleanups: (() => void)[] = []
+    const frames = new Map<string, number>()
+
+    for (const [id, part] of Object.entries(bench.parts)) {
+      const el = els.current[id]
+      if (part.type === 'wokwi-potentiometer') {
+        const onInput = () => bench.control(id, 'position', Number(el.value ?? 0) / 1023)
+        el.addEventListener('input', onInput)
+        cleanups.push(() => el.removeEventListener('input', onInput))
+      }
+      if (part.type === 'wokwi-ssd1306') {
+        // dark until the sketch draws on it
+        const px = (el.imageData as ImageData).data
+        for (let i = 0; i < px.length; i++) px[i] = i % 4 === 3 ? 255 : 0
+        el.redraw()
+      }
+    }
     setSerial('')
     let raf = 0
     let last = performance.now()
-    let frames = -1
 
     const tick = (now: number) => {
       const dt = Math.min(50, now - last)
       last = now
-      if (runningRef.current) uno.run(dt)
-      led.value = uno.read('D13')
-      board.led13 = uno.read('D13')
-      board.ledPower = true
-      if (oled.frames !== frames) {
-        frames = oled.frames
-        oled.paint(image.data)
-        screen.redraw()
+      if (runningRef.current) bench.run(dt)
+      for (const [id, part] of Object.entries(bench.parts)) {
+        const el = els.current[id]
+        if (part.type === 'wokwi-led') el.value = part.lit
+        if (part.type === 'wokwi-ssd1306' && part.oled && part.oled.frames !== frames.get(id)) {
+          frames.set(id, part.oled.frames)
+          part.oled.paint((el.imageData as ImageData).data)
+          el.redraw()
+        }
       }
-      setSerial(uno.serial)
-      setSimMs(uno.ms)
+      const board = els.current[parsed.circuit!.board.id]
+      board.led13 = bench.uno.read('D13')
+      board.ledPower = true
+      setSerial(bench.uno.serial)
+      setSimMs(bench.uno.ms)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => {
       cancelAnimationFrame(raf)
-      pot.removeEventListener('input', setPot)
+      for (const c of cleanups) c()
     }
   }, [build])
+
+  const status =
+    problem ||
+    (parsed.errors.length
+      ? `diagram: ${parsed.errors[0]}`
+      : !build
+        ? 'compiling...'
+        : build.ok
+          ? `compiled in ${(build.ms / 1000).toFixed(1)}s${build.cached ? ' (cached)' : ''} · flash ${build.flash} b · ram ${build.ram} of 2048 b`
+          : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
         <span className="font-mono text-sm font-semibold tracking-tight text-accent">blinkproof</span>
         <span className="text-xs text-dim">wokwi for agents</span>
-        <span className="font-mono text-[11px] text-dim">
-          {compileError ||
-            (!build
-              ? 'compiling...'
-              : build.ok
-                ? `compiled in ${(build.ms / 1000).toFixed(1)}s${build.cached ? ' (cached)' : ''} · flash ${build.flash} b · ram ${build.ram} of 2048 b`
-                : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)}
-        </span>
+        <span className="font-mono text-[11px] text-dim">{status}</span>
         <div className="ml-auto flex items-center gap-2">
           {(Object.keys(SKETCHES) as Sketch[]).map((s) => (
             <button
@@ -178,11 +212,11 @@ export default function App() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div ref={canvas} className="dots relative flex-1 overflow-hidden">
-          {PARTS.map((p) => {
-            const Tag = p.tag as any
+        <div ref={canvas} key={sketch} className="dots relative flex-1 overflow-hidden">
+          {diagram.parts.map((p) => {
+            const Tag = p.type as any
             return (
-              <div key={p.id} className="part" style={{ left: p.x, top: p.y }}>
+              <div key={p.id} className="part" style={{ left: p.left ?? 0, top: p.top ?? 0, display: p.hide ? 'none' : undefined }}>
                 <Tag ref={(el: Wokwi | null) => el && (els.current[p.id] = el)} {...p.attrs} />
               </div>
             )
