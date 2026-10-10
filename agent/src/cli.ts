@@ -24,9 +24,9 @@ async function main() {
     if (e.type === 'thinking') console.log(`  . ${e.text.slice(0, 200).replace(/\n/g, ' ')}`)
     if (e.type === 'tool') {
       const r = e.result
-      const note = r.errors ?? r.findings ?? r.steps ?? r.refused ?? r.compile_errors ?? ''
-      console.log(`  ${r.ok ? 'ok  ' : 'FAIL'} ${e.name} ${e.ms}ms ${JSON.stringify(note).slice(0, 300)}`)
-      if (r.parts && !r.ok) console.log(`       ${String(r.parts).replace(/\n/g, '\n       ')}`)
+      const note = e.name === 'list_parts' ? '' : r.errors ?? r.findings ?? r.steps ?? r.refused ?? r.compile_errors ?? ''
+      console.log(`  ${r.ok === false ? 'FAIL' : 'ok  '} ${e.name} ${e.ms}ms ${JSON.stringify(note).slice(0, 300)}`)
+      if (typeof r.parts === 'string' && r.ok === false) console.log(`       ${String(r.parts).replace(/\n/g, '\n       ')}`)
     }
     if (e.type === 'done') console.log(e.ok ? `done in ${e.turns} turns, ${e.tokens} tokens\n${e.summary}` : `gave up: ${e.reason}, ${e.tokens} tokens`)
   }
