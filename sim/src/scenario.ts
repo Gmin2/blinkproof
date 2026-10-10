@@ -200,6 +200,18 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
           const id = arg?.['part-id']
           const buzzer = part(bench, id, 'wokwi-buzzer').buzzer
           if (!buzzer) throw new Fail(`${id} is not wired to a pin and GND`)
+          // beeps come and go, so a window asks "did it sound at all in the last second"
+          if (arg?.within !== undefined) {
+            const since = bench.uno.ms - parseDuration(arg.within)
+            const heard = buzzer.notes.filter((n) => n.startMs + n.ms >= since)
+            const right = heard.filter((n) => arg?.hz === undefined || Math.abs(n.hz - Number(arg.hz)) <= Number(arg.hz) * 0.02)
+            if (arg?.silent && heard.length) throw new Fail(`${id} played ${Math.round(heard[0].hz)} hz in the last ${arg.within}, expected silence`)
+            if (!arg?.silent && !right.length) {
+              throw new Fail(heard.length ? `${id} played ${heard.map((n) => Math.round(n.hz)).join(', ')} hz in the last ${arg.within}, expected ${arg.hz}` : `${id} made no sound in the last ${arg.within}`)
+            }
+            result.detail = heard.length ? `${heard.length} beeps, ${heard.map((n) => Math.round(n.hz)).join(' ')} hz` : 'silent'
+            break
+          }
           if (arg?.silent) {
             if (buzzer.hz) throw new Fail(`${id} plays ${buzzer.hz} hz, expected silence`)
           } else {

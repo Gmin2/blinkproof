@@ -2,3 +2,7 @@ packages:
   - sim
   - web
   - compiler
+  - agent
+allowBuilds:
+  esbuild: true
+  protobufjs: false
