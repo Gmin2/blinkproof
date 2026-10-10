@@ -224,8 +224,12 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
         case 'expect-led': {
           const id = arg?.['part-id']
           const led = part(bench, id, 'wokwi-led')
-          if (led.lit !== !!arg?.lit) throw new Fail(`${id} is ${led.lit ? 'lit' : 'dark'}, expected ${arg?.lit ? 'lit' : 'dark'}`)
-          result.detail = led.lit ? 'lit' : 'dark'
+          if (arg?.lit !== undefined && led.lit !== !!arg.lit) throw new Fail(`${id} is ${led.lit ? 'lit' : 'dark'}, expected ${arg.lit ? 'lit' : 'dark'}`)
+          // pwm: brightness is how much of the last 20 ms the led was on, 0 to 1
+          const b = led.brightness
+          if (arg?.['min-brightness'] !== undefined && b < Number(arg['min-brightness'])) throw new Fail(`${id} is at ${Math.round(b * 100)}% brightness, expected at least ${Math.round(Number(arg['min-brightness']) * 100)}%`)
+          if (arg?.['max-brightness'] !== undefined && b > Number(arg['max-brightness'])) throw new Fail(`${id} is at ${Math.round(b * 100)}% brightness, expected at most ${Math.round(Number(arg['max-brightness']) * 100)}%`)
+          result.detail = led.lit ? `lit, ${Math.round(b * 100)}%` : 'dark'
           break
         }
       }

@@ -1,0 +1,17 @@
+name: the knob sets the brightness
+version: 1
+author: blinkproof
+steps:
+  - wait-serial: dimmer ready
+  - set-control: { part-id: knob, control: position, value: 0 }
+  - delay: 200ms
+  - name: knob down, led off
+    expect-led: { part-id: led1, max-brightness: 0.03 }
+  - set-control: { part-id: knob, control: position, value: 0.5 }
+  - delay: 200ms
+  - name: halfway, half bright
+    expect-led: { part-id: led1, min-brightness: 0.4, max-brightness: 0.6 }
+  - set-control: { part-id: knob, control: position, value: 1 }
+  - delay: 200ms
+  - name: knob up, full
+    expect-led: { part-id: led1, min-brightness: 0.95 }

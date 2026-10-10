@@ -145,11 +145,10 @@ export class Circuit {
 
   // the arduino pin a part pin is driven by or reads, like D13 or A0, if any
   signal(ref: string, throughResistors = false) {
+    // a header repeated elsewhere on the board is called 13.2 or A4.2, the same pin
     for (const pin of this.boardPins(ref, throughResistors)) {
-      if (/^\d+$/.test(pin)) return `D${pin}`
-      if (/^A\d$/.test(pin)) return pin
-      const alias = pin.match(/^(A\d)\.2$/)
-      if (alias) return alias[1]
+      const m = pin.match(/^(\d+|A\d)(\.\d)?$/)
+      if (m) return /^\d/.test(m[1]) ? `D${m[1]}` : m[1]
     }
     return undefined
   }
@@ -162,8 +161,8 @@ export class Circuit {
   // power the uno feeds nothing back out of it
   supply(ref: string, throughResistors = false) {
     const pins = this.boardPins(ref, throughResistors)
-    if (pins.includes('5V')) return 5
-    if (pins.includes('3.3V')) return 3.3
+    if (pins.some((p) => p.startsWith('5V'))) return 5
+    if (pins.some((p) => p.startsWith('3.3V'))) return 3.3
     return 0
   }
 }

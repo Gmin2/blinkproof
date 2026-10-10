@@ -11,6 +11,9 @@ import parkingTest from '../../sketches/parking/test.yaml?raw'
 import tourDiagram from '../../sketches/parts-tour/diagram.json'
 import tourSrc from '../../sketches/parts-tour/parts-tour.ino?raw'
 import tourTest from '../../sketches/parts-tour/test.yaml?raw'
+import dimmerDiagram from '../../sketches/nano-dimmer/diagram.json'
+import dimmerSrc from '../../sketches/nano-dimmer/nano-dimmer.ino?raw'
+import dimmerTest from '../../sketches/nano-dimmer/test.yaml?raw'
 import potDiagram from '../../sketches/pot-print/diagram.json'
 import potSrc from '../../sketches/pot-print/pot-print.ino?raw'
 import potTest from '../../sketches/pot-print/test.yaml?raw'
@@ -26,6 +29,7 @@ const SKETCHES: Record<string, { source: string; diagram: Diagram; test?: string
   parking: { source: parkingSrc, diagram: d(parkingDiagram), test: parkingTest },
   'parking-ram': { source: parkingRamSrc, diagram: d(parkingDiagram), test: parkingTest },
   'pot-print': { source: potSrc, diagram: d(potDiagram), test: potTest },
+  'nano-dimmer': { source: dimmerSrc, diagram: d(dimmerDiagram), test: dimmerTest },
 }
 
 // the circuits built by hand, to poke at

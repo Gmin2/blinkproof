@@ -56,6 +56,7 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
   const add = (rule: string, severity: Finding['severity'], parts: string[], message: string) => out.push({ rule, severity, parts, message })
   const code = readSketch(sketch)
   const board = c.board.id
+  const boardName = c.board.type === 'wokwi-arduino-nano' ? 'nano' : 'uno'
 
   for (const p of c.diagram.parts) {
     const id = p.id
@@ -118,7 +119,7 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
       const sda = c.signal(`${id}:DATA`)
       const scl = c.signal(`${id}:CLK`)
       if ((sda && sda !== 'A4') || (scl && scl !== 'A5')) {
-        add('i2c-pins', 'error', [id], `the uno i2c pins are fixed: ${id}:DATA (SDA) to A4 and ${id}:CLK (SCL) to A5. now DATA is on ${sda ?? 'nothing'}, CLK on ${scl ?? 'nothing'}`)
+        add('i2c-pins', 'error', [id], `the ${boardName} i2c pins are fixed: ${id}:DATA (SDA) to A4 and ${id}:CLK (SCL) to A5. now DATA is on ${sda ?? 'nothing'}, CLK on ${scl ?? 'nothing'}`)
       }
       const address = Number(attrs.i2cAddress ?? '0x3c')
       for (const a of code.addresses) {
@@ -164,13 +165,20 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
     if (pins.some((q) => q.startsWith('GND')) || pins.includes('5V') || pins.includes('3.3V')) {
       add('short', 'error', ids, `${pin} is wired straight to ${pins.find((q) => !/^(\d+|A\d(\.2)?)$/.test(q))}, writing it high or low shorts the pin`)
     }
+    if (/^A[67]$/.test(pin) && ids.some((id) => c.parts.get(id)?.type !== 'wokwi-potentiometer')) {
+      add('analog-only', 'error', ids, `${pin} on the nano is analog input only, it cannot drive or read a digital part. move ${ids.join(', ')} to a digital pin`)
+    }
     if (pin === 'D0' || pin === 'D1') add('serial-pins', 'warning', ids, `${pin} is the usb serial line, using it breaks Serial and can fail uploads. move ${ids.join(', ')} to another pin`)
     if (ids.length > 1 && !(pin === 'A4' || pin === 'A5')) add('shared-pin', 'warning', ids, `${ids.join(' and ')} share ${pin}, give each its own pin`)
   }
 
+  for (const [pin, mode] of code.modes) {
+    if (/^A[67]$/.test(pin)) add('analog-only', 'error', [board], `pinMode(${pin}, ${mode}) does nothing, A6 and A7 on the nano are analog input only. use analogRead(${pin})`)
+  }
+
   for (const pin of code.pwm) {
     const n = Number(pin.replace(/^D/, ''))
-    if (!pin.startsWith('D') || !UNO_PWM.includes(n)) add('pwm-pin', 'error', [board], `analogWrite on ${pin} does not fade, the uno has pwm on ${UNO_PWM.join(', ')} only`)
+    if (!pin.startsWith('D') || !UNO_PWM.includes(n)) add('pwm-pin', 'error', [board], `analogWrite on ${pin} does not fade, the ${boardName} has pwm on ${UNO_PWM.join(', ')} only`)
     else if (code.servo && (n === 9 || n === 10)) add('pwm-pin', 'warning', [board], `the Servo library takes timer1, analogWrite on ${pin} stops working. use pin 3, 5, 6 or 11`)
     else if (code.tone && (n === 3 || n === 11)) add('pwm-pin', 'warning', [board], `tone() takes timer2, analogWrite on ${pin} stops working while a tone plays. use 5, 6, 9 or 10`)
   }

@@ -35,6 +35,9 @@ for (let i = 0; i <= 5; i++) {
 
 export const unoPins = Object.keys(PINS)
 
+// on the nano A6 and A7 reach the adc and nothing else
+const ANALOG_ONLY = /^A[67]$/
+
 export function pinOf(name: string) {
   const key = /^\d+$/.test(name) ? `D${name}` : name.toUpperCase()
   const p = PINS[key]
@@ -157,23 +160,32 @@ export class Uno {
   }
 
   state(name: string) {
+    if (ANALOG_ONLY.test(name)) return PinState.Input
     const [port, bit] = pinOf(name)
     return this.ports[port].pinState(bit)
   }
 
   // the level the sketch drives on a pin
   read(name: string) {
+    if (ANALOG_ONLY.test(name)) return false
     const [port, bit] = pinOf(name)
     return this.ports[port].pinState(bit) === PinState.High
   }
 
   // something outside driving a pin, a button or a sensor
   drive(name: string, high: boolean) {
+    if (ANALOG_ONLY.test(name)) return
     const [port, bit] = pinOf(name)
     this.ports[port].setPin(bit, high)
   }
 
   setVolts(name: string, volts: number) {
+    // the nano's A6 and A7 go to the adc only, no port behind them
+    const only = name.match(/^A([67])$/)
+    if (only) {
+      this.adc.channelValues[Number(only[1])] = volts
+      return
+    }
     const [port, bit] = pinOf(name)
     if (port !== 'C') throw new Error(`${name} is not an analog pin`)
     this.adc.channelValues[bit] = volts
