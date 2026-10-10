@@ -98,41 +98,95 @@ export class SSD1306 implements I2CDevice {
   private glyphAt(x: number, y: number, size: number) {
     for (let ch = 32; ch < 127; ch++) {
       let match = true
-      for (let cx = 0; cx < 5 && match; cx++) {
-        const bits = font[ch * 5 + cx]
+      for (let cx = 0; cx < 6 && match; cx++) {
+        const bits = cx < 5 ? font[ch * 5 + cx] : 0
         for (let cy = 0; cy < 8 && match; cy++) {
-          const py = y + cy * size
-          if (py >= 64) continue
-          if (((bits >> cy) & 1) !== this.pixel(x + cx * size, py)) match = false
+          const want = (bits >> cy) & 1
+          for (let sx = 0; sx < size && match; sx++) {
+            for (let sy = 0; sy < size && match; sy++) {
+              const px = x + cx * size + sx
+              const py = y + cy * size + sy
+              const lit = px < 128 && py < 64 && px >= 0 && py >= 0 ? this.pixel(px, py) : 0
+              if (lit !== want) match = false
+            }
+          }
         }
       }
       if (match) return String.fromCharCode(ch)
     }
-    return '?'
+    return undefined
   }
 
-  private line(y: number, size: number) {
-    let line = ''
-    for (let x = 0; x + 6 * size <= 128; x += 6 * size) line += this.glyphAt(x, y, size)
-    return line.trimEnd()
+  private litColumn(from: number, y0: number, y1: number) {
+    for (let x = from; x < 128; x++) {
+      for (let y = Math.max(0, y0); y < Math.min(64, y1); y++) if (this.pixel(x, y)) return x
+    }
+    return -1
   }
 
-  // what a person would read on the screen, default gfx font at text size 1 or 2,
-  // on its 8px row grid. a row that reads cleaner at size 2 is taken as size 2
+  // one line of text in rows y.. at this size, wherever it starts. each glyph is found on its own,
+  // so text printed at another x later on the same line still reads
+  private readLine(y: number, size: number) {
+    let text = ''
+    let pos = 0
+    let junk = 0
+    for (;;) {
+      const c = this.litColumn(pos, y, y + 8 * size)
+      if (c < 0) break
+      let found: { ch: string; at: number } | undefined
+      for (let dx = 0; dx <= 2 * size && !found; dx++) {
+        const at = c - dx
+        if (at < pos - size || at < 0) break
+        const ch = this.glyphAt(at, y, size)
+        if (ch && ch !== ' ') found = { ch, at }
+      }
+      if (text && found) text += ' '.repeat(Math.max(0, Math.round((found.at - pos) / (6 * size))))
+      if (found) {
+        text += found.ch
+        pos = found.at + 6 * size
+      } else {
+        text += '?'
+        junk++
+        pos = c + size
+      }
+    }
+    return { text: text.trimEnd(), junk }
+  }
+
+  private rowLit(y: number) {
+    for (let x = 0; x < 128; x++) if (this.pixel(x, y)) return true
+    return false
+  }
+
+  // what a person would read on the screen: lines of the default gfx font at any size from 1 to 4,
+  // at any x and y
   text() {
     if (!this.on) return ''
     const lines: string[] = []
-    const junk = (s: string) => (s.match(/\?/g) ?? []).length
-    for (let y = 0; y + 8 <= 64; ) {
-      const small = this.line(y, 1)
-      const big = y + 16 <= 64 ? this.line(y, 2) : ''
-      if (big && junk(big) < junk(small) && big.replace(/\?/g, '').length) {
-        lines.push(big)
-        y += 16
-      } else {
-        if (small) lines.push(small)
-        y += 8
+    let y = 0
+    while (y < 64) {
+      if (!this.rowLit(y)) {
+        y++
+        continue
       }
+      let best: { text: string; junk: number; top: number; size: number } | undefined
+      for (const size of [1, 2, 3, 4]) {
+        // lowercase letters start a row or two below the top of the glyph box
+        for (let dy = 0; dy <= 2 * size; dy++) {
+          const top = y - dy
+          if (top < 0) break
+          const r = this.readLine(top, size)
+          const score = r.text.replace(/[? ]/g, '').length - 3 * r.junk
+          const bestScore = best ? best.text.replace(/[? ]/g, '').length - 3 * best.junk : -Infinity
+          if (r.text && score > bestScore) best = { ...r, top, size }
+        }
+      }
+      if (!best) {
+        y++
+        continue
+      }
+      lines.push(best.text)
+      y = best.top + 8 * best.size
     }
     return lines.join('\n')
   }

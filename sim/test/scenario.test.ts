@@ -54,3 +54,20 @@ describe('reading a scenario', () => {
     ])
   })
 })
+
+describe('beeps', () => {
+  it('expect-tone within a window hears intermittent beeps that an instant check misses', async () => {
+    const test = `name: beeps
+version: 1
+steps:
+  - delay: 450ms
+  - expect-tone: { part-id: bz, silent: true }
+  - expect-tone: { part-id: bz, within: 500ms }
+  - expect-tone: { part-id: bz, hz: 1000, within: 500ms }
+`
+    const src = 'void setup() {}\nvoid loop() { tone(8, 1000, 40); delay(300); }\n'
+    const d = { version: 1, parts: [{ id: 'uno', type: 'wokwi-arduino-uno' }, { id: 'bz', type: 'wokwi-buzzer' }], connections: [['bz:2', 'uno:8', ''], ['bz:1', 'uno:GND.1', '']] }
+    const r = run(new Bench(Circuit.parse(d).circuit!, await build(src)), parseScenario(test).scenario!)
+    expect(r.failed).toBeUndefined()
+  })
+})

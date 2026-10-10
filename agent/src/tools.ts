@@ -58,7 +58,7 @@ export const TOOLS = [
 - expect-text: { part-id: oled1, contains: '20 cm' }
 - expect-pixels: { part-id: ring1, lit: 16 } or { part-id: ring1, min-lit: 4, max-lit: 8 } or { part-id: ring1, index: 0, color: red }
 - expect-servo: { part-id: servo1, angle: 90 }
-- expect-tone: { part-id: bz1, hz: 440 } or { part-id: bz1, silent: true }
+- expect-tone: { part-id: bz1, hz: 440 } or { part-id: bz1, silent: true }, add within: 1s for beeps that come and go
 the test must check every behaviour the user asked for`,
     parameters: { type: 'object', properties: { yaml: { type: 'string' } }, required: ['yaml'] },
   },
