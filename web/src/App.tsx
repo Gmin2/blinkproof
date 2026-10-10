@@ -1,5 +1,5 @@
 import '@wokwi/elements'
-import { Bench, Circuit, type Diagram } from '@blinkproof/sim'
+import { Bench, Circuit, parseScenario, play, type Diagram, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import blinkDiagram from '../../sketches/blink/diagram.json'
 import blinkSrc from '../../sketches/blink/blink.ino?raw'
@@ -7,13 +7,18 @@ import oledDiagram from '../../sketches/hello-oled/diagram.json'
 import oledSrc from '../../sketches/hello-oled/hello-oled.ino?raw'
 import tourDiagram from '../../sketches/parts-tour/diagram.json'
 import tourSrc from '../../sketches/parts-tour/parts-tour.ino?raw'
+import tourTest from '../../sketches/parts-tour/test.yaml?raw'
+import potDiagram from '../../sketches/pot-print/diagram.json'
+import potSrc from '../../sketches/pot-print/pot-print.ino?raw'
+import potTest from '../../sketches/pot-print/test.yaml?raw'
 
-const SKETCHES = {
+const SKETCHES: Record<string, { source: string; diagram: Diagram; test?: string }> = {
   blink: { source: blinkSrc, diagram: blinkDiagram as unknown as Diagram },
   'hello-oled': { source: oledSrc, diagram: oledDiagram as unknown as Diagram },
-  'parts-tour': { source: tourSrc, diagram: tourDiagram as unknown as Diagram },
+  'parts-tour': { source: tourSrc, diagram: tourDiagram as unknown as Diagram, test: tourTest },
+  'pot-print': { source: potSrc, diagram: potDiagram as unknown as Diagram, test: potTest },
 }
-type Sketch = keyof typeof SKETCHES
+type Sketch = string
 
 type Build = { ok: boolean; hex?: string; flash?: number; ram?: number; ms: number; cached: boolean; diagnostics: { line: number; message: string }[] }
 
@@ -115,7 +120,10 @@ export default function App() {
   const canvas = useRef<HTMLDivElement>(null)
   const els = useRef<Record<string, Wokwi>>({})
   const [sketch, setSketch] = useState<Sketch>('hello-oled')
-  const { diagram, source } = SKETCHES[sketch]
+  const { diagram, source, test } = SKETCHES[sketch]
+  const [testRun, setTestRun] = useState(0)
+  const [steps, setSteps] = useState<StepResult[]>([])
+  const [report, setReport] = useState<Report | null>(null)
   const [paths, setPaths] = useState<{ d: string; color: string }[]>([])
   const [running, setRunning] = useState(true)
   const runningRef = useRef(running)
@@ -136,6 +144,9 @@ export default function App() {
     let stale = false
     setBuild(null)
     setProblem('')
+    setTestRun(0)
+    setSteps([])
+    setReport(null)
     compile(source)
       .then((b) => !stale && setBuild(b))
       .catch(() => !stale && setProblem('compiler not running, start it with pnpm -C compiler start'))
@@ -166,6 +177,11 @@ export default function App() {
     if (!build?.hex || !parsed.circuit) return
     const bench = new Bench(parsed.circuit, build.hex)
     benchRef.current = bench
+    // a test plays on a fresh bench, at twice real time so people can watch it
+    const scenario = testRun && test ? parseScenario(test).scenario : undefined
+    const playing = scenario ? play(bench, scenario) : null
+    setSteps([])
+    setReport(null)
     const strips = new Map<string, number>()
     const distances: Record<string, number> = {}
     const cleanups: (() => void)[] = []
@@ -201,11 +217,26 @@ export default function App() {
     const tick = (now: number) => {
       const dt = Math.min(50, now - last)
       last = now
-      if (runningRef.current) bench.run(dt)
+      if (playing) {
+        const until = bench.uno.ms + dt * 2
+        while (bench.uno.ms < until) {
+          const next = playing.next()
+          if (next.done) {
+            setReport(next.value)
+            break
+          }
+          if (next.value) setSteps((s) => [...s, next.value!])
+        }
+      } else if (runningRef.current) bench.run(dt)
       for (const [id, part] of Object.entries(bench.parts)) {
         const el = els.current[id]
         if (part.type === 'wokwi-led') el.value = part.lit
         if (part.type === 'wokwi-servo' && part.servo) el.angle = part.servo.angle
+        // a test moves the car too, keep the slider with it
+        if (part.type === 'wokwi-hc-sr04' && part.distance !== distances[id]) {
+          distances[id] = part.distance
+          setSonars({ ...distances })
+        }
         if (part.type === 'wokwi-buzzer') {
           el.hasSignal = !!part.buzzer?.hz
           speaker.current.play(part.buzzer?.hz ?? 0)
@@ -236,7 +267,7 @@ export default function App() {
       benchRef.current = null
       for (const c of cleanups) c()
     }
-  }, [build])
+  }, [build, testRun])
 
   const status =
     problem ||
@@ -264,6 +295,14 @@ export default function App() {
               {s}
             </button>
           ))}
+          {test && (
+            <button
+              onClick={() => setTestRun((n) => n + 1)}
+              className="rounded-md bg-accent/15 px-3 py-1.5 font-mono text-xs text-accent hover:bg-accent/25"
+            >
+              run test
+            </button>
+          )}
           <button
             onClick={() => setSound((v) => !v)}
             className="rounded-md bg-line px-3 py-1.5 font-mono text-xs text-ink hover:bg-[#283246]"
@@ -322,6 +361,27 @@ export default function App() {
         </div>
 
         <aside className="flex w-80 flex-col border-l border-line bg-panel">
+          {testRun > 0 && (
+            <div className="border-b border-line">
+              <div className="flex items-center justify-between px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-dim">
+                <span>test</span>
+                {report && <span className={report.ok ? 'text-accent' : 'text-[#f87171]'}>{report.ok ? 'passed' : 'failed'}</span>}
+              </div>
+              <ol className="max-h-72 overflow-auto px-4 pb-3 font-mono text-[11px] leading-5">
+                {steps.map((st) => (
+                  <li key={st.index} className="flex gap-2">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${st.ok ? 'bg-accent' : 'bg-[#f87171]'}`} />
+                    <span className={st.ok ? 'text-ink' : 'text-[#f87171]'}>
+                      {st.name ?? st.kind}
+                      <span className="block text-dim">{st.detail}</span>
+                    </span>
+                  </li>
+                ))}
+                {!report && <li className="text-dim">running...</li>}
+              </ol>
+              {report?.failed && <pre className="mx-4 mb-3 whitespace-pre-wrap rounded bg-canvas px-3 py-2 text-[10px] leading-4 text-dim">{report.failed.bench}</pre>}
+            </div>
+          )}
           <div className="border-b border-line px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-dim">serial</div>
           <pre className="flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-5 text-ink">{serial}</pre>
         </aside>

@@ -9,7 +9,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "avr8js": "0.21.1"
+    "avr8js": "0.21.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@blinkproof/compiler": "workspace:*",

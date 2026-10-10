@@ -1,0 +1,19 @@
+name: pot reads 0 to 1023
+version: 1
+author: blinkproof
+steps:
+  - set-control:
+      part-id: pot1
+      control: position
+      value: 1
+  - wait-serial: 'Potentiometer value: 1023'
+  - set-control:
+      part-id: pot1
+      control: position
+      value: 0.5
+  - wait-serial: 'Potentiometer value: 512'
+  - set-control:
+      part-id: pot1
+      control: position
+      value: 0
+  - wait-serial: 'Potentiometer value: 0'
