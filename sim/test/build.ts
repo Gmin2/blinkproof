@@ -14,4 +14,11 @@ export async function build(src: string) {
 
 export const hex = (name: string) => build(source(name))
 
+// the hex and where the heap pointer lives, for tests that look at ram
+export async function firmware(src: string) {
+  const r = await compile('uno', { 'sketch.ino': src })
+  if (!r.hex) throw new Error(`did not compile: ${r.log}`)
+  return { hex: r.hex, symbols: r.symbols ?? {}, ram: r.ram! }
+}
+
 export const diagram = (name: string) => JSON.parse(file(`${name}/diagram.json`))

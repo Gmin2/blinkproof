@@ -5,7 +5,7 @@ import { HCSR04 } from './parts/hcsr04'
 import { Servo } from './parts/servo'
 import { SSD1306 } from './parts/ssd1306'
 import { WS2812 } from './parts/ws2812'
-import { MHZ, Uno } from './uno'
+import { MHZ, Uno, type Symbols } from './uno'
 
 // what each part is doing, read by the canvas and by tests. a part that is not powered
 // or not wired to a pin it can use has null where its model would be
@@ -38,9 +38,9 @@ export class Bench {
   private updates: (() => void)[] = []
   private random = noise(7)
 
-  constructor(circuit: Circuit, hex: string) {
+  constructor(circuit: Circuit, hex: string, symbols?: Symbols) {
     this.circuit = circuit
-    this.uno = new Uno(hex)
+    this.uno = new Uno(hex, symbols)
     for (const p of circuit.diagram.parts) {
       const id = p.id
       switch (p.type) {
@@ -214,6 +214,12 @@ export class Bench {
       if (p.type === 'wokwi-servo') out.push(`${id}: ${!p.servo ? 'not powered or PWM not on a pin' : p.servo.pulses ? `${p.servo.angle} degrees` : 'no pulses yet'}`)
       if (p.type === 'wokwi-hc-sr04') out.push(`${id}: ${!p.sensor ? 'not working (needs 5V, GND, TRIG and ECHO on pins)' : `${p.distance} cm away, ${p.sensor.pings} pings${p.sensor.short ? `, ${p.sensor.short} triggers too short` : ''}`}`)
       if (p.type === 'wokwi-buzzer') out.push(`${id}: ${!p.buzzer ? 'not wired to a pin and GND' : p.buzzer.hz ? `${p.buzzer.hz} hz` : 'silent'}`)
+    }
+    const mem = this.uno.memory()
+    if (mem) {
+      out.push(this.uno.collidedAtMs !== undefined
+        ? `ram: the stack ran into the heap at ${Math.round(this.uno.collidedAtMs)}ms, memory is corrupted`
+        : `ram: ${mem.leastFree} bytes free at the tightest moment, heap ${mem.heapBytes} bytes`)
     }
     return out.join('\n')
   }

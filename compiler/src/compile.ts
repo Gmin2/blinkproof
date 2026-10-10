@@ -26,6 +26,8 @@ export type CompileResult = {
   // bytes used, from arduino-cli's summary
   flash?: number
   ram?: number
+  // ram addresses of avr-libc's heap pointers, so the sim can show free ram while it runs
+  symbols?: { brkval?: number; heapStart?: number }
   diagnostics: Diagnostic[]
   log: string
   ms: number
@@ -79,6 +81,15 @@ export function parseDiagnostics(log: string) {
   return out
 }
 
+// avr-nm prints data addresses with the 0x800000 offset avr-gcc gives ram
+export function parseSymbols(nm: string) {
+  const find = (name: string) => {
+    const m = nm.match(new RegExp(`^([0-9a-f]+) \\w ${name}$`, 'm'))
+    return m ? parseInt(m[1], 16) - 0x800000 : undefined
+  }
+  return { brkval: find('__brkval'), heapStart: find('__heap_start') }
+}
+
 function parseSizes(log: string) {
   const flash = log.match(/Sketch uses (\d+) bytes/)
   const ram = log.match(/Global variables use (\d+) bytes/)
@@ -118,7 +129,8 @@ export async function compile(board: Board, files: Record<string, string>): Prom
   const refused = checkSources(files)
   if (refused.length) return { ok: false, diagnostics: refused, log: '', ms: ms(), cached: false }
 
-  const hash = createHash('sha256').update(board)
+  // bump when the result shape changes, old cache entries are then ignored
+  const hash = createHash('sha256').update(`v2\0${board}`)
   for (const name of Object.keys(files).sort()) hash.update(`\0${name}\0${files[name]}`)
   const key = hash.digest('hex').slice(0, 32)
   const cacheFile = join(CACHE, `${key}.json`)
@@ -133,13 +145,17 @@ export async function compile(board: Board, files: Record<string, string>): Prom
     try {
       await mkdir(sketch)
       for (const [name, text] of Object.entries(files)) await writeFile(join(sketch, name), text)
+      const script = [
+        `arduino-cli compile -b ${target.fqbn} --warnings default --output-dir /w/sketch/build /w/sketch`,
+        '/root/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-nm /w/sketch/build/sketch.ino.elf > /w/sketch/build/symbols.txt',
+      ].join(' && ')
       const { code, out } = await run('docker', [
         'run', '--rm', '--network', 'none', '--memory', '1g', '--cpus', '2',
-        '-v', `${sketch}:/w/sketch`, target.image,
-        'arduino-cli', 'compile', '-b', target.fqbn, '--warnings', 'default', '--output-dir', '/w/sketch/build', '/w/sketch',
+        '-v', `${sketch}:/w/sketch`, target.image, 'sh', '-c', script,
       ], 90_000)
       const hex = code === 0 ? await readFile(join(sketch, 'build', 'sketch.ino.hex'), 'utf8').catch(() => undefined) : undefined
-      return { ok: !!hex, hex, ...parseSizes(out), diagnostics: parseDiagnostics(out), log: out.trim(), ms: 0, cached: false }
+      const nm = hex ? await readFile(join(sketch, 'build', 'symbols.txt'), 'utf8').catch(() => '') : ''
+      return { ok: !!hex, hex, ...parseSizes(out), symbols: parseSymbols(nm), diagnostics: parseDiagnostics(out), log: out.trim(), ms: 0, cached: false }
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

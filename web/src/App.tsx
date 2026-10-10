@@ -8,6 +8,10 @@ import oledSrc from '../../sketches/hello-oled/hello-oled.ino?raw'
 import tourDiagram from '../../sketches/parts-tour/diagram.json'
 import tourSrc from '../../sketches/parts-tour/parts-tour.ino?raw'
 import tourTest from '../../sketches/parts-tour/test.yaml?raw'
+import parkingDiagram from '../../sketches/parking/diagram.json'
+import parkingSrc from '../../sketches/parking/parking.ino?raw'
+import parkingTest from '../../sketches/parking/test.yaml?raw'
+import parkingRamSrc from '../../sketches/parking-ram/parking-ram.ino?raw'
 import potDiagram from '../../sketches/pot-print/diagram.json'
 import potSrc from '../../sketches/pot-print/pot-print.ino?raw'
 import potTest from '../../sketches/pot-print/test.yaml?raw'
@@ -16,11 +20,13 @@ const SKETCHES: Record<string, { source: string; diagram: Diagram; test?: string
   blink: { source: blinkSrc, diagram: blinkDiagram as unknown as Diagram },
   'hello-oled': { source: oledSrc, diagram: oledDiagram as unknown as Diagram },
   'parts-tour': { source: tourSrc, diagram: tourDiagram as unknown as Diagram, test: tourTest },
+  parking: { source: parkingSrc, diagram: parkingDiagram as unknown as Diagram, test: parkingTest },
+  'parking-ram': { source: parkingRamSrc, diagram: parkingDiagram as unknown as Diagram, test: parkingTest },
   'pot-print': { source: potSrc, diagram: potDiagram as unknown as Diagram, test: potTest },
 }
 type Sketch = string
 
-type Build = { ok: boolean; hex?: string; flash?: number; ram?: number; ms: number; cached: boolean; diagnostics: { line: number; message: string }[] }
+type Build = { ok: boolean; hex?: string; symbols?: { brkval?: number; heapStart?: number }; flash?: number; ram?: number; ms: number; cached: boolean; diagnostics: { line: number; message: string }[] }
 
 async function compile(source: string): Promise<Build> {
   const res = await fetch('/api/compile', {
@@ -130,6 +136,7 @@ export default function App() {
   runningRef.current = running
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
+  const [ram, setRam] = useState<{ free: number; leastFree: number; heapBytes: number; crashed: boolean } | null>(null)
   const [build, setBuild] = useState<Build | null>(null)
   const [problem, setProblem] = useState('')
   const speaker = useRef(new Speaker())
@@ -175,7 +182,7 @@ export default function App() {
 
   useEffect(() => {
     if (!build?.hex || !parsed.circuit) return
-    const bench = new Bench(parsed.circuit, build.hex)
+    const bench = new Bench(parsed.circuit, build.hex, build.symbols)
     benchRef.current = bench
     // a test plays on a fresh bench, at twice real time so people can watch it
     const scenario = testRun && test ? parseScenario(test).scenario : undefined
@@ -258,6 +265,8 @@ export default function App() {
       board.ledPower = true
       setSerial(bench.uno.serial)
       setSimMs(bench.uno.ms)
+      const mem = bench.uno.memory()
+      setRam(mem ? { ...mem, crashed: bench.uno.collidedAtMs !== undefined } : null)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -357,7 +366,22 @@ export default function App() {
               </label>
             )
           })}
-          <div className="absolute bottom-3 left-4 font-mono text-[11px] text-dim">sim {(simMs / 1000).toFixed(2)}s</div>
+          <div className="absolute bottom-3 left-4 flex items-center gap-4 font-mono text-[11px] text-dim">
+            <span>sim {(simMs / 1000).toFixed(2)}s</span>
+            {ram && build && (
+              <span className="flex items-center gap-2" title="globals, heap and stack in the uno's 2048 bytes">
+                ram
+                <span className="relative h-2 w-40 overflow-hidden rounded-full bg-line">
+                  <span className="absolute inset-y-0 left-0 bg-[#64748b]" style={{ width: `${((build.ram ?? 0) / 2048) * 100}%` }} />
+                  <span className="absolute inset-y-0 bg-[#a78bfa]" style={{ left: `${((build.ram ?? 0) / 2048) * 100}%`, width: `${(ram.heapBytes / 2048) * 100}%` }} />
+                  <span className="absolute inset-y-0 right-0 bg-[#f59e0b]" style={{ width: `${Math.max(0, 2048 - (build.ram ?? 0) - ram.heapBytes - Math.max(0, ram.leastFree)) / 2048 * 100}%` }} />
+                </span>
+                <span className={ram.crashed || ram.leastFree < 64 ? 'text-[#f87171]' : 'text-ink'}>
+                  {ram.crashed ? 'stack hit the heap' : `${ram.leastFree} b free`}
+                </span>
+              </span>
+            )}
+          </div>
         </div>
 
         <aside className="flex w-80 flex-col border-l border-line bg-panel">
