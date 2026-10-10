@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "author": "blinkproof",
+  "editor": "blinkproof",
+  "parts": [
+    { "type": "wokwi-pi-pico", "id": "pico", "left": 0, "top": 0 },
+    { "type": "wokwi-potentiometer", "id": "soil", "left": 260, "top": 260, "attrs": { "value": "800" } },
+    { "type": "wokwi-ssd1306", "id": "oled1", "left": 300, "top": 20 },
+    { "type": "wokwi-neopixel", "id": "light", "left": 300, "top": 170 }
+  ],
+  "connections": [
+    ["soil:VCC", "pico:3V3", "#ef4444", []],
+    ["soil:GND", "pico:GND.8", "#94a3b8", []],
+    ["soil:SIG", "pico:GP26", "#22c55e", []],
+    ["oled1:VIN", "pico:3V3", "#ef4444", []],
+    ["oled1:GND", "pico:GND.1", "#94a3b8", []],
+    ["oled1:DATA", "pico:GP4", "#38bdf8", []],
+    ["oled1:CLK", "pico:GP5", "#818cf8", []],
+    ["light:VDD", "pico:VBUS", "#ef4444", []],
+    ["light:VSS", "pico:GND.4", "#94a3b8", []],
+    ["light:DIN", "pico:GP15", "#f59e0b", []]
+  ]
+}

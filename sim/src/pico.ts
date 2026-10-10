@@ -4,7 +4,9 @@ import type { Board, PinEvent } from './board'
 import type { I2CDevice } from './i2c'
 import { bootromB1 } from './pico-bootrom'
 
-export const PICO_HZ = 125_000_000
+// board time on the pico is in nanoseconds: the firmware may move clk_sys (arduino-pico runs it at 200 mhz),
+// parts only need to know how long things took
+export const PICO_HZ = 1_000_000_000
 
 // gp0 to gp28, the adc on gp26, 27 and 28
 const pin = (name: string) => {
@@ -96,6 +98,9 @@ export class Pico implements Board {
       }
     }
     this.i2c = new PicoI2C(mcu.i2c[0])
+    // rp2040js runs the pio on its own timer as fast as it can. we step it here instead, each state machine at
+    // its divided clock, so a neopixel's pulses come out as long as on the chip
+    for (const pio of mcu.pio as any[]) pio.run = () => {}
     mcu.core.PC = 0x10000000
 
     mcu.gpio.forEach((gpio, n) => {
@@ -114,7 +119,12 @@ export class Pico implements Board {
   }
 
   get cycles() {
-    return Math.round(this.sim.clock.nanos / 8)
+    return this.sim.clock.nanos
+  }
+
+  // length of one clk_sys cycle, as the firmware set it up
+  private get cycleNs() {
+    return 1e9 / this.mcu.clkSys
   }
 
   get ms() {
@@ -151,7 +161,7 @@ export class Pico implements Board {
 
   at(cycles: number, fn: () => void) {
     const alarm = this.sim.clock.createAlarm(fn)
-    alarm.schedule(Math.max(1, (cycles - this.cycles) * 8))
+    alarm.schedule(Math.max(1, cycles - this.cycles))
   }
 
   writeSerial(byte: number) {
@@ -163,14 +173,49 @@ export class Pico implements Board {
     return undefined
   }
 
+  // a state machine that is running and not stalled on its fifo
+  private pioBusy() {
+    for (const pio of this.mcu.pio as any[]) {
+      if (pio.stopped) continue
+      for (const m of pio.machines) if (m.enabled && !m.waiting) return true
+    }
+    return false
+  }
+
+  private stepPio(sysCycles: number) {
+    for (const pio of this.mcu.pio as any[]) {
+      if (pio.stopped) continue
+      for (const m of pio.machines) {
+        if (!m.enabled) continue
+        const div = m.clockDivInt + m.clockDivFrac / 256 || 65536
+        m.blinkproofAcc = (m.blinkproofAcc ?? 0) + sysCycles / div
+        // an instruction costs one cycle plus its delay, rp2040js counts them in m.cycles
+        while (m.blinkproofAcc >= 1) {
+          const before = m.cycles
+          m.step()
+          pio.checkChangedPins()
+          m.blinkproofAcc -= Math.max(1, m.cycles - before)
+        }
+      }
+    }
+  }
+
   run(ms: number) {
     const clock = this.sim.clock
     const core = this.mcu.core
     const end = clock.nanos + ms * 1e6
     while (clock.nanos < end) {
-      // the core sleeps in wfe and wfi, skip straight to the next timer
-      if (core.waiting) clock.tick(Math.min(clock.nanosToNextAlarm, end - clock.nanos))
-      else clock.tick(this.mcu.core.executeInstruction() * 8)
+      if (core.waiting) {
+        // the core sleeps in wfe and wfi: skip to the next timer, unless the pio is still sending
+        if (this.pioBusy()) {
+          clock.tick(8 * this.cycleNs)
+          this.stepPio(8)
+        } else clock.tick(Math.min(clock.nanosToNextAlarm, end - clock.nanos))
+      } else {
+        const cycles = core.executeInstruction()
+        clock.tick(cycles * this.cycleNs)
+        this.stepPio(cycles)
+      }
     }
   }
 }

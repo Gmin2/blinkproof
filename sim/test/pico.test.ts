@@ -31,3 +31,15 @@ void loop() {
     expect(gp15.length).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe('pico plant monitor', () => {
+  it('reads the soil on GP26, writes the oled over i2c on GP4/GP5, lights a neopixel through pio', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { Bench, Circuit, parseScenario, run } = await import('../src')
+    const file = (f: string) => readFileSync(new URL(`../../sketches/pico-plant/${f}`, import.meta.url), 'utf8')
+    const bench = new Bench(Circuit.parse(JSON.parse(file('diagram.json'))).circuit!, await uf2(file('pico-plant.ino')))
+    const r = run(bench, parseScenario(file('test.yaml')).scenario!)
+    if (r.failed) console.log(r.failed.detail, '\n', r.failed.bench, '\n', r.failed.serialTail)
+    expect(r.failed).toBeUndefined()
+  })
+})
