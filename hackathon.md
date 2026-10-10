@@ -41,6 +41,12 @@ next
 - git init, `entire enable --agent claude-code` (entire cli 0.11.4), hooks and `.entire/settings.json` in place
 - business inputs for cfo.ai written in `business.md`
 
+### 2026-10-11 02:50 ist, slice 1 compile service
+- `docs/plan.md`: 12 slices in order, each with a done when and an oracle. research notes go in `research/notes/`
+- compile service: arduino-cli in docker behind http, cache, library allowlist, gcc errors with lines, flash and ram
+- the canvas compiles sketches itself now
+- found: arduino-cli's ram number leaves out malloc, so the oled's 1k buffer is invisible to it. the sim has to catch it
+
 ## demo
 pending
 
