@@ -11,6 +11,13 @@ export const PARTS = {
     same: [['GND.1', 'GND.2', 'GND.3'], ['A4', 'A4.2'], ['A5', 'A5.2']],
     board: true,
   },
+  'wokwi-arduino-nano': {
+    pins: ['12', '11', '10', '9', '8', '7', '6', '5', '4', '3', '2', 'GND.2', 'RESET.2', '0', '1', '13', '3.3V', 'AREF',
+      'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', '5V', 'RESET', 'GND.1', 'VIN', '12.2', '5V.2', '13.2', '11.2', 'RESET.3', 'GND.3'],
+    // the icsp header repeats 11, 12, 13, 5V and GND
+    same: [['GND.1', 'GND.2', 'GND.3'], ['5V', '5V.2'], ['11', '11.2'], ['12', '12.2'], ['13', '13.2'], ['RESET', 'RESET.2', 'RESET.3']],
+    board: true,
+  },
   'wokwi-led': { pins: ['A', 'C'] },
   'wokwi-resistor': { pins: ['1', '2'] },
   'wokwi-pushbutton': { pins: ['1.l', '2.l', '1.r', '2.r'], same: [['1.l', '1.r'], ['2.l', '2.r']] },

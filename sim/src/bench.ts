@@ -18,7 +18,7 @@ export type PartState =
   | { type: 'wokwi-servo'; servo: Servo | null }
   | { type: 'wokwi-hc-sr04'; sensor: HCSR04 | null; distance: number }
   | { type: 'wokwi-buzzer'; buzzer: Buzzer | null }
-  | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' }
+  | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' }
 
 // same seed every run, so a floating pin or a bouncing button reads the same in every test
 function noise(seed: number) {
