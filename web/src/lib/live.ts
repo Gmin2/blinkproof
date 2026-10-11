@@ -30,6 +30,8 @@ export function read(p: PartState): Reading | undefined {
       const text = p.oled?.text().replace(/\s+/g, ' ').trim() ?? ''
       return { cards: [['Screen', !p.oled ? 'not on the bus' : p.oled.on ? 'on' : 'off'], ['Frames', String(p.oled?.frames ?? 0)]], line: text ? `shows "${text.slice(0, 40)}"` : 'blank' }
     }
+    case 'wokwi-dht22':
+      return { cards: [['Temperature', `${p.temperature} °C`], ['Humidity', `${p.humidity}%`], ['Reads', String(p.sensor?.reads ?? 0)]], value: p.temperature, unit: '°C', max: 50, line: !p.sensor ? 'no power' : `${p.temperature} °C, ${p.humidity}%` }
     case 'wokwi-photoresistor-sensor':
       return { cards: [['Light', `${fmtLux(p.lux)} lux`], ['AO', p.powered ? `${p.volts.toFixed(2)} V` : '-'], ['DO', !p.powered ? '-' : p.dark ? 'high, dark' : 'low, light']], value: p.lux, unit: 'lux', max: 1000, line: !p.powered ? 'no power' : `${fmtLux(p.lux)} lux, ${p.dark ? 'dark' : 'light'}` }
     case 'wokwi-led-ring':

@@ -29,10 +29,11 @@ const NOTES: Record<string, string> = {
   'wokwi-servo': 'V+ 5V, GND, PWM to a digital pin. Servo library, attach(pin), write(0..180)',
   'wokwi-hc-sr04': 'ultrasonic distance. VCC 5V (not 3.3V), GND, TRIG and ECHO to digital pins. trigger 10us high, pulseIn(ECHO, HIGH, 30000) / 58 = cm. attrs: distance (cm). test control: distance (2 to 400)',
   'wokwi-photoresistor-sensor': 'light sensor module (photoresistor). VCC to 5V (3V3 on a pico), GND, AO to an analog pin: analogRead goes DOWN as the light goes up, about 250 at 500 lux (a lit room), over 900 at 1 lux (dark). DO to a digital pin reads HIGH when dark, LOW when bright, switching near 100 lux. wire AO, DO or both. attrs: lux (default 500). test control: lux (0.1 to 100000)',
+  'wokwi-dht22': 'temperature and humidity on one wire. VCC to 5V (3V3 on a pico), GND, SDA to a digital pin, leave NC alone. #include <DHT.h>, DHT dht(pin, DHT22), dht.begin() in setup, then dht.readTemperature() and dht.readHumidity(), they return NAN when the read fails. it answers at most every 2 seconds, so read it no faster than that. attrs: temperature (C, default 24), humidity (%, default 40). test controls: temperature (-40 to 80), humidity (0 to 100); a test has to wait over 2 s after changing one before the sketch sees it',
   'wokwi-buzzer': 'passive buzzer. 2 (+) to a digital pin, 1 (-) to GND. tone(pin, hz) and noTone(pin), a steady HIGH is silent',
 }
 
-const LIBRARIES = 'Adafruit_SSD1306.h, Adafruit_GFX.h, Adafruit_NeoPixel.h, Servo.h, Wire.h, plus the arduino core. nothing else is installed'
+const LIBRARIES = 'Adafruit_SSD1306.h, Adafruit_GFX.h, Adafruit_NeoPixel.h, Servo.h, Wire.h, DHT.h (DHT sensor library), plus the arduino core. nothing else is installed'
 
 export const TOOLS = [
   {

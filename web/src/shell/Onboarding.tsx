@@ -39,7 +39,7 @@ type Props = {
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
-const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04', 'wokwi-photoresistor-sensor']
+const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04', 'wokwi-photoresistor-sensor', 'wokwi-dht22']
 const RAILS = /^(GND|5V|3\.3V|3V3|VIN|VCC|VBUS|VSYS|V\+|VDD|VSS|IOREF|AREF)/
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const ohms = (v?: string) => {
@@ -140,6 +140,7 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
     ['wokwi-potentiometer', 'Knob', 'A dial read with analogRead'],
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Distance from 2 to 400 cm'],
     ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright the room is'],
+    ['wokwi-dht22', 'Temperature sensor', 'Degrees and humidity, one wire'],
   ],
   out: [
     ['wokwi-led', 'LED', 'Light from a pin, resistor included'],
@@ -609,6 +610,19 @@ function Control({ type, id, live, value }: { type: string; id: string; live: Li
         <input type="range" min={0} max={100} defaultValue={Math.round(20 * Math.log10(value ?? 500))} onChange={(e) => live.control(id, 'lux', Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10)} className="min-w-0 flex-1 accent-[var(--accent)]" />
         Bright
       </label>
+    )
+  if (type === 'wokwi-dht22')
+    return (
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+          <span className="w-[74px]">Temperature</span>
+          <input type="range" min={-40} max={80} step={0.5} defaultValue={value ?? 24} onChange={(e) => live.control(id, 'temperature', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        </label>
+        <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+          <span className="w-[74px]">Humidity</span>
+          <input type="range" min={0} max={100} defaultValue={live.readings[id]?.cards[1]?.[1] ? parseFloat(live.readings[id].cards[1][1]) : 40} onChange={(e) => live.control(id, 'humidity', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        </label>
+      </div>
     )
   if (type === 'wokwi-pushbutton')
     return (

@@ -37,4 +37,5 @@ export const PARTS = {
   'wokwi-buzzer': { pins: ['1', '2'] },
   // the module: a photoresistor in a divider, and a comparator with its own trim pot for DO
   'wokwi-photoresistor-sensor': { pins: ['VCC', 'GND', 'DO', 'AO'] },
+  'wokwi-dht22': { pins: ['VCC', 'SDA', 'NC', 'GND'] },
 } satisfies Record<string, { pins: string[]; same?: string[][]; board?: boolean }>

@@ -25,6 +25,8 @@ const CONNECT: [keyof typeof PARTS, string, string][][] = [
     ['wokwi-pushbutton', 'Button', 'Read a press with INPUT_PULLUP'],
     ['wokwi-potentiometer', 'Knob', 'A dial you read with analogRead'],
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Measure distance, 2 to 400 cm'],
+    ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright it is, on an analog pin'],
+    ['wokwi-dht22', 'Temperature sensor', 'Degrees and humidity, DHT22'],
   ],
   [
     ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels over i2c'],
