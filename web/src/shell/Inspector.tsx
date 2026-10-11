@@ -42,7 +42,7 @@ function Switch({ on, label }: { on: boolean; label: string }) {
   return (
     <div className="flex h-6 items-center gap-2 text-[12px] text-ink">
       <span className={`relative h-3 w-[22px] rounded-full transition-colors ${on ? 'bg-accent' : 'bg-switch'}`}>
-        <span className={`absolute top-[1px] h-2.5 w-2.5 rounded-full bg-white shadow transition-all ${on ? 'left-[11px]' : 'left-[1px]'}`} />
+        <span className={`absolute top-[1px] h-2.5 w-2.5 rounded-full bg-panel shadow transition-all ${on ? 'left-[11px]' : 'left-[1px]'}`} />
       </span>
       {label}
     </div>
@@ -117,7 +117,7 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
         <div className="flex-1" />
         {/* who builds it */}
         <label className="relative flex h-9 items-center gap-1.5 text-[12px] font-medium text-ink" title="model">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">{(current?.label ?? model).charAt(0).toUpperCase()}</span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-on-accent">{(current?.label ?? model).charAt(0).toUpperCase()}</span>
           <span className="max-w-[78px] truncate">{(current?.label ?? model).split(' ').slice(-2).join(' ')}</span>
           <select value={model} onChange={(e) => onModel(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0">
             {['litellm', 'anthropic', 'openai'].map((p) => {
