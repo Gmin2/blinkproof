@@ -90,7 +90,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
     onPick?.(picked === id ? null : id)
   }
 
-  const holeFill = blue ? '#b7c3e3' : '#c9c1b0'
+  const holeFill = blue ? '#b7c3e3' : '#cfcfcf'
   const label = { fontFamily: 'Geist Mono, monospace' }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={fill ? 'block h-full w-full' : 'block h-auto w-full'} preserveAspectRatio="xMidYMid meet" role="img" aria-label="the circuit on a breadboard" onClick={() => onPick?.(null)}>
@@ -115,7 +115,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       </g>
 
       {/* the breadboard */}
-      <rect x={x0 - 8} y={top} width={bbW} height={bbH} rx={6} fill={blue ? 'rgba(255,255,255,.55)' : '#f5f2ea'} stroke={blue ? INK : '#d6d0c2'} strokeWidth={blue ? 1.4 : 1} />
+      <rect x={x0 - 8} y={top} width={bbW} height={bbH} rx={6} fill={blue ? 'rgba(255,255,255,.55)' : '#fafafa'} stroke={blue ? INK : '#dcdcdc'} strokeWidth={blue ? 1.4 : 1} />
       {(['top+', 'top-', 'bottom-', 'bottom+'] as const).map((r) => (
         <g key={r}>
           <line x1={x0} x2={x0 + p.cols * P} y1={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -5 : 5)} y2={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -5 : 5)} stroke={r.endsWith('+') ? '#ef4444' : '#3b82f6'} strokeWidth={1} opacity={0.6} />
@@ -125,10 +125,10 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
           {Array.from({ length: p.cols }, (_, i) => (i % 6 === 5 ? null : <rect key={i} x={x0 + i * P + P / 2 - 1.6} y={top + railY[r] * P - 1.6} width={3.2} height={3.2} rx={0.6} fill={holeFill} />))}
         </g>
       ))}
-      <rect x={x0} y={top + 8.05 * P} width={p.cols * P} height={0.9 * P} fill={blue ? 'rgba(44,79,158,.06)' : '#ebe5d6'} />
+      <rect x={x0} y={top + 8.05 * P} width={p.cols * P} height={0.9 * P} fill={blue ? 'rgba(44,79,158,.06)' : '#f0f0f0'} />
       {Object.entries(rowY).map(([row, y]) => (
         <g key={row}>
-          <text x={x0 - 5} y={top + y * P + 3} textAnchor="end" fontSize={7.5} fill="#a39a86" {...label}>
+          <text x={x0 - 5} y={top + y * P + 3} textAnchor="end" fontSize={7.5} fill="#a3a3a3" {...label}>
             {row}
           </text>
           {Array.from({ length: p.cols }, (_, i) => (
@@ -138,7 +138,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       ))}
       {Array.from({ length: p.cols }, (_, i) =>
         (i + 1) % 5 === 0 || i === 0 ? (
-          <text key={i} x={x0 + i * P + P / 2} y={top + 2.35 * P} textAnchor="middle" fontSize={7} fill="#a39a86" {...label}>
+          <text key={i} x={x0 + i * P + P / 2} y={top + 2.35 * P} textAnchor="middle" fontSize={7} fill="#a3a3a3" {...label}>
             {i + 1}
           </text>
         ) : null,
@@ -146,7 +146,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
 
       {/* the tray: parts with no breadboard form, dashed to their holes */}
       {p.beside.length > 0 && (
-        <text x={x0} y={trayTop - 8} fontSize={8.5} fill={blue ? INK : '#8a847e'} {...label}>
+        <text x={x0} y={trayTop - 8} fontSize={8.5} fill={blue ? INK : '#8c8c8c'} {...label}>
           beside the board: these connect with jumper wires
         </text>
       )}
@@ -778,7 +778,7 @@ export function BreadboardGuide({ diagram }: { diagram: Diagram }) {
   const s = p.steps[step]
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[10px] border border-sep bg-[#fbfaf7] p-2">
+      <div className="overflow-hidden rounded-[10px] border border-sep bg-frame p-2">
         <Drawing p={p} diagram={diagram} look="real" upTo={step} focus={step} />
       </div>
       <div className="flex items-center gap-2">
