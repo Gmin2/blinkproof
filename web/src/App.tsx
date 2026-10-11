@@ -4,6 +4,7 @@ import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
 import { Start } from './shell/Start'
+import { Onboarding } from './shell/Onboarding'
 import { Serial } from './shell/Serial'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, drafts, useLibrary, useRoute, type Draft, type Saved } from './shell/library'
@@ -118,15 +119,19 @@ export default function App() {
   const [prompt, setPrompt] = useState(IDEAS[1])
   const [model, setModel] = useState('claude-haiku')
   const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
+  // onboarding keeps its own page while it builds, the editor moves to the build's link
+  const routeRef = useRef(route)
+  routeRef.current = route
   const build = useBuild(
     () => setTestRun((n) => n + 1),
     (t) => setMode(t),
     (id) => {
-      go({ kind: 'doc', id }, true)
+      if (routeRef.current.kind !== 'onboard') go({ kind: 'doc', id }, true)
       lib.refresh()
     },
+    () => routeRef.current.kind !== 'onboard',
   )
-  const live = route.kind === 'new' || build.savedId === route.id
+  const live = route.kind === 'new' || (route.kind === 'doc' && build.savedId === route.id)
 
   const docId = route.kind === 'doc' ? route.id : undefined
 
@@ -427,6 +432,29 @@ export default function App() {
   const serialPanel = (
     <Serial lines={bench?.lines ?? []} simMs={bench?.simMs ?? 0} speed={bench?.speed ?? 0} state={sim} flash={bench?.build?.flash} ram={bench?.build?.ram} board={boardName} onSend={(t) => serialIn.current?.(t)} />
   )
+
+  if (route.kind === 'onboard')
+    return (
+      <Onboarding
+        busy={build.busy}
+        request={build.request}
+        prompt={prompt}
+        onPrompt={setPrompt}
+        onStart={() => build.start(prompt, model)}
+        feed={build.feed}
+        diagram={build.diagram}
+        source={build.source}
+        test={build.test}
+        runs={build.runs}
+        compiles={build.compiles}
+        verdict={build.verdict}
+        savedId={build.savedId}
+        recent={lib.builds}
+        examples={lib.examples}
+        onEditor={(id) => (id ? open(id) : openNew())}
+        onBlank={blank}
+      />
+    )
 
   return (
     <div className="flex h-full">

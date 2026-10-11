@@ -40,7 +40,11 @@ function note(name: string, r: Record<string, any>) {
 }
 
 // the agent's build, played on screen at a pace a person can follow
-export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 'code') => void, onSaved: (id: string) => void) {
+export type Run = { ok: boolean; steps: string[]; failed?: number }
+export type Compiled = { ok: boolean; flash?: string; ram?: string; errors?: unknown[] }
+
+// hasCanvas: whether a canvas will play each test run, if not there is nothing to wait for
+export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 'code') => void, onSaved: (id: string) => void, hasCanvas: () => boolean = () => true) {
   const [busy, setBusy] = useState(false)
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [diagram, setDiagram] = useState<Diagram | null>(null)
@@ -51,6 +55,9 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
   const [request, setRequest] = useState('')
   // the stored build this state belongs to, so the page knows whether to show it
   const [savedId, setSavedId] = useState<string>()
+  // every test run and compile the agent did, for the flow to show
+  const [runs, setRuns] = useState<Run[]>([])
+  const [compiles, setCompiles] = useState<Compiled[]>([])
   const reportWaiter = useRef<(() => void) | null>(null)
 
   // the canvas tells us when the test it plays has a report
@@ -99,8 +106,10 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
         return
       }
       if (e.name === 'write_test' && typeof e.args?.yaml === 'string' && ok) setTest(e.args.yaml)
+      if (e.name === 'compile') setCompiles((c) => [...c, { ok, flash: e.result.flash, ram: e.result.ram, errors: e.result.errors }])
+      if (e.name === 'run_test') setRuns((r) => [...r, { ok, steps: Array.isArray(e.result.steps) ? e.result.steps : (e.result.compile_errors ?? e.result.errors ?? []).map(String), failed: e.result.failed_step }])
       say({ kind: 'tool', name: e.name, ok, note: note(e.name, e.result) })
-      if (e.name === 'run_test' && Array.isArray(e.result.steps)) {
+      if (e.name === 'run_test' && Array.isArray(e.result.steps) && hasCanvas()) {
         onTab('test')
         onRunTest()
         // let the canvas play the same test the agent just ran
@@ -125,6 +134,8 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setTest(undefined)
     setVerdict(null)
     setSavedId(undefined)
+    setRuns([])
+    setCompiles([])
   }
 
   async function start(text: string, model: string) {
@@ -185,5 +196,5 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setBusy(false)
   }
 
-  return { busy, feed, diagram, source, code, test, verdict, request, savedId, start, replay, reported, reset }
+  return { busy, feed, diagram, source, code, test, verdict, request, savedId, runs, compiles, start, replay, reported, reset }
 }

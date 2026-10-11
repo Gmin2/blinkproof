@@ -66,12 +66,12 @@ export function useLibrary() {
   return { builds, examples, offline, refresh, upsert }
 }
 
-// two pages: / for a new build, /b/:id for anything stored
-export type Route = { kind: 'new' } | { kind: 'doc'; id: string }
+// three pages: / is onboarding, /new is the editor with nothing open, /b/:id is anything stored
+export type Route = { kind: 'onboard' } | { kind: 'new' } | { kind: 'doc'; id: string }
 
 const parse = (path: string): Route => {
   const m = path.match(/^\/b\/([\w-]+)/)
-  return m ? { kind: 'doc', id: m[1] } : { kind: 'new' }
+  return m ? { kind: 'doc', id: m[1] } : path.startsWith('/new') ? { kind: 'new' } : { kind: 'onboard' }
 }
 
 export function useRoute() {
@@ -83,7 +83,7 @@ export function useRoute() {
   }, [])
   // replace keeps the back button sane when a new build gets its id
   const go = useCallback((r: Route, replace = false) => {
-    const path = r.kind === 'doc' ? `/b/${r.id}` : '/'
+    const path = r.kind === 'doc' ? `/b/${r.id}` : r.kind === 'new' ? '/new' : '/'
     if (location.pathname !== path) history[replace ? 'replaceState' : 'pushState'](null, '', path)
     setRoute(r)
   }, [])
