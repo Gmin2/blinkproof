@@ -27,11 +27,11 @@ function netName(p: Proto, color: string, why: string) {
   return why
 }
 
-type DrawProps = { p: Proto; diagram: Diagram; look: Look; upTo: number; focus?: number; picked?: string | null; onPick?: (id: string | null) => void; callouts?: boolean; fill?: boolean }
+type DrawProps = { p: Proto; diagram: Diagram; look: Look; upTo: number; focus?: number; picked?: string | null; onPick?: (id: string | null) => void; callouts?: boolean; fill?: boolean; hover?: string | null }
 
 // the breadboard seen from above with the board beside it, drawn to the hole. two looks of one drawing:
 // real, in the colours of the bench, and blueprint, see through with numbered callouts
-export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callouts = false, fill = false }: DrawProps) {
+export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callouts = false, fill = false, hover = null }: DrawProps) {
   const blue = look === 'blueprint'
   const shown = new Set(p.steps.slice(0, upTo + 1).flatMap((s) => s.adds))
   const hot = new Set(focus === undefined ? [] : (p.steps[focus]?.adds ?? []))
@@ -63,7 +63,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
   const order = numbered(p)
   const calloutX = x0 + bbW + 40
   const W = callouts ? calloutX + 170 : x0 + bbW + 6
-  const H = trayTop + (p.beside.length ? 66 : 0) + 8
+  const H = trayTop + (p.beside.length ? 66 : 0) + (p.beside.length ? 6 : -18)
   const at = (h: Hole) => ({ x: x0 + (h.col - 0.5) * P, y: top + ('rail' in h ? railY[h.rail] : rowY[h.row]) * P })
   const boardPinAt = (pin: string) => ({ x: BW - 6, y: top + 30 + boardPins.indexOf(pin) * Math.min(16, (bbH - 46) / Math.max(1, boardPins.length - 1)) })
   const besidePins = (b: Placed) => [...new Set(p.jumpers.flatMap((j) => [j.from, j.to]).filter((e): e is { part: string; pin: string } => 'part' in e && e.part === b.id).map((e) => e.pin))]
@@ -119,7 +119,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       <rect x={x0 - 8} y={top} width={bbW} height={bbH} rx={6} fill={blue ? 'rgba(255,255,255,.55)' : '#fafafa'} stroke={blue ? INK : '#dcdcdc'} strokeWidth={blue ? 1.4 : 1} />
       {(['top+', 'top-', 'bottom-', 'bottom+'] as const).map((r) => (
         <g key={r}>
-          <line x1={x0} x2={x0 + p.cols * P} y1={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -5 : 5)} y2={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -5 : 5)} stroke={r.endsWith('+') ? '#ef4444' : '#3b82f6'} strokeWidth={1} opacity={0.6} />
+          <line x1={x0} x2={x0 + p.cols * P} y1={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -4.5 : 4.5)} y2={top + railY[r] * P + (r === 'top+' || r === 'bottom-' ? -4.5 : 4.5)} stroke={r.endsWith('+') ? '#ef4444' : '#3b82f6'} strokeWidth={1} opacity={0.6} />
           <text x={x0 - 5} y={top + railY[r] * P + 3} textAnchor="end" fontSize={8} fill={r.endsWith('+') ? '#ef4444' : '#3b82f6'} {...label}>
             {r.endsWith('+') ? '+' : '−'}
           </text>
@@ -139,7 +139,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       ))}
       {Array.from({ length: p.cols }, (_, i) =>
         (i + 1) % 5 === 0 || i === 0 ? (
-          <text key={i} x={x0 + i * P + P / 2} y={top + 2.35 * P} textAnchor="middle" fontSize={7} fill="#a3a3a3" {...label}>
+          <text key={i} x={x0 + i * P + P / 2} y={top + 2.5 * P} textAnchor="middle" fontSize={6.5} fill="#a3a3a3" {...label}>
             {i + 1}
           </text>
         ) : null,
@@ -147,7 +147,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
 
       {/* the tray: parts with no breadboard form, dashed to their holes */}
       {p.beside.some((b) => shown.has(b.id)) && (
-        <text x={x0} y={trayTop - 8} fontSize={7} fill={blue ? INK : '#8c8c8c'} fontFamily="Geist, sans-serif">
+        <text x={x0} y={trayTop + 58} fontSize={7} fill={blue ? INK : '#8c8c8c'} fontFamily="Geist, sans-serif">
           beside the board: these connect with jumper wires
         </text>
       )}
@@ -180,18 +180,27 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
         </g>
       ))}
 
-      {/* jumpers on top, bowed so they do not hide each other. blueprint draws them thin and dashed */}
-      {p.jumpers.map((j, k) => {
+      {/* jumpers on top. a short hop along a column is a straight rigid wire, a long one leaves the board pin
+          sideways and drops into its hole from above, the way a jumper sits. each has a dark casing under it */}
+      {p.jumpers.map((j) => {
         const a = endAt(j.from)
         const b = endAt(j.to)
-        const bow = Math.min(26, Math.hypot(b.x - a.x, b.y - a.y) * 0.25)
-        const d = `M${a.x} ${a.y} Q${(a.x + b.x) / 2 + (k % 2 ? 4 : -4)} ${(a.y + b.y) / 2 - bow} ${b.x} ${b.y}`
+        const straight = Math.abs(a.x - b.x) < P * 0.6
+        const fromBoard = 'board' in j.from || 'part' in j.from
+        const d = straight
+          ? `M${a.x} ${a.y} L${b.x} ${b.y}`
+          : fromBoard
+            ? `M${a.x} ${a.y} C${a.x + Math.max(24, (b.x - a.x) * 0.5)} ${a.y} ${b.x} ${b.y + (a.y < b.y ? -1 : 1) * Math.max(18, Math.abs(b.y - a.y) * 0.6)} ${b.x} ${b.y}`
+            : `M${a.x} ${a.y} C${a.x} ${a.y - 18} ${b.x} ${b.y - 18} ${b.x} ${b.y}`
+        const lit = hot.has(j.id) || hover === j.id
         return (
-          <g key={j.id} opacity={op(j.id)}>
-            {hot.has(j.id) && <path d={d} stroke="var(--accent-line)" strokeOpacity={0.14} strokeWidth={6} fill="none" strokeLinecap="round" />}
-            <path d={d} stroke={j.color} strokeWidth={blue ? 1.2 : 2} fill="none" strokeLinecap="round" strokeDasharray={blue ? '4 3' : undefined} />
-            <circle cx={a.x} cy={a.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? 'var(--accent-line)' : 'none'} strokeWidth={1.2} />
-            <circle cx={b.x} cy={b.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? 'var(--accent-line)' : 'none'} strokeWidth={1.2} />
+          <g key={j.id} opacity={hover && hover !== j.id ? Math.min(op(j.id), 0.25) : op(j.id)}>
+            {lit && <path d={d} stroke="var(--accent-line)" strokeOpacity={0.14} strokeWidth={7} fill="none" strokeLinecap="round" />}
+            <path d={d} stroke="#000" strokeOpacity={0.28} strokeWidth={blue ? 1.4 : 3.2} fill="none" strokeLinecap="round" transform="translate(0 0.8)" />
+            <path d={d} stroke={j.color} strokeWidth={blue ? 1.2 : 2.2} fill="none" strokeLinecap="round" strokeDasharray={blue ? '4 3' : undefined} />
+            {[a, b].map((e, k) => (
+              <rect key={k} x={e.x - 2} y={e.y - 2} width={4} height={4} rx={0.8} fill={j.color} stroke={lit ? 'var(--accent-line)' : '#00000055'} strokeWidth={lit ? 1.2 : 0.6} />
+            ))}
           </g>
         )
       })}
@@ -356,6 +365,8 @@ export function useGuide(diagram: Diagram | null, key: string) {
   const p = useMemo(() => (diagram ? proto(diagram) : null), [diagram])
   const [step, setStep] = useState(0)
   const [picked, setPicked] = useState<string | null>(null)
+  // a wire row the pointer is on, lit on the canvas
+  const [hover, setHover] = useState<string | null>(null)
   const [look, setLook] = useState<Look>('real')
   const [list, setList] = useState<'steps' | 'shopping'>('steps')
   const store = `bp-ticks-${key}`
@@ -380,7 +391,7 @@ export function useGuide(diagram: Diagram | null, key: string) {
       return next
     })
   const last = p ? p.steps.length - 1 : 0
-  return { p, step: Math.min(step, last), setStep, picked, setPicked, look, setLook, list, setList, ticks, tick, last }
+  return { p, step: Math.min(step, last), setStep, picked, setPicked, hover, setHover, look, setLook, list, setList, ticks, tick, last }
 }
 export type Guide = ReturnType<typeof useGuide>
 
@@ -396,7 +407,7 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
         <div className="relative" style={{ width: `${Math.round(Math.min(1, zoom) * 100)}%`, minWidth: zoom > 1 ? `${Math.round(zoom * 100)}%` : undefined, maxWidth: zoom === 1 ? 980 : undefined }}>
           <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}, on a {p.cols > 30 ? 'full' : 'half'} size breadboard</span>
           <div className="bg-frame px-6 py-5">
-            <Drawing p={p} diagram={diagram} look="real" upTo={picked ? last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} />
+            <Drawing p={p} diagram={diagram} look="real" upTo={picked ? last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} hover={guide.hover} />
           </div>
         </div>
       </div>
@@ -449,7 +460,11 @@ function rowsOf(p: Proto, adds: string[]): Row[] {
     const n = pin.replace(/\.\d$/, '')
     return /^\d+$/.test(n) ? `D${n}` : n
   }
-  const end = (e: End) => ('hole' in e ? holeName(e.hole).replace(/^the /, '') : 'board' in e ? `${p.board.name.toLowerCase()}:${say(e.board.split(':')[1])}` : `${e.part}:${e.pin}`)
+  const end = (e: End) => {
+    if ('hole' in e && 'rail' in e.hole) return `${e.hole.rail.startsWith('top') ? 'top' : 'bottom'} ${e.hole.rail.endsWith('+') ? `+ rail, ${p.power}` : '− rail, GND'}`
+    if ('hole' in e) return holeName(e.hole)
+    return 'board' in e ? `${p.board.name.toLowerCase()}:${say(e.board.split(':')[1])}` : `${e.part}:${e.pin}`
+  }
   const out: Row[] = []
   for (const id of adds) {
     const x = p.placed.find((q) => q.id === id)
@@ -476,9 +491,9 @@ function Resistor({ bands }: { bands: string[] }) {
 }
 
 // one grey row the way the inspector shows a pin: a label on the left, where it goes on the right in mono
-function Line({ left, right, swatch }: { left: React.ReactNode; right: React.ReactNode; swatch?: string }) {
+function Line({ left, right, swatch, onHover }: { left: React.ReactNode; right: React.ReactNode; swatch?: string; onHover?: (on: boolean) => void }) {
   return (
-    <div className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+    <div onPointerEnter={() => onHover?.(true)} onPointerLeave={() => onHover?.(false)} className={`flex h-6 items-center gap-2 rounded-[7px] px-2 text-[11px] ${onHover ? 'bg-input hover:bg-hover hover:shadow-[inset_0_0_0_1px_var(--divider)]' : 'bg-input'}`}>
       {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
       <span className="min-w-0 truncate font-mono text-ink">{left}</span>
       <span className="ml-auto truncate font-mono text-dim">{right}</span>
@@ -567,6 +582,7 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
                     ))}
                     {others.length > 0 && (
                       <div className="space-y-1.5">
+                      {parts.length > 0 && others.some((r) => r.kind === 'wire') && <div className="pt-1 text-[11px] font-medium text-dim">then the wires</div>}
                         {others.map((r) =>
                           r.kind === 'resistor' ? (
                             <div key={r.id} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
@@ -579,7 +595,7 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
                           ) : r.kind === 'beside' ? (
                             <Line key={r.id} left={r.id} right="beside the board" />
                           ) : (
-                            <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} />
+                            <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} onHover={(on) => guide.setHover(on ? r.id : null)} />
                           ),
                         )}
                       </div>
