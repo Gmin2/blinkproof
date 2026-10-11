@@ -1,6 +1,7 @@
-import { Bench, Circuit, colorName, type Diagram, type PartState } from '@blinkproof/sim'
+import { colorName, type Bench, type PartState } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
-import { compile, type Build } from './compile'
+import type { Build } from './compile'
+import type { BenchState } from '../Workbench'
 
 export type Point = { ms: number; v: number }
 export type Happening = { ms: number; text: string; tone?: 'ok' | 'bad' | 'warn' }
@@ -53,100 +54,57 @@ export type Live = {
   control: (id: string, name: string, value: number) => void
 }
 
-// the gadget running in the page: compile once, then the bench in real time, sampled ten times a second
-export function useLive(diagram: Diagram | null | undefined, source: string | undefined, on: boolean): Live {
-  const [build, setBuild] = useState<Build>()
-  const [error, setError] = useState<string>()
-  const [frame, setFrame] = useState<Omit<Live, 'state' | 'error' | 'build' | 'control'>>({ simMs: 0, speed: 0, readings: {}, history: {}, log: {}, serial: [] })
+type Frame = Omit<Live, 'state' | 'error' | 'build' | 'control'>
+const empty = (): Frame => ({ simMs: 0, speed: 0, readings: {}, history: {}, log: {}, serial: [] })
+
+// the gadget running in a workbench, read ten times a second into readings, a history to chart and a log of changes.
+// the workbench hands its bench over so controls move the same sim that is drawn
+export function useSampler(on: boolean, reset: unknown) {
   const bench = useRef<Bench | null>(null)
-  const board = diagram?.parts.find((p) => p.type === 'wokwi-pi-pico') ? 'pico' : diagram?.parts.find((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno'
-
+  const kept = useRef({ history: {} as Record<string, Point[]>, log: {} as Record<string, Happening[]>, last: {} as Record<string, string>, sampled: 0, simMs: 0, build: null as Build | null })
+  const [frame, setFrame] = useState<Frame>(empty)
+  const [build, setBuild] = useState<Build | null>(null)
   useEffect(() => {
-    if (!on || !source) return
-    let stale = false
-    setBuild(undefined)
-    setError(undefined)
-    compile(source, board)
-      .then((b) => !stale && (b.ok ? setBuild(b) : setError(`line ${b.diagnostics[0]?.line}: ${b.diagnostics[0]?.message}`)))
-      .catch(() => !stale && setError('the compiler is not running'))
-    return () => {
-      stale = true
-    }
-  }, [on, source, board])
+    kept.current = { history: {}, log: {}, last: {}, sampled: 0, simMs: 0, build: null }
+    setFrame(empty())
+    setBuild(null)
+  }, [reset])
 
-  useEffect(() => {
-    const firmware = build?.hex ?? build?.uf2
-    const circuit = diagram && Circuit.parse(diagram).circuit
-    if (!on || !firmware || !circuit) return
-    const b = new Bench(circuit, firmware, build?.symbols)
-    bench.current = b
-    const history: Record<string, Point[]> = {}
-    const log: Record<string, Happening[]> = {}
-    const last: Record<string, string> = {}
-    const serial: Happening[] = []
-    let read0 = 0
-    let partial = ''
-    let raf = 0
-    let prev = performance.now()
-    let sampled = 0
-    let windowWall = 0
-    let windowSim = 0
-    let speed = 0
-    const tick = (now: number) => {
-      const wall = now - prev
-      prev = now
-      const before = b.board.ms
-      b.run(Math.min(50, wall))
-      windowWall += wall
-      windowSim += b.board.ms - before
-      if (windowWall > 600) {
-        speed = windowSim / windowWall
-        windowWall = windowSim = 0
+  const onState = (s: BenchState) => {
+    const k = kept.current
+    if (s.build !== k.build) setBuild((k.build = s.build))
+    const now = performance.now()
+    if (now - k.sampled < 100) return
+    k.sampled = now
+    // a fresh boot starts the charts over
+    if (s.simMs < k.simMs) Object.assign(k, { history: {}, log: {}, last: {} })
+    k.simMs = s.simMs
+    const readings: Record<string, Reading> = {}
+    for (const [id, p] of Object.entries(s.parts)) {
+      if (BOARDS.includes(p.type) || p.type === 'wokwi-resistor') continue
+      const r = read(p)
+      if (!r) continue
+      readings[id] = r
+      if (r.value !== undefined) {
+        const h = (k.history[id] ??= [])
+        h.push({ ms: s.simMs, v: r.value })
+        if (h.length > HISTORY) h.shift()
       }
-      // serial, line by line, stamped with the sim time the newline came in
-      const text = b.board.serial
-      if (text.length !== read0) {
-        const parts = (partial + text.slice(read0)).split('\n')
-        read0 = text.length
-        partial = parts.pop() ?? ''
-        for (const t of parts) serial.push({ ms: b.board.ms, text: t.replace(/\r$/, ''), tone: /(error|fail)/i.test(t) ? 'bad' : /(ready|ok\b)/i.test(t) ? 'ok' : undefined })
-        if (serial.length > 400) serial.splice(0, serial.length - 400)
+      if (r.line !== k.last[id]) {
+        k.last[id] = r.line
+        const l = (k.log[id] ??= [])
+        l.push({ ms: s.simMs, text: r.line })
+        if (l.length > 200) l.shift()
       }
-      if (now - sampled > 100) {
-        sampled = now
-        const readings: Record<string, Reading> = {}
-        for (const [id, p] of Object.entries(b.parts)) {
-          if (BOARDS.includes(p.type) || p.type === 'wokwi-resistor') continue
-          const r = read(p)
-          if (!r) continue
-          readings[id] = r
-          if (r.value !== undefined) {
-            const h = (history[id] ??= [])
-            h.push({ ms: b.board.ms, v: r.value })
-            if (h.length > HISTORY) h.shift()
-          }
-          if (r.line !== last[id]) {
-            last[id] = r.line
-            const l = (log[id] ??= [])
-            l.push({ ms: b.board.ms, text: r.line })
-            if (l.length > 200) l.shift()
-          }
-        }
-        setFrame({ simMs: b.board.ms, speed, readings, history: { ...history }, log: { ...log }, serial: [...serial] })
-      }
-      raf = requestAnimationFrame(tick)
     }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(raf)
-      bench.current = null
-    }
-  }, [on, build, diagram])
+    const serial = s.lines.slice(-400).map((l) => ({ ms: l.ms, text: l.text, tone: /(error|fail)/i.test(l.text) ? ('bad' as const) : /(ready|ok\b)/i.test(l.text) ? ('ok' as const) : undefined }))
+    setFrame({ simMs: s.simMs, speed: s.speed, readings, history: { ...k.history }, log: { ...k.log }, serial })
+  }
 
-  return {
-    state: !on ? 'off' : error ? 'failed' : build ? 'running' : 'compiling',
-    error,
-    build,
+  const live: Live = {
+    state: !on ? 'off' : build && !build.ok ? 'failed' : build ? 'running' : 'compiling',
+    error: build && !build.ok ? `line ${build.diagnostics[0]?.line}: ${build.diagnostics[0]?.message}` : undefined,
+    build: build ?? undefined,
     ...frame,
     control: (id, name, value) => {
       try {
@@ -154,4 +112,5 @@ export function useLive(diagram: Diagram | null | undefined, source: string | un
       } catch {}
     },
   }
+  return { live, onState, bench }
 }

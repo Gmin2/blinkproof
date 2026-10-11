@@ -6,7 +6,9 @@ import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
 import { BuildGuide, bom } from './Guide'
 import { api, type Saved } from './library'
-import { useLive, type Happening, type Live, type Point } from '../lib/live'
+import { useSampler, type Happening, type Live, type Point } from '../lib/live'
+import { Workbench, type BenchState } from '../Workbench'
+import type { Bench } from '@blinkproof/sim'
 import { KIND } from './Sidebar'
 import { IDEAS, type Compiled, type FeedItem, type Run, type Verdict } from './useBuild'
 
@@ -275,7 +277,45 @@ function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   )
 }
 
-const nodeTypes = { step: StepNode, card: CardNode, idea: IdeaNode, plus: PlusNode, menu: MenuNode }
+type Sim = { diagram: Diagram; source: string; title: string; onState: (s: BenchState) => void; bench: { current: Bench | null } }
+
+// the end of the line: the gadget itself, drawn the way the editor draws it and running the firmware that passed.
+// press its button, turn its knob, slide the car closer
+function SimNode({ data }: NodeProps<Node<{ sim: Sim }>>) {
+  const { sim } = data
+  const flow = useReactFlow()
+  const [close, setClose] = useState(false)
+  const fly = () => {
+    const duration = document.visibilityState === 'visible' ? 450 : 0
+    if (close) flow.fitView({ padding: 0.08, duration })
+    else flow.fitView({ nodes: [{ id: 'sim' }], padding: 0.04, maxZoom: 2, duration })
+    setClose(!close)
+  }
+  return (
+    <div className="rise nodrag nopan nowheel w-[660px] cursor-default">
+      <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Frame>
+        <div className="flex items-center gap-2.5 border-b border-sep px-3.5 py-2.5">
+          <Icon name="play" size={14} className="text-icon" />
+          <span className="flex-1 text-[13.5px] font-medium text-ink">Simulation</span>
+          <span className="flex items-center gap-1.5 text-[11.5px] text-dim">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok" />
+            running, try the parts
+          </span>
+          <button onClick={fly} title={close ? 'back to the whole line' : 'zoom in on the circuit'} className="ml-1 flex h-7 items-center gap-1.5 rounded-[7px] border border-line px-2 text-[11.5px] font-medium text-ink hover:bg-hover">
+            <Icon name={close ? 'collapse' : 'full-screen-2'} size={12} />
+            {close ? 'Back' : 'Zoom in'}
+          </button>
+        </div>
+        <div className="h-[420px]">
+          <Workbench diagram={sim.diagram} source={sim.source} title={sim.title} compact running onState={sim.onState} benchOut={sim.bench} />
+        </div>
+      </Frame>
+    </div>
+  )
+}
+
+const nodeTypes = { step: StepNode, sim: SimNode, card: CardNode, idea: IdeaNode, plus: PlusNode, menu: MenuNode }
 const edgeTypes = { chip: ChipEdge }
 
 type Idea = Omit<IdeaData, 'onPick' | 'open'>
@@ -286,7 +326,7 @@ const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, heig
 
 // one line read left to right: what you asked, the board with its parts hanging off it, then the firmware, the
 // test and the result. inputs sit above the board and feed down into it, outputs hang below it
-function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand, lines?: Record<string, string>, stops: Stop[] = []) {
+function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand, lines?: Record<string, string>, stops: Stop[] = [], sim?: Sim) {
   const board = d?.parts.find((p) => BOARDS.includes(p.type))
   const nodes: Node[] = []
   const edges: Edge[] = []
@@ -381,6 +421,11 @@ function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onP
     nodes.push({ id: st.id, type: 'step', position: { x: x0 + GAP * (i + 1), y: 0 }, data: { ...st, onPick: st.state === 'wait' ? undefined : () => onPick(st.id) }, selected: picked === st.id, draggable: false })
     link(st.id, st.state)
   })
+  if (sim) {
+    const from = prev
+    nodes.push({ id: 'sim', type: 'sim', position: { x: x0 + GAP * (main.length + 1), y: -212 }, data: { sim }, draggable: false })
+    edges.push({ id: `${from}-sim`, source: from!, target: 'sim', type: 'smoothstep', markerEnd: arrow(false), style: line(false) })
+  }
   stops
     .filter((st) => st.state === 'next')
     .forEach((st, k) => {
@@ -391,7 +436,7 @@ function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onP
   return { nodes, edges }
 }
 
-function Path({ diagram, idea, picked, onPick, state, hand, lines, stops }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand; lines?: Record<string, string>; stops?: Stop[] }) {
+function Path({ diagram, idea, picked, onPick, state, hand, lines, stops, sim }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand; lines?: Record<string, string>; stops?: Stop[]; sim?: Sim }) {
   const flow = useReactFlow()
   // the part that came in last glows for a moment, the way a new connection lights up
   const seen = useRef(new Set<string>())
@@ -408,7 +453,7 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines, stops }: { di
   }, [diagram])
   const liveKey = lines ? Object.entries(lines).map(([k, v]) => k + v).join('|') : ''
   const stopKey = (stops ?? []).map((s) => s.id + s.state + s.line).join('|')
-  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand, lines, stops), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand, liveKey, stopKey])
+  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand, lines, stops, sim), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand, liveKey, stopKey, sim?.source, sim?.diagram])
   const hasBoard = !!diagram?.parts.some((p) => BOARDS.includes(p.type))
   const edges = laid.edges
   // react flow measures nodes through onNodesChange, so they live in state and keep their sizes across relayouts
@@ -830,7 +875,11 @@ export function Onboarding(props: Props) {
   const [menu, setMenu] = useState<Menu | null>(null)
   const [what, setWhat] = useState('')
   // the gadget running behind the path, once there is firmware that passed: a proven build or an example
-  const live = useLive(shown ? (shown.diagram ?? null) : diagram, shown ? shown.sketch : props.source, shown ? !!shown.sketch : !!verdict?.ok && !busy)
+  const simOn = shown ? !!shown.sketch && !!shown.diagram : !!verdict?.ok && !busy && !!diagram && !!props.source
+  const simSource = shown ? shown.sketch : props.source
+  const { live, onState, bench } = useSampler(simOn, `${shown?.id ?? savedId}|${simSource}`)
+  const simDiagram = shown ? (shown.diagram ?? null) : diagram
+  const sim = useMemo<Sim | undefined>(() => (simOn && simDiagram && simSource ? { diagram: simDiagram, source: simSource, title: shown?.title ?? cap(request.split(/[:.]/)[0]), onState, bench } : undefined), [simOn, simDiagram, simSource])
   const liveLines = Object.fromEntries(Object.entries(live.readings).map(([id, r]) => [id, r.line]))
   const started = busy || !!request
   const input = useRef<HTMLInputElement>(null)
@@ -839,9 +888,6 @@ export function Onboarding(props: Props) {
     if (step === 'describe') input.current?.focus()
   }, [step])
   // a proven build opens what you need to build it
-  useEffect(() => {
-    if (verdict?.ok) setPicked('parts')
-  }, [verdict])
 
   // ideas and earlier requests that match what is being typed
   const q = prompt.trim().toLowerCase()
@@ -1023,7 +1069,7 @@ export function Onboarding(props: Props) {
             <Frame>
               <div className="max-h-[360px] overflow-auto">
                 {examples.map((ex) => (
-                  <Row key={ex.id} icon={ex.diagram?.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'chip' : 'frame'} title={ex.title} line={ex.status === 'proven' ? 'With a test that passes' : 'A sketch to run and change'} onClick={() => api.get(ex.id).then((full) => full && (setShown(full), setPicked('parts')))} />
+                  <Row key={ex.id} icon={ex.diagram?.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'chip' : 'frame'} title={ex.title} line={ex.status === 'proven' ? 'With a test that passes' : 'A sketch to run and change'} onClick={() => api.get(ex.id).then((full) => full && (setShown(full), setPicked(null)))} />
                 ))}
               </div>
             </Frame>
@@ -1084,7 +1130,7 @@ export function Onboarding(props: Props) {
     const result: Stop = verdict
       ? { id: 'proven', title: verdict.ok ? 'Proven' : 'Not proven', icon: verdict.ok ? 'circle-check' : 'circle-xmark', state: verdict.ok ? 'done' : 'fail', line: verdict.ok ? (verdict.turns ? `in ${verdict.turns} turns` : 'it does what you asked') : 'open it in the editor to fix' }
       : { id: 'proven', title: 'Proven', icon: 'circle-check', state: 'wait', line: 'once the test passes' }
-    return [firmware, test, result, ...(verdict?.ok ? after(diagram) : [])]
+    return [firmware, test, result, ...(verdict?.ok ? after(diagram) : [{ id: 'sim', title: 'Simulation', icon: 'play', state: 'wait', line: 'runs once it is proven' } as Stop])]
   })()
   const pathState: NodeData['state'] = shown ? (shown.test ? 'done' : 'idle') : boardState
   return (
@@ -1101,7 +1147,7 @@ export function Onboarding(props: Props) {
       )}
       <div className="min-w-0 flex-1">
         <ReactFlowProvider>
-          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} stops={stops} />
+          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} stops={stops} sim={sim} />
         </ReactFlowProvider>
       </div>
       <aside className={`absolute bottom-0 right-0 top-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel transition-transform duration-300 ease-out ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
