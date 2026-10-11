@@ -229,9 +229,9 @@ export function proto(d: Diagram): Proto | null {
   }
   const rails = [
     add({ board: `${board.id}:${powerPin}` }, { hole: { col: 1, rail: 'top+' } }, RED, `${powerPin} to the top + rail`),
-    add({ board: `${board.id}:GND.1` }, { hole: { col: 1, rail: 'top-' } }, BLACK, 'GND to the top - rail'),
+    add({ board: `${board.id}:GND.1` }, { hole: { col: 2, rail: 'top-' } }, BLACK, 'GND to the top - rail'),
     add({ hole: { col: 1, rail: 'top+' } }, { hole: { col: 1, rail: 'bottom+' } }, RED, 'the top + rail to the bottom + rail'),
-    add({ hole: { col: 1, rail: 'top-' } }, { hole: { col: 1, rail: 'bottom-' } }, BLACK, 'the top - rail to the bottom - rail'),
+    add({ hole: { col: 2, rail: 'top-' } }, { hole: { col: 2, rail: 'bottom-' } }, BLACK, 'the top - rail to the bottom - rail'),
   ]
   // which jumpers belong to which step: the part whose strip the jumper lands on
   const stepOf = new Map<string, string>()
@@ -240,7 +240,8 @@ export function proto(d: Diagram): Proto | null {
     const part = on.find((p) => p.type !== 'wokwi-resistor') ?? on[0]
     return part && (serves.get(part.id) ?? part.id)
   }
-  const outer = (half: Half) => (half === 'top' ? ['a', 'b', 'd'] : ['j', 'i', 'g'])
+  // a module's body covers the rows above its legs, so its wires go in on the gap side where they stay in sight
+  const outer = (half: Half) => (half === 'top' ? ['e', 'd', 'b', 'a'] : ['g', 'h', 'i', 'j'])
   const nets = new Set([...owner.values()])
   let colorAt = 0
   const signalColor = (n: string, ref?: string) => (n === gnd ? BLACK : n === plus ? RED : (ref && wireColor(ref)) || SIGNALS[colorAt++ % SIGNALS.length])
