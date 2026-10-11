@@ -94,9 +94,9 @@ function Row({
   dim?: boolean;
 }) {
   const tone = selected
-    ? "bg-accent font-semibold text-on-accent"
+    ? "bg-accent hover:bg-accent-hover font-semibold text-on-accent"
     : soft
-      ? "bg-accent-soft text-accent-ink"
+      ? "bg-accent-soft text-accent-line-ink"
       : current
         ? "bg-row text-ink"
         : "text-ink hover:bg-hover";
@@ -122,7 +122,7 @@ function Row({
               selected
                 ? "text-on-accent"
                 : soft
-                  ? "text-accent-ink"
+                  ? "text-accent-line-ink"
                   : "text-icon-2"
             }
           />
@@ -255,7 +255,7 @@ export function Sidebar({
             renaming?.id === b.id ? (
               <div
                 key={b.id}
-                className="mx-2.5 flex h-[25px] items-center gap-2 rounded-[6px] bg-input pl-[9px] pr-1 ring-1 ring-accent"
+                className="mx-2.5 flex h-[25px] items-center gap-2 rounded-[6px] bg-input pl-[9px] pr-1 ring-1 ring-accent-line"
               >
                 <Icon name="cloud" size={16} className="text-icon-2" />
                 <input
@@ -435,7 +435,7 @@ export function Sidebar({
         <button
           title="clear selection"
           onClick={() => onSelect(null)}
-          className="text-accent"
+          className="text-accent-line"
         >
           <Icon name="crosshairs" size={16} />
         </button>

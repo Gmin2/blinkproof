@@ -23,8 +23,11 @@
   --text: #343433;
   --text-2: #8a847e;
   --icon: #4a4846;
-  --accent: #343433;
-  --on-accent: #fbfaf9;
+  /* the accent is a light stone to fill with, and a warm grey line for outlines and highlights */
+  --accent: #e6dfd5;
+  --accent-hover: #ddd4c8;
+  --on-accent: #343433;
+  --accent-line: #8c8074;
   --accent-soft: #eeeae5;
   --input: #f1eeea;
   --row-current: #eeeae5;
@@ -39,7 +42,7 @@
   --tree: #e4dfd9;
   --accent-ink: #343433;
   --switch: #d1cac2;
-  --select: #343433;
+  --select: #8c8074;
   --menu-shadow: 0 0 0 1px #e4dfd9, 0 10px 30px rgba(52, 52, 51, 0.1);
   --ok: #1f9d5c;
   --bad: #d9473f;
@@ -55,8 +58,10 @@
   --text: #edeae6;
   --text-2: #8f8983;
   --icon: #cfcac4;
-  --accent: #fbfaf9;
-  --on-accent: #232221;
+  --accent: #3e3a36;
+  --accent-hover: #48433e;
+  --on-accent: #edeae6;
+  --accent-line: #b3a99e;
   --accent-soft: #33302d;
   --input: #2e2c2a;
   --row-current: #33302d;
@@ -71,7 +76,7 @@
   --tree: #3a3734;
   --accent-ink: #edeae6;
   --switch: #4a4642;
-  --select: #fbfaf9;
+  --select: #b3a99e;
   --menu-shadow: 0 0 0 1px #3a3734, 0 10px 30px rgba(0, 0, 0, 0.55);
   --ok: #3ccf82;
   --bad: #ff6b63;
@@ -88,6 +93,8 @@
   --color-dim: var(--text-2);
   --color-icon: var(--icon);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-line: var(--accent-line);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-input: var(--input);

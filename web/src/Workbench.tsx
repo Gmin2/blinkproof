@@ -610,7 +610,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             const style = isNew ? { animationDelay: `${wireDelay(p.key)}s` } : undefined
             return (
               <g key={p.key}>
-                {selectedWire === p.key && <path d={p.d} stroke="var(--accent)" strokeOpacity={0.55} strokeWidth={10} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+                {selectedWire === p.key && <path d={p.d} stroke="var(--accent-line)" strokeOpacity={0.55} strokeWidth={10} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
                 <path d={p.d} pathLength={1} className={isNew ? 'draw' : ''} style={style} stroke="black" strokeOpacity={0.45} strokeWidth={5} fill="none" transform="translate(0 2)" />
                 <path d={p.d} pathLength={1} className={isNew ? 'draw' : ''} style={style} stroke={p.color} strokeWidth={3} fill="none" strokeLinecap="round" />
                 {editable && (
@@ -639,7 +639,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             return (
               <>
                 <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
-                  <path d={`M${x} ${y} H${x + 34 * k}`} stroke="var(--accent)" strokeWidth={1.5 * k} strokeDasharray={`${3 * k} ${3 * k}`} />
+                  <path d={`M${x} ${y} H${x + 34 * k}`} stroke="var(--accent-line)" strokeWidth={1.5 * k} strokeDasharray={`${3 * k} ${3 * k}`} />
                 </svg>
                 <button
                   title="connect a part to the board"
@@ -648,7 +648,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                     onConnect(rect.right + 8, rect.top)
                   }}
-                  className="absolute z-10 flex items-center justify-center rounded-[6px] bg-accent text-on-accent shadow-sm transition-transform hover:scale-110"
+                  className="absolute z-10 flex items-center justify-center rounded-[6px] bg-accent hover:bg-accent-hover text-on-accent shadow-sm transition-transform hover:scale-110"
                   style={{ left: x + 34 * k, top: y - 11 * k, width: 22 * k, height: 22 * k }}
                 >
                   <Icon name="plus" size={14 * k} />
@@ -658,7 +658,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           })()}
         {drawing && (
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
-            <path d={`M${drawing.a.x} ${drawing.a.y} L${drawing.b.x} ${drawing.b.y}`} stroke="var(--accent)" strokeWidth={2 / fit.scale} strokeDasharray={`${6 / fit.scale} ${4 / fit.scale}`} fill="none" strokeLinecap="round" />
+            <path d={`M${drawing.a.x} ${drawing.a.y} L${drawing.b.x} ${drawing.b.y}`} stroke="var(--accent-line)" strokeWidth={2 / fit.scale} strokeDasharray={`${6 / fit.scale} ${4 / fit.scale}`} fill="none" strokeLinecap="round" />
           </svg>
         )}
         {editable &&
@@ -672,7 +672,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                 <div
                   key={pin.ref}
                   data-pin={pin.ref}
-                  className={`absolute z-10 rounded-full border ${on ? 'border-accent bg-accent' : 'border-accent bg-panel/80'}`}
+                  className={`absolute z-10 rounded-full border ${on ? 'border-accent-line bg-accent hover:bg-accent-hover' : 'border-accent-line bg-panel/80'}`}
                   style={{ left: pin.x - d / 2, top: pin.y - d / 2, width: d, height: d, borderWidth: 1 / fit.scale, cursor: 'crosshair' }}
                   onPointerDown={(e) => startWire(e, pin.ref, { x: pin.x, y: pin.y })}
                   onPointerEnter={() => (setHoverPin(pin.ref), setHover(pin.ref.split(':')[0]))}
@@ -693,10 +693,10 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           const s = 7 / fit.scale
           const line = 1 / fit.scale
           return (
-            <div key={k} className="pointer-events-none absolute" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${line}px solid var(--accent)` }}>
+            <div key={k} className="pointer-events-none absolute" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${line}px solid var(--accent-line)` }}>
               {k === 1 &&
                 [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => (
-                  <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
+                  <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent hover:bg-accent-hover" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
                 ))}
             </div>
           )
@@ -706,7 +706,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           if (!p) return null
           const move = (on: boolean) => benchRef.current?.control(id, 'motion', on ? 1 : 0)
           return (
-            <button key={id} onPointerDown={(e) => (e.stopPropagation(), move(true))} onPointerUp={() => move(false)} onPointerLeave={() => move(false)} className="pill absolute whitespace-nowrap px-3 py-1 font-mono text-[11px] text-dim active:bg-accent active:text-on-accent" style={{ left: at(p).x - 10, top: at(p).y + 100 }}>
+            <button key={id} onPointerDown={(e) => (e.stopPropagation(), move(true))} onPointerUp={() => move(false)} onPointerLeave={() => move(false)} className="pill absolute whitespace-nowrap px-3 py-1 font-mono text-[11px] text-dim active:bg-accent hover:bg-accent-hover active:text-on-accent" style={{ left: at(p).x - 10, top: at(p).y + 100 }}>
               hold to move
             </button>
           )
@@ -722,12 +722,12 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             <div key={id} className="pill absolute space-y-0.5 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: at(p).x - 40, top: at(p).y + 115 }}>
               <label className="flex items-center gap-2">
                 <span className="w-9">temp</span>
-                <input type="range" min={-40} max={80} step={0.5} value={v.temperature} className="w-24 accent-[var(--accent)]" onChange={(e) => set('temperature', Number(e.target.value))} />
+                <input type="range" min={-40} max={80} step={0.5} value={v.temperature} className="w-24 accent-[var(--accent-line)]" onChange={(e) => set('temperature', Number(e.target.value))} />
                 <span className="w-14 text-ink">{v.temperature} °C</span>
               </label>
               <label className="flex items-center gap-2">
                 <span className="w-9">humid</span>
-                <input type="range" min={0} max={100} value={v.humidity} className="w-24 accent-[var(--accent)]" onChange={(e) => set('humidity', Number(e.target.value))} />
+                <input type="range" min={0} max={100} value={v.humidity} className="w-24 accent-[var(--accent-line)]" onChange={(e) => set('humidity', Number(e.target.value))} />
                 <span className="w-14 text-ink">{v.humidity}%</span>
               </label>
             </div>
@@ -744,7 +744,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                 min={0}
                 max={100}
                 value={Math.round(20 * Math.log10(lux))}
-                className="w-28 accent-[var(--accent)]"
+                className="w-28 accent-[var(--accent-line)]"
                 onChange={(e) => {
                   const v = Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10
                   setLights((s) => ({ ...s, [id]: v }))
@@ -766,7 +766,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                 min={2}
                 max={400}
                 value={cm}
-                className="w-32 accent-[var(--accent)]"
+                className="w-32 accent-[var(--accent-line)]"
                 onChange={(e) => {
                   const v = Number(e.target.value)
                   setSonars((s) => ({ ...s, [id]: v }))
@@ -785,7 +785,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           <svg width={112} height={112 * Math.min(0.7, frame.h / frame.w)} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`} preserveAspectRatio="xMidYMid meet" className="block">
             <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="var(--frame)" />
             {Object.entries(rects).map(([id, r]) => (
-              <rect key={id} x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill={id === selected ? 'var(--accent)' : 'var(--icon-2)'} opacity={id === selected ? 0.9 : 0.35} />
+              <rect key={id} x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill={id === selected ? 'var(--accent-line)' : 'var(--icon-2)'} opacity={id === selected ? 0.9 : 0.35} />
             ))}
           </svg>
         </div>

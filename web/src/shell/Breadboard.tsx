@@ -191,6 +191,15 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
             <path d={d} stroke={j.color} strokeWidth={blue ? 1.2 : 2} fill="none" strokeLinecap="round" strokeDasharray={blue ? '4 3' : undefined} />
             <circle cx={a.x} cy={a.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? '#2563eb' : 'none'} strokeWidth={1.2} />
             <circle cx={b.x} cy={b.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? '#2563eb' : 'none'} strokeWidth={1.2} />
+            {/* the holes this step uses, named on the board the way the steps name them */}
+            {hot.has(j.id) &&
+              [j.from, j.to].map((e, k) =>
+                'hole' in e && !('rail' in e.hole) ? (
+                  <text key={k} x={(k ? b : a).x + 4} y={(k ? b : a).y - 4} fontSize={7} fontWeight={600} fill="#1d4ed8" fontFamily="Geist Mono, monospace" paintOrder="stroke" stroke="#ffffff" strokeWidth={2.4}>
+                    {holeName(e.hole)}
+                  </text>
+                ) : null,
+              )}
           </g>
         )
       })}
@@ -405,7 +414,22 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
           </span>
         </div>
       )}
-      <div ref={box} className="min-h-0 flex-1 overflow-auto px-5">
+      <div ref={box} className="relative min-h-0 flex-1 overflow-auto px-5">
+        {!picked && (
+          <div className="pointer-events-none sticky top-2 z-10 flex justify-center">
+            <div className="pill pointer-events-auto flex items-center gap-1 py-1 pl-1 pr-1">
+              <button onClick={() => guide.setStep(Math.max(0, step - 1))} disabled={step === 0} title="the step before" className="flex h-7 w-7 items-center justify-center rounded-[7px] text-icon hover:bg-hover disabled:opacity-30">
+                <Icon name="chevron-left" size={12} />
+              </button>
+              <span className="px-2 text-[12.5px] text-ink">
+                <span className="font-mono text-dim">{step + 1}/{p.steps.length}</span> <span className="font-medium">{p.steps[step].title}</span>
+              </span>
+              <button onClick={() => guide.setStep(Math.min(guide.last, step + 1))} disabled={step === guide.last} title="the next step" className="flex h-7 w-7 items-center justify-center rounded-[7px] text-icon hover:bg-hover disabled:opacity-30">
+                <Icon name="chevron-right" size={12} />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="mx-auto h-full py-4" style={{ width: `${Math.round(zoom * 100)}%`, height: `${Math.round(zoom * 100)}%` }}>
           <Drawing p={p} diagram={diagram} look="real" upTo={picked ? guide.last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} callouts fill />
         </div>
@@ -437,17 +461,129 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
   )
 }
 
-// the sidebar while building: the steps with a tick each, the shopping list, or the card of the part picked
+// what a step adds, as rows to show rather than sentences: a part and the holes its legs go in, a resistor and its
+// bands, a wire from where to where
+type Row =
+  | { kind: 'part'; id: string; type: string; legs: { pin: string; hole: string }[]; straddle: boolean }
+  | { kind: 'resistor'; id: string; value: string; bands: string[]; from: string; to: string }
+  | { kind: 'wire'; id: string; color: string; from: string; to: string }
+  | { kind: 'beside'; id: string; type: string }
+function rowsOf(p: Proto, adds: string[]): Row[] {
+  const say = (pin: string) => {
+    const n = pin.replace(/\.\d$/, '')
+    return /^\d+$/.test(n) ? `D${n}` : n
+  }
+  const end = (e: End) => ('hole' in e ? holeName(e.hole).replace(/^the /, '') : 'board' in e ? `${p.board.name} ${say(e.board.split(':')[1])}` : `${e.part} ${e.pin}`)
+  const out: Row[] = []
+  for (const id of adds) {
+    const x = p.placed.find((q) => q.id === id)
+    if (x?.type === 'wokwi-resistor') out.push({ kind: 'resistor', id, value: x.label.split(', ')[1], bands: x.bands ?? [], from: holeName(x.legs[0].hole), to: holeName(x.legs[1].hole) })
+    else if (x) out.push({ kind: 'part', id, type: x.type, legs: x.legs.map((l) => ({ pin: l.pin, hole: holeName(l.hole) })), straddle: x.type === 'wokwi-pushbutton' || x.type === 'wokwi-7segment' })
+    const b = p.beside.find((q) => q.id === id)
+    if (b) out.push({ kind: 'beside', id, type: b.type })
+    const j = p.jumpers.find((q) => q.id === id)
+    if (j) out.push({ kind: 'wire', id, color: j.color, from: end(j.from), to: end(j.to) })
+  }
+  return out
+}
+
+const Chip = ({ children, strong }: { children: React.ReactNode; strong?: boolean }) => (
+  <span className={`inline-flex h-[22px] items-center rounded-[6px] border px-1.5 font-mono text-[11px] ${strong ? 'border-line bg-panel text-ink' : 'border-transparent bg-input text-dim'}`}>{children}</span>
+)
+
+function Resistor({ bands }: { bands: string[] }) {
+  return (
+    <svg width="46" height="14" viewBox="0 0 46 14" aria-hidden="true" className="shrink-0">
+      <line x1="0" x2="46" y1="7" y2="7" stroke="#9ca3af" strokeWidth="1.4" />
+      <rect x="10" y="1.5" width="26" height="11" rx="5" fill="#e8d3a8" />
+      {bands.map((c, k) => (
+        <rect key={k} x={13.5 + k * 5 + (k === 3 ? 2 : 0)} y="1.5" width="2.6" height="11" fill={BAND_HEX[c]} />
+      ))}
+    </svg>
+  )
+}
+
+function StepRows({ rows, lead }: { rows: Row[]; lead: string[] }) {
+  return (
+    <div className="space-y-2.5">
+      {lead.map((l, i) => (
+        <p key={i} className="text-[12px] leading-[18px] text-ink">
+          {l}
+        </p>
+      ))}
+      {rows.map((r) => {
+        if (r.kind === 'part')
+          return (
+            <div key={r.id} className="rounded-[10px] border border-sep bg-panel p-2.5">
+              <div className="mb-2 flex items-center gap-2 text-[12.5px] text-ink">
+                <Icon name={PART_ICON[r.type] ?? 'box'} size={14} className="text-icon" />
+                <span>
+                  {r.straddle ? 'Press' : 'Push'} <b className="font-semibold">{r.id}</b> in{r.straddle ? ' across the gap' : ''}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {r.legs.map((l, i) => (
+                  <span key={i} className="inline-flex items-center gap-1">
+                    <Chip>{l.pin}</Chip>
+                    <Chip strong>{l.hole}</Chip>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )
+        if (r.kind === 'resistor')
+          return (
+            <div key={r.id} className="flex items-center gap-2.5 rounded-[10px] border border-sep bg-panel px-2.5 py-2 text-[12px] text-ink">
+              <Resistor bands={r.bands} />
+              <span className="min-w-0 flex-1">
+                <b className="font-semibold">{r.value}</b> <span className="text-dim">{r.bands.slice(0, 3).join(' ')}</span>
+              </span>
+              <Chip strong>{r.from}</Chip>
+              <Icon name="chevron-right" size={10} className="text-icon-2" />
+              <Chip strong>{r.to}</Chip>
+            </div>
+          )
+        if (r.kind === 'beside')
+          return (
+            <div key={r.id} className="flex items-center gap-2 rounded-[10px] border border-dashed border-line px-2.5 py-2 text-[12px] text-ink">
+              <Icon name={PART_ICON[r.type] ?? 'box'} size={14} className="text-icon" />
+              <span>
+                <b className="font-semibold">{r.id}</b> stays beside the breadboard, on jumper wires
+              </span>
+            </div>
+          )
+        return (
+          <div key={r.id} className="flex items-center gap-2 px-0.5 text-[12px]">
+            <span className="h-[3px] w-4 shrink-0 rounded-full" style={{ background: r.color }} />
+            <Chip strong>{r.from}</Chip>
+            <Icon name="chevron-right" size={10} className="shrink-0 text-icon-2" />
+            <Chip strong>{r.to}</Chip>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const summary = (rows: Row[]) => {
+  const parts = rows.filter((r) => r.kind === 'part' || r.kind === 'beside').length
+  const res = rows.filter((r) => r.kind === 'resistor').length
+  const wires = rows.filter((r) => r.kind === 'wire').length
+  return [parts && `${parts} part${parts > 1 ? 's' : ''}`, res && `${res} resistor${res > 1 ? 's' : ''}`, wires && `${wires} wire${wires > 1 ? 's' : ''}`].filter(Boolean).join(' · ')
+}
+
+// the sidebar while building: where you are, the steps, each opening into what it adds, the shopping list,
+// or the card of the part picked
 export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram }) {
   const { p, step, setStep, ticks, tick, picked, setPicked, list, setList } = guide
   // keep the open step in view by scrolling its own list, never scrollIntoView, which drags the tab track along
-  const current = useRef<HTMLButtonElement>(null)
+  const current = useRef<HTMLLIElement>(null)
   useEffect(() => {
     const el = current.current
-    const list = el?.closest('ol')
-    if (!el || !list) return
-    const top = el.offsetTop - list.offsetTop
-    if (top < list.scrollTop || top > list.scrollTop + list.clientHeight - 60) list.scrollTop = top - 40
+    const box = el?.closest('ol')
+    if (!el || !box) return
+    const top = el.offsetTop - box.offsetTop
+    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 80) box.scrollTop = top - 12
   }, [step])
   if (!p) return <p className="px-4 text-[12px] text-dim">Add a board to see how to build it.</p>
   const order = numbered(p)
@@ -455,60 +591,64 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
   const done = p.steps.filter((s) => ticks.has(s.n)).length
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-1 px-4 pb-2">
+      <div className="mx-4 mb-3 flex shrink-0 rounded-[9px] bg-input p-0.5">
         {(['steps', 'shopping'] as const).map((l) => (
-          <button key={l} onClick={() => setList(l)} className={`flex h-7 items-center gap-1.5 rounded-[7px] px-2.5 text-[12px] font-medium ${list === l ? 'bg-input text-ink' : 'text-dim hover:text-ink'}`}>
+          <button key={l} onClick={() => setList(l)} className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[12px] font-medium ${list === l ? 'bg-panel text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)]' : 'text-dim hover:text-ink'}`}>
             <Icon name={l === 'steps' ? 'unordered-list' : 'box'} size={12} />
             {l === 'steps' ? 'Build it' : 'Shopping list'}
           </button>
         ))}
-        <div className="flex-1" />
-        {list === 'steps' && (
-          <span className="text-[11.5px] text-dim">
-            {done} of {p.steps.length} done
-          </span>
-        )}
       </div>
       {list === 'shopping' ? (
         <Shopping p={p} diagram={diagram} />
       ) : (
         <>
-          <ol className="min-h-0 flex-1 space-y-1 overflow-auto px-3 pb-3">
+          <div className="shrink-0 px-4 pb-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[15px] font-semibold text-ink">
+                Step {step + 1} <span className="font-normal text-dim">of {p.steps.length}</span>
+              </span>
+              <span className="text-[11.5px] text-dim">{done} done</span>
+            </div>
+            <div className="mt-2 flex gap-1">
+              {p.steps.map((s, i) => (
+                <button key={s.n} onClick={() => setStep(i)} title={s.title} className={`h-1.5 flex-1 rounded-full transition-colors ${ticks.has(s.n) ? 'bg-ok/70' : i === step ? 'bg-accent-line' : 'bg-input'}`} />
+              ))}
+            </div>
+          </div>
+          <ol className="min-h-0 flex-1 space-y-1.5 overflow-auto px-3 pb-3">
             {p.steps.map((s, i) => {
               const open = i === step
               const isDone = ticks.has(s.n)
+              const rows = rowsOf(p, s.adds)
+              const lead = s.adds.length === 0 || s.n === 1 ? (s.n === 1 ? s.do.slice(0, 1) : s.do) : []
               return (
-                <li key={s.n}>
-                  <div className={`flex gap-2.5 rounded-[9px] px-2 py-2 ${open ? 'bg-accent/10' : 'hover:bg-hover'}`}>
-                    <input type="checkbox" checked={isDone} onChange={(e) => tick(s.n, e.target.checked)} aria-label={`step ${s.n} done`} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]" />
-                    <button ref={open ? current : undefined} onClick={() => setStep(i)} className="min-w-0 flex-1 text-left">
-                      <span className={`block text-[12.5px] font-medium ${isDone && !open ? 'text-dim line-through' : 'text-ink'}`}>
-                        {s.n}. {s.title}
-                      </span>
-                      {open && (
-                        <span className="mt-1 block space-y-1">
-                          {s.do.map((line, k) => (
-                            <span key={k} className="block text-[12px] leading-[18px] text-ink">
-                              {line}
-                            </span>
-                          ))}
-                        </span>
-                      )}
+                <li key={s.n} ref={open ? current : undefined} className={`rounded-[12px] border transition-colors ${open ? 'border-line bg-accent/40 shadow-[0_1px_2px_rgba(0,0,0,.04)]' : 'border-transparent hover:bg-hover'}`}>
+                  <div className="flex items-start gap-2.5 px-2.5 py-2">
+                    <button onClick={() => tick(s.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className={`mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-semibold transition-colors ${isDone ? 'border-ok bg-ok text-white' : open ? 'border-accent-line text-ink' : 'border-line text-dim'}`}>
+                      {isDone ? <Icon name="check" size={11} /> : s.n}
+                    </button>
+                    <button onClick={() => setStep(i)} className="min-w-0 flex-1 text-left">
+                      <span className={`block text-[13px] font-medium ${isDone && !open ? 'text-dim' : 'text-ink'}`}>{s.title}</span>
+                      {!open && summary(rows) && <span className="block text-[11px] text-dim">{summary(rows)}</span>}
                     </button>
                   </div>
+                  {open && (
+                    <div className="px-2.5 pb-3 pl-[42px]">
+                      <StepRows rows={rows} lead={lead} />
+                    </div>
+                  )}
                 </li>
               )
             })}
           </ol>
           <div className="flex shrink-0 items-center gap-2 border-t border-sep px-4 py-3">
-            <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="h-8 rounded-[8px] border border-line px-3 text-[12px] font-medium text-ink hover:bg-hover disabled:opacity-40">
-              Back
+            <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line text-icon hover:bg-hover disabled:opacity-40" title="the step before">
+              <Icon name="chevron-left" size={12} />
             </button>
-            <span className="flex-1 text-center text-[11.5px] text-dim">
-              step {step + 1} of {p.steps.length}
-            </span>
-            <button onClick={() => (tick(p.steps[step].n, true), setStep(Math.min(guide.last, step + 1)))} className="h-8 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-on-accent">
-              {step === guide.last ? 'Done' : 'Done, next'}
+            <button onClick={() => (tick(p.steps[step].n, true), setStep(Math.min(guide.last, step + 1)))} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent hover:bg-accent-hover">
+              <Icon name="check" size={12} />
+              {step === guide.last ? 'Done, all built' : 'Done, next step'}
             </button>
           </div>
         </>
@@ -600,7 +740,7 @@ function PartCard({ p, diagram, id, n, onClose, onStep }: { p: Proto; diagram: D
           <dt className="w-20 shrink-0 text-dim">placed in</dt>
           <dd>
             {stepAt >= 0 ? (
-              <button onClick={() => onStep(stepAt)} className="text-accent underline-offset-2 hover:underline">
+              <button onClick={() => onStep(stepAt)} className="text-accent-line underline-offset-2 hover:underline">
                 step {stepAt + 1}, {p.steps[stepAt].title.toLowerCase()}
               </button>
             ) : (
@@ -647,10 +787,10 @@ export function BreadboardGuide({ diagram }: { diagram: Diagram }) {
         </button>
         <div className="flex flex-1 gap-1">
           {p.steps.map((x, i) => (
-            <button key={i} onClick={() => setStep(i)} title={x.title} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? 'bg-accent/50' : i === step ? 'bg-accent' : 'bg-input'}`} />
+            <button key={i} onClick={() => setStep(i)} title={x.title} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? 'bg-accent/400' : i === step ? 'bg-accent hover:bg-accent-hover' : 'bg-input'}`} />
           ))}
         </div>
-        <button onClick={() => setStep(Math.min(last, step + 1))} disabled={step === last} title="the next step" className="flex h-8 items-center gap-1 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-on-accent disabled:opacity-40">
+        <button onClick={() => setStep(Math.min(last, step + 1))} disabled={step === last} title="the next step" className="flex h-8 items-center gap-1 rounded-[8px] bg-accent hover:bg-accent-hover px-3 text-[12px] font-semibold text-on-accent disabled:opacity-40">
           {step === last ? 'Done' : 'Next'}
           <Icon name="chevron-right" size={11} />
         </button>

@@ -69,7 +69,7 @@ function Row({ icon, title, line, onClick }: { icon: IconName; title: string; li
         <span className="block text-[13.5px] font-medium text-ink">{title}</span>
         <span className="block truncate text-[12px] text-dim">{line}</span>
       </span>
-      <Icon name="plus" size={13} className="text-icon-2 transition-colors group-hover:text-accent" />
+      <Icon name="plus" size={13} className="text-icon-2 transition-colors group-hover:text-accent-line" />
     </button>
   )
 }
@@ -96,9 +96,9 @@ type IdeaData = { label: string; sub?: string; lines?: string[]; open: boolean; 
 // says inside it. once there is a board it folds into a node at the top of the path
 function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
   return (
-    <button className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : 'w-[264px]'}`}>
+    <button className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent-line/60 bg-accent/60' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : 'w-[264px]'}`}>
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-      <span className={`block overflow-hidden rounded-[11px] border bg-panel ${selected ? 'border-accent' : 'border-line'}`}>
+      <span className={`block overflow-hidden rounded-[11px] border bg-panel ${selected ? 'border-accent-line' : 'border-line'}`}>
         <span className={`flex items-center gap-2.5 ${data.open ? 'border-b border-sep px-3.5 py-2.5' : 'px-3 py-2'}`}>
           <Icon name="magic-wand" size={15} className="text-icon" />
           <span className="min-w-0 flex-1">
@@ -161,7 +161,7 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
 // the blue + at the end of a dashed lead, it turns into a cross while its menu is open
 function PlusNode({ data }: NodeProps<Node<{ open: boolean; side: Side; onClick: () => void }>>) {
   return (
-    <button onClick={data.onClick} title={data.side === 'in' ? 'connect an input' : 'connect an output'} className="nodrag flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-on-accent shadow-[0_1px_3px_rgba(0,0,0,.15)] transition-transform hover:scale-105">
+    <button onClick={data.onClick} title={data.side === 'in' ? 'connect an input' : 'connect an output'} className="nodrag flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent hover:bg-accent-hover text-on-accent shadow-[0_1px_3px_rgba(0,0,0,.15)] transition-transform hover:scale-105">
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Icon name={data.open ? 'xmark' : 'plus'} size={data.open ? 11 : 15} />
@@ -217,15 +217,15 @@ function MenuNode({ data }: NodeProps<Node<{ hand: Hand }>>) {
 }
 
 function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
-  const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent animate-pulse' : 'bg-icon-2/50'
+  const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent hover:bg-accent-hover animate-pulse' : 'bg-icon-2/50'
   const big = data.kind === 'board'
   return (
-    <button className={`rise block rounded-[12px] border p-[3px] transition-colors ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'}`}>
+    <button className={`rise block rounded-[12px] border p-[3px] transition-colors ${selected ? 'border-accent-line/60 bg-accent/60' : 'border-line/80 bg-input/60'}`}>
       <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-      <span className={`flex items-center gap-2.5 rounded-[9px] border bg-panel ${selected ? 'border-accent' : 'border-line'} ${big ? 'px-3.5 py-2.5' : 'px-3 py-2'}`}>
+      <span className={`flex items-center gap-2.5 rounded-[9px] border bg-panel ${selected ? 'border-accent-line' : 'border-line'} ${big ? 'px-3.5 py-2.5' : 'px-3 py-2'}`}>
         <Icon name={data.icon} size={big ? 17 : 15} className="text-icon" />
         <span className="text-left">
           <span className={`block font-medium text-ink ${big ? 'text-[14px]' : 'text-[13px]'}`}>{data.label}</span>
@@ -242,15 +242,15 @@ export type StepData = { title: string; line: string; icon: IconName; state: 'wa
 // one stop on the line, saying in a few words what the agent is doing there. not reached yet it is dashed and faint
 function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
   const wait = data.state === 'wait'
-  const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent animate-pulse' : data.state === 'next' ? 'hidden' : 'bg-icon-2/40'
+  const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent hover:bg-accent-hover animate-pulse' : data.state === 'next' ? 'hidden' : 'bg-icon-2/40'
   return (
-    <button disabled={wait} className={`block w-[212px] rounded-[12px] border p-[3px] text-left transition-all duration-300 ${wait ? 'border-dashed border-line opacity-55' : selected ? 'border-accent/60 bg-accent/10' : data.state === 'work' ? 'border-accent/40 bg-accent/5' : 'border-line/80 bg-input/60'}`}>
+    <button disabled={wait} className={`block w-[212px] rounded-[12px] border p-[3px] text-left transition-all duration-300 ${wait ? 'border-dashed border-line opacity-55' : selected ? 'border-accent-line/60 bg-accent/60' : data.state === 'work' ? 'border-accent-line/40 bg-accent/40' : 'border-line/80 bg-input/60'}`}>
       <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-      <span className={`flex items-center gap-2.5 rounded-[9px] px-3 py-2 ${wait ? '' : `border bg-panel ${selected ? 'border-accent' : 'border-line'}`}`}>
-        <Icon name={data.state === 'work' ? 'loader' : data.icon} size={15} className={data.state === 'work' ? 'animate-spin text-accent' : 'text-icon'} />
+      <span className={`flex items-center gap-2.5 rounded-[9px] px-3 py-2 ${wait ? '' : `border bg-panel ${selected ? 'border-accent-line' : 'border-line'}`}`}>
+        <Icon name={data.state === 'work' ? 'loader' : data.icon} size={15} className={data.state === 'work' ? 'animate-spin text-accent-line' : 'text-icon'} />
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-medium text-ink">{data.title}</span>
           <span className={`block truncate text-[11px] ${data.state === 'fail' ? 'text-bad' : 'text-dim'}`}>{data.line}</span>
@@ -276,7 +276,7 @@ function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
         {chips.length > 0 && (
           <div className="nodrag nopan absolute flex items-center gap-1" style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>
             {chips.map((c, i) => (
-              <span key={i} className={`flex h-6 items-center gap-1 rounded-[7px] border bg-panel px-1.5 font-mono text-[10.5px] shadow-[0_1px_1px_rgba(0,0,0,.04)] ${data?.hot ? 'border-accent text-accent' : 'border-line text-dim'}`}>
+              <span key={i} className={`flex h-6 items-center gap-1 rounded-[7px] border bg-panel px-1.5 font-mono text-[10.5px] shadow-[0_1px_1px_rgba(0,0,0,.04)] ${data?.hot ? 'border-accent-line text-accent-line' : 'border-line text-dim'}`}>
                 {c.icon && <Icon name={c.icon} size={11} />}
                 {c.text}
               </span>
@@ -332,8 +332,8 @@ const edgeTypes = { chip: ChipEdge }
 type Idea = Omit<IdeaData, 'onPick' | 'open'>
 export type Stop = StepData & { id: string }
 
-const line = (hot: boolean, faint?: boolean) => ({ stroke: hot ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, ...(faint ? { strokeDasharray: '4 4', opacity: 0.6 } : {}) })
-const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent)' : 'var(--icon-2)' })
+const line = (hot: boolean, faint?: boolean) => ({ stroke: hot ? 'var(--accent-line)' : 'var(--icon-2)', strokeWidth: 1.5, ...(faint ? { strokeDasharray: '4 4', opacity: 0.6 } : {}) })
+const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent-line)' : 'var(--icon-2)' })
 
 // one line read left to right: what you asked, the board with its parts hanging off it, then the firmware, the
 // test and the result. inputs sit above the board and feed down into it, outputs hang below it
@@ -420,7 +420,7 @@ function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onP
         const at = { x: row(list.length + 1, list.length) + 80, y: side === 'in' ? -150 : 182 }
         const isOpen = hand.menu?.side === side
         nodes.push({ id: `plus-${side}`, type: 'plus', position: at, data: { open: isOpen, side, onClick: () => hand.onPlus(side) }, draggable: false })
-        const lead = { stroke: isOpen ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' }
+        const lead = { stroke: isOpen ? 'var(--accent-line)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' }
         edges.push(side === 'in' ? { id: 'lead-in', source: 'plus-in', sourceHandle: 'bottom', target: board.id, targetHandle: 'top', type: 'smoothstep', style: lead } : { id: 'lead-out', source: board.id, sourceHandle: 'bottom', target: 'plus-out', targetHandle: 'top', type: 'smoothstep', style: lead })
         if (isOpen) nodes.push({ id: 'menu', type: 'menu', position: { x: at.x + 44, y: side === 'in' ? at.y - 150 : at.y - 30 }, data: { hand }, draggable: false, zIndex: 10 })
       }
@@ -551,8 +551,8 @@ function Chart({ points, max, unit, title }: { points: Point[]; max?: number; un
         <line x1="0" x2={W} y1={H / 2} y2={H / 2} stroke="var(--separator)" />
         {points.length > 1 && (
           <>
-            <path d={`${line} L${W} ${H} L0 ${H} Z`} fill="var(--accent)" opacity="0.09" />
-            <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d={`${line} L${W} ${H} L0 ${H} Z`} fill="var(--accent-line)" opacity="0.09" />
+            <path d={line} fill="none" stroke="var(--accent-line)" strokeWidth="1.6" strokeLinejoin="round" />
           </>
         )}
       </svg>
@@ -600,34 +600,34 @@ function Control({ type, id, live, value }: { type: string; id: string; live: Li
     return (
       <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
         Turn it
-        <input type="range" min={0} max={100} defaultValue={value ?? 0} onChange={(e) => live.control(id, 'position', Number(e.target.value) / 100)} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        <input type="range" min={0} max={100} defaultValue={value ?? 0} onChange={(e) => live.control(id, 'position', Number(e.target.value) / 100)} className="min-w-0 flex-1 accent-[var(--accent-line)]" />
       </label>
     )
   if (type === 'wokwi-hc-sr04')
     return (
       <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
         Distance
-        <input type="range" min={2} max={400} defaultValue={value ?? 200} onChange={(e) => live.control(id, 'distance', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        <input type="range" min={2} max={400} defaultValue={value ?? 200} onChange={(e) => live.control(id, 'distance', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent-line)]" />
       </label>
     )
   if (type === 'wokwi-photoresistor-sensor')
     return (
       <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
         Dark
-        <input type="range" min={0} max={100} defaultValue={Math.round(20 * Math.log10(value ?? 500))} onChange={(e) => live.control(id, 'lux', Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10)} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        <input type="range" min={0} max={100} defaultValue={Math.round(20 * Math.log10(value ?? 500))} onChange={(e) => live.control(id, 'lux', Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10)} className="min-w-0 flex-1 accent-[var(--accent-line)]" />
         Bright
       </label>
     )
   if (type === 'wokwi-slide-switch')
     return (
       <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
-        <input type="checkbox" defaultChecked={!!value} onChange={(e) => live.control(id, 'value', e.target.checked ? 1 : 0)} className="accent-[var(--accent)]" />
+        <input type="checkbox" defaultChecked={!!value} onChange={(e) => live.control(id, 'value', e.target.checked ? 1 : 0)} className="accent-[var(--accent-line)]" />
         Flip it on
       </label>
     )
   if (type === 'wokwi-pir-motion-sensor')
     return (
-      <button onPointerDown={() => live.control(id, 'motion', 1)} onPointerUp={() => live.control(id, 'motion', 0)} onPointerLeave={() => live.control(id, 'motion', 0)} className="h-9 w-full rounded-[9px] border border-line bg-input text-[12.5px] font-medium text-ink active:bg-accent active:text-on-accent">
+      <button onPointerDown={() => live.control(id, 'motion', 1)} onPointerUp={() => live.control(id, 'motion', 0)} onPointerLeave={() => live.control(id, 'motion', 0)} className="h-9 w-full rounded-[9px] border border-line bg-input text-[12.5px] font-medium text-ink active:bg-accent hover:bg-accent-hover active:text-on-accent">
         Hold to walk past it
       </button>
     )
@@ -636,17 +636,17 @@ function Control({ type, id, live, value }: { type: string; id: string; live: Li
       <div className="space-y-1.5">
         <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
           <span className="w-[74px]">Temperature</span>
-          <input type="range" min={-40} max={80} step={0.5} defaultValue={value ?? 24} onChange={(e) => live.control(id, 'temperature', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+          <input type="range" min={-40} max={80} step={0.5} defaultValue={value ?? 24} onChange={(e) => live.control(id, 'temperature', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent-line)]" />
         </label>
         <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
           <span className="w-[74px]">Humidity</span>
-          <input type="range" min={0} max={100} defaultValue={live.readings[id]?.cards[1]?.[1] ? parseFloat(live.readings[id].cards[1][1]) : 40} onChange={(e) => live.control(id, 'humidity', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+          <input type="range" min={0} max={100} defaultValue={live.readings[id]?.cards[1]?.[1] ? parseFloat(live.readings[id].cards[1][1]) : 40} onChange={(e) => live.control(id, 'humidity', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent-line)]" />
         </label>
       </div>
     )
   if (type === 'wokwi-pushbutton')
     return (
-      <button onPointerDown={() => live.control(id, 'pressed', 1)} onPointerUp={() => live.control(id, 'pressed', 0)} onPointerLeave={() => live.control(id, 'pressed', 0)} className="h-9 w-full rounded-[9px] border border-line bg-input text-[12.5px] font-medium text-ink active:bg-accent active:text-on-accent">
+      <button onPointerDown={() => live.control(id, 'pressed', 1)} onPointerUp={() => live.control(id, 'pressed', 0)} onPointerLeave={() => live.control(id, 'pressed', 0)} className="h-9 w-full rounded-[9px] border border-line bg-input text-[12.5px] font-medium text-ink active:bg-accent hover:bg-accent-hover active:text-on-accent">
         Hold to press
       </button>
     )
@@ -720,7 +720,7 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
     return (
       <>
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={file} disabled={!file} className="flex h-9 items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent disabled:opacity-40">
+          <button onClick={file} disabled={!file} className="flex h-9 items-center justify-center gap-1.5 rounded-[9px] bg-accent hover:bg-accent-hover text-[12.5px] font-semibold text-on-accent disabled:opacity-40">
             <Icon name="export" size={13} />
             {pico ? 'sketch.uf2' : 'sketch.hex'}
           </button>
@@ -1233,7 +1233,7 @@ export function Onboarding(props: Props) {
       {left !== null && left > 0 && (
         <div data-countdown className="rise absolute inset-x-0 bottom-6 z-40 flex justify-center px-6">
           <div className="float flex items-center gap-3 overflow-hidden py-1.5 pl-3.5 pr-1.5">
-            <svg width="22" height="22" viewBox="0 0 22 22" className="-rotate-90 text-accent">
+            <svg width="22" height="22" viewBox="0 0 22 22" className="-rotate-90 text-accent-line">
               <circle cx="11" cy="11" r="9" fill="none" stroke="var(--sep)" strokeWidth="2" />
               <circle cx="11" cy="11" r="9" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={2 * Math.PI * 9} strokeDashoffset={2 * Math.PI * 9 * (left / WAIT)} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s linear' }} />
             </svg>
@@ -1243,7 +1243,7 @@ export function Onboarding(props: Props) {
             <button onClick={stay} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink">
               Stay here
             </button>
-            <button onClick={() => target && onEditor(target)} className="flex h-8 items-center gap-1 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-on-accent">
+            <button onClick={() => target && onEditor(target)} className="flex h-8 items-center gap-1 rounded-[8px] bg-accent hover:bg-accent-hover px-3 text-[12px] font-semibold text-on-accent">
               Go now
               <Icon name="chevron-right" size={11} />
             </button>
@@ -1253,7 +1253,7 @@ export function Onboarding(props: Props) {
       {!shown && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center">
           <button onClick={() => verdict?.ok && setPicked('parts')} className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full border bg-panel px-3.5 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)] ${verdict ? (verdict.ok ? 'border-ok/40' : 'border-bad/40') : 'border-line'}`}>
-            {verdict ? <Status ok={verdict.ok} size={14} /> : <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />}
+            {verdict ? <Status ok={verdict.ok} size={14} /> : <span className="h-2 w-2 animate-pulse rounded-full bg-accent hover:bg-accent-hover" />}
             {phase}
             {verdict?.ok && <span className="text-dim">· now build it for real</span>}
           </button>
@@ -1281,7 +1281,7 @@ export function Onboarding(props: Props) {
             </div>
             {openId && (
               <div className="border-t border-sep p-3">
-                <button onClick={() => onEditor(openId)} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent">
+                <button onClick={() => onEditor(openId)} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] bg-accent hover:bg-accent-hover text-[12.5px] font-semibold text-on-accent">
                   Open in the editor
                   <Icon name="chevron-right" size={12} />
                 </button>

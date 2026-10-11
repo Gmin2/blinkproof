@@ -83,7 +83,7 @@ export function Start({ examples, busy, prompt, onPrompt, onDescribe, onOpen, on
                 placeholder="a night light that turns on when the room gets dark"
                 className="min-h-[40px] flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-5 text-ink outline-none placeholder:text-dim"
               />
-              <button type="submit" disabled={busy || !prompt.trim()} title="build it, return" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-accent text-on-accent disabled:opacity-40">
+              <button type="submit" disabled={busy || !prompt.trim()} title="build it, return" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-accent hover:bg-accent-hover text-on-accent disabled:opacity-40">
                 {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="chevron-right" size={14} />}
               </button>
             </form>
@@ -92,7 +92,7 @@ export function Start({ examples, busy, prompt, onPrompt, onDescribe, onOpen, on
             ) : (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                 {IDEAS.map((idea) => (
-                  <button key={idea} onClick={() => onPrompt(idea)} className={`h-7 rounded-full border px-3 text-[11.5px] ${prompt === idea ? 'border-accent bg-accent text-on-accent' : 'border-sep bg-panel text-dim hover:text-ink'}`}>
+                  <button key={idea} onClick={() => onPrompt(idea)} className={`h-7 rounded-full border px-3 text-[11.5px] ${prompt === idea ? 'border-accent-line bg-accent hover:bg-accent-hover text-on-accent' : 'border-sep bg-panel text-dim hover:text-ink'}`}>
                     {idea.split(':')[0].replace(/^./, (c) => c.toUpperCase())}
                   </button>
                 ))}
