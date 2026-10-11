@@ -111,3 +111,22 @@ describe('broken circuits fail on the right rule', () => {
     expect(rules(c, 'void loop(){ analogWrite(5, 1); }')).toEqual([])
   })
 })
+describe('light sensor rules', () => {
+  const ldr = { id: 'ldr1', type: 'wokwi-photoresistor-sensor' }
+  const power = [['ldr1:VCC', 'uno:5V'], ['ldr1:GND', 'uno:GND.1']]
+  it('is fine with AO on an analog pin', () => {
+    expect(errors(circuit([ldr], [...power, ['ldr1:AO', 'uno:A0']]))).toEqual([])
+  })
+  it('is fine with only DO on a digital pin', () => {
+    expect(errors(circuit([ldr], [...power, ['ldr1:DO', 'uno:7']]))).toEqual([])
+  })
+  it('says when it reaches no pin at all', () => {
+    expect(errors(circuit([ldr], power))).toContain('unwired')
+  })
+  it('says when AO is on a pin that cannot read a voltage', () => {
+    expect(errors(circuit([ldr], [...power, ['ldr1:AO', 'uno:7']]))).toContain('adc-pin')
+  })
+  it('says when it has no power', () => {
+    expect(errors(circuit([ldr], [['ldr1:AO', 'uno:A0']]))).toContain('no-power')
+  })
+})

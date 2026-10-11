@@ -28,6 +28,7 @@ const NOTES: Record<string, string> = {
   'wokwi-led-ring': 'ws2812 ring. VCC 5V, GND, DIN to a digital pin. attrs: pixels (default "16"). Adafruit_NeoPixel, NEO_GRB + NEO_KHZ800, call begin(). 3 bytes of ram a pixel',
   'wokwi-servo': 'V+ 5V, GND, PWM to a digital pin. Servo library, attach(pin), write(0..180)',
   'wokwi-hc-sr04': 'ultrasonic distance. VCC 5V (not 3.3V), GND, TRIG and ECHO to digital pins. trigger 10us high, pulseIn(ECHO, HIGH, 30000) / 58 = cm. attrs: distance (cm). test control: distance (2 to 400)',
+  'wokwi-photoresistor-sensor': 'light sensor module (photoresistor). VCC to 5V (3V3 on a pico), GND, AO to an analog pin: analogRead goes DOWN as the light goes up, about 250 at 500 lux (a lit room), over 900 at 1 lux (dark). DO to a digital pin reads HIGH when dark, LOW when bright, switching near 100 lux. wire AO, DO or both. attrs: lux (default 500). test control: lux (0.1 to 100000)',
   'wokwi-buzzer': 'passive buzzer. 2 (+) to a digital pin, 1 (-) to GND. tone(pin, hz) and noTone(pin), a steady HIGH is silent',
 }
 

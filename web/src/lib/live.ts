@@ -9,6 +9,9 @@ export type Happening = { ms: number; text: string; tone?: 'ok' | 'bad' | 'warn'
 // what one part is doing right now, as cards, one number to chart, and a line for the log when it changes
 export type Reading = { cards: [string, string][]; value?: number; unit?: string; max?: number; line: string }
 
+// lux runs from starlight to sunlight, round it the way a person would say it
+export const fmtLux = (lux: number) => (lux >= 1000 ? `${Math.round(lux / 100) / 10}k` : lux >= 10 ? String(Math.round(lux)) : String(Math.round(lux * 10) / 10))
+
 export function read(p: PartState): Reading | undefined {
   switch (p.type) {
     case 'wokwi-led':
@@ -27,6 +30,8 @@ export function read(p: PartState): Reading | undefined {
       const text = p.oled?.text().replace(/\s+/g, ' ').trim() ?? ''
       return { cards: [['Screen', !p.oled ? 'not on the bus' : p.oled.on ? 'on' : 'off'], ['Frames', String(p.oled?.frames ?? 0)]], line: text ? `shows "${text.slice(0, 40)}"` : 'blank' }
     }
+    case 'wokwi-photoresistor-sensor':
+      return { cards: [['Light', `${fmtLux(p.lux)} lux`], ['AO', p.powered ? `${p.volts.toFixed(2)} V` : '-'], ['DO', !p.powered ? '-' : p.dark ? 'high, dark' : 'low, light']], value: p.lux, unit: 'lux', max: 1000, line: !p.powered ? 'no power' : `${fmtLux(p.lux)} lux, ${p.dark ? 'dark' : 'light'}` }
     case 'wokwi-led-ring':
     case 'wokwi-neopixel': {
       const px = p.strip?.pixels ?? []

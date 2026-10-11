@@ -35,4 +35,6 @@ export const PARTS = {
   'wokwi-servo': { pins: ['GND', 'V+', 'PWM'] },
   'wokwi-hc-sr04': { pins: ['VCC', 'TRIG', 'ECHO', 'GND'] },
   'wokwi-buzzer': { pins: ['1', '2'] },
+  // the module: a photoresistor in a divider, and a comparator with its own trim pot for DO
+  'wokwi-photoresistor-sensor': { pins: ['VCC', 'GND', 'DO', 'AO'] },
 } satisfies Record<string, { pins: string[]; same?: string[][]; board?: boolean }>

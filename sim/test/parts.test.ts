@@ -153,3 +153,32 @@ describe('pushbutton', () => {
     expect(b.board.serial.trim()).toBe('presses 1')
   })
 })
+
+describe('light sensor', () => {
+  const ldr = { id: 'ldr1', type: 'wokwi-photoresistor-sensor' }
+  const wires = [['ldr1:VCC', 'uno:5V'], ['ldr1:GND', 'uno:GND.1'], ['ldr1:AO', 'uno:A0'], ['ldr1:DO', 'uno:2']]
+  const sketch = `void setup() { Serial.begin(9600); pinMode(2, INPUT); }
+void loop() { Serial.print(analogRead(A0)); Serial.print(' '); Serial.println(digitalRead(2)); delay(50); }`
+  const last = (b: Bench) => b.board.serial.trim().split('\n').at(-1)!.split(' ').map(Number)
+
+  it('reads lower on AO the brighter it is, and DO goes high in the dark', async () => {
+    const b = bench([ldr], wires, await build(sketch))
+    b.run(120)
+    const [bright, brightDo] = last(b)
+    b.control('ldr1', 'lux', 1)
+    b.run(120)
+    const [dark, darkDo] = last(b)
+    expect(bright).toBeLessThan(300)
+    expect(brightDo).toBe(0)
+    expect(dark).toBeGreaterThan(900)
+    expect(darkDo).toBe(1)
+    expect(get<'wokwi-photoresistor-sensor'>(b, 'ldr1')).toMatchObject({ lux: 1, dark: true })
+  })
+
+  it('reads nothing without power', async () => {
+    const b = bench([ldr], wires.slice(1), await build(sketch))
+    b.run(120)
+    expect(last(b)[0]).toBeLessThan(50)
+    expect(b.describe()).toContain('ldr1: not powered')
+  })
+})

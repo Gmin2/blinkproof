@@ -3,6 +3,7 @@ import './elements/pico'
 import { Bench, Circuit, PARTS, checkRules, parseScenario, play, type Diagram, type Finding, type PartState, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
+import { fmtLux } from './lib/live'
 import { Speaker } from './lib/speaker'
 import { Icon } from './icons/Icon'
 import { untangle } from './lib/layout'
@@ -106,6 +107,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
   const [steps, setSteps] = useState<StepResult[]>([])
   const [report, setReport] = useState<Report | null>(null)
   const [sonars, setSonars] = useState<Record<string, number>>({})
+  const [lights, setLights] = useState<Record<string, number>>({})
   const benchRef = useRef<Bench | null>(null)
   const runningRef = useRef(running)
   runningRef.current = running
@@ -251,6 +253,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     const strips = new Map<string, number>()
     const frames = new Map<string, number>()
     const distances: Record<string, number> = {}
+    const luxes: Record<string, number> = {}
     const cleanups: (() => void)[] = []
 
     for (const [id, part] of Object.entries(bench.parts)) {
@@ -269,6 +272,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         cleanups.push(() => (el.removeEventListener('button-press', down), el.removeEventListener('button-release', up)))
       }
       if (part.type === 'wokwi-hc-sr04') distances[id] = part.distance
+      if (part.type === 'wokwi-photoresistor-sensor') luxes[id] = part.lux
       if (part.type === 'wokwi-ssd1306') {
         // dark until the sketch draws on it
         const px = (el.imageData as ImageData).data
@@ -278,6 +282,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
       if (part.type === 'wokwi-led-ring') el.reset?.()
     }
     setSonars(distances)
+    setLights(luxes)
     setSerial('')
     setLines([])
     // serial text arrives in pieces, a line is stamped with the sim time its newline came in
@@ -329,6 +334,15 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         if (part.type === 'wokwi-hc-sr04' && part.distance !== distances[id]) {
           distances[id] = part.distance
           setSonars({ ...distances })
+        }
+        // the module's own leds: power, and DO, which lights while it is bright
+        if (part.type === 'wokwi-photoresistor-sensor') {
+          el.ledPower = part.powered
+          el.ledDO = part.powered && !part.dark
+          if (part.lux !== luxes[id]) {
+            luxes[id] = part.lux
+            setLights({ ...luxes })
+          }
         }
         if (part.type === 'wokwi-buzzer') {
           el.hasSignal = !!part.buzzer?.hz
@@ -649,6 +663,28 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                   <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
                 ))}
             </div>
+          )
+        })}
+        {Object.entries(lights).map(([id, lux]) => {
+          const p = diagram.parts.find((q) => q.id === id)
+          if (!p) return null
+          return (
+            <label key={id} className="pill absolute flex items-center gap-2 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: at(p).x, top: at(p).y + 80 }}>
+              light
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(20 * Math.log10(lux))}
+                className="w-28 accent-[var(--accent)]"
+                onChange={(e) => {
+                  const v = Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10
+                  setLights((s) => ({ ...s, [id]: v }))
+                  benchRef.current?.control(id, 'lux', v)
+                }}
+              />
+              <span className="w-16 text-ink">{fmtLux(lux)} lux</span>
+            </label>
           )
         })}
         {Object.entries(sonars).map(([id, cm]) => {

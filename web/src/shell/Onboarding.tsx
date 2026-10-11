@@ -39,7 +39,7 @@ type Props = {
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
-const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04']
+const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04', 'wokwi-photoresistor-sensor']
 const RAILS = /^(GND|5V|3\.3V|3V3|VIN|VCC|VBUS|VSYS|V\+|VDD|VSS|IOREF|AREF)/
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const ohms = (v?: string) => {
@@ -139,6 +139,7 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
     ['wokwi-pushbutton', 'Button', 'Read a press'],
     ['wokwi-potentiometer', 'Knob', 'A dial read with analogRead'],
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Distance from 2 to 400 cm'],
+    ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright the room is'],
   ],
   out: [
     ['wokwi-led', 'LED', 'Light from a pin, resistor included'],
@@ -599,6 +600,14 @@ function Control({ type, id, live, value }: { type: string; id: string; live: Li
       <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
         Distance
         <input type="range" min={2} max={400} defaultValue={value ?? 200} onChange={(e) => live.control(id, 'distance', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+      </label>
+    )
+  if (type === 'wokwi-photoresistor-sensor')
+    return (
+      <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+        Dark
+        <input type="range" min={0} max={100} defaultValue={Math.round(20 * Math.log10(value ?? 500))} onChange={(e) => live.control(id, 'lux', Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10)} className="min-w-0 flex-1 accent-[var(--accent)]" />
+        Bright
       </label>
     )
   if (type === 'wokwi-pushbutton')

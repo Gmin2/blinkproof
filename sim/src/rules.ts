@@ -19,6 +19,7 @@ const DRAW: Record<string, (attrs: Record<string, string>) => number> = {
   'wokwi-servo': () => 360,
   'wokwi-hc-sr04': () => 15,
   'wokwi-ssd1306': () => 20,
+  'wokwi-photoresistor-sensor': () => 5,
 }
 // pins each part needs wired to work at all
 const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = {
@@ -28,6 +29,8 @@ const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = 
   'wokwi-servo': { power: [['V+', 'GND']], signals: ['PWM'] },
   'wokwi-hc-sr04': { power: [['VCC', 'GND']], signals: ['TRIG', 'ECHO'] },
   'wokwi-potentiometer': { power: [['VCC', 'GND']], signals: ['SIG'] },
+  // AO or DO, whichever the sketch reads, checked on its own below
+  'wokwi-photoresistor-sensor': { power: [['VCC', 'GND']], signals: [] },
 }
 
 // what the sketch says, read crudely: constants, pinMode, analogWrite, Servo, tone, i2c addresses
@@ -81,6 +84,14 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
         // ECHO may reach its pin through a divider, the way the five volt rule asks for on a pico
         if (!c.signal(`${id}:${s}`, s === 'ECHO')) add('unwired', 'error', [id], `${id}:${s} is not wired to a ${board} pin`)
       }
+    }
+
+    if (p.type === 'wokwi-photoresistor-sensor') {
+      const ao = c.signal(`${id}:AO`)
+      const dout = c.signal(`${id}:DO`)
+      if (!ao && !dout) add('unwired', 'error', [id], `${id} is not wired to the ${board}: AO to an analog pin reads how bright it is, DO to a digital pin reads dark or light`)
+      const analog = pico ? /^GP2[678]$/ : /^A\d$/
+      if (ao && !analog.test(ao)) add('adc-pin', 'error', [id], `${id}:AO is on ${ao}, which cannot read a voltage. move it to ${pico ? 'GP26, GP27 or GP28' : 'an analog pin, A0 to A5'}`)
     }
 
     if (p.type === 'wokwi-led') {
