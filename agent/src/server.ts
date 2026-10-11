@@ -50,6 +50,21 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     res.json({ ...b, title })
   })
 
+  // a blank build to make by hand: a board and an empty sketch
+  const BLANK: Record<string, { type: string; id: string; title: string; baud: number }> = {
+    uno: { type: 'wokwi-arduino-uno', id: 'uno', title: 'Blank Uno', baud: 9600 },
+    nano: { type: 'wokwi-arduino-nano', id: 'nano', title: 'Blank Nano', baud: 9600 },
+    pico: { type: 'wokwi-pi-pico', id: 'pico', title: 'Blank Pico', baud: 115200 },
+  }
+  app.post('/builds', async (req, res) => {
+    const blank = BLANK[String(req.body?.board ?? '')]
+    if (!blank) return void res.status(400).json({ error: 'board is uno, nano or pico' })
+    const diagram = { version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: blank.type, id: blank.id, left: 0, top: 0 }], connections: [] }
+    const sketch = `void setup() {\n  Serial.begin(${blank.baud});\n}\n\nvoid loop() {\n}\n`
+    const b = await store.create({ kind: 'build', title: blank.title, status: 'edited', diagram, sketch })
+    res.status(201).json(b)
+  })
+
   // save an edit as a new build: a link always shows what it showed, so changes go to a fresh id
   app.post('/builds/:id/fork', async (req, res) => {
     const parent = await store.get(req.params.id)
