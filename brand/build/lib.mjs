@@ -5,9 +5,7 @@ import { FONTS } from '../src/logo.mjs'
 import tokens from '../tokens.json' with { type: 'json' }
 
 export const c = tokens.color.brand
-export const ui = tokens.color.ui
-// what the character svg needs, in brand colours
-export const CH = { body: c.paper, eyes: c.ink, glow: c.glow, glowDim: c.glowDim, bad: ui.light.bad, lampOff: c.lampOff }
+export const code = tokens.color.code
 
 const fontFiles = ['geist-sans/Geist-Regular.ttf', 'geist-sans/Geist-Medium.ttf', 'geist-sans/Geist-SemiBold.ttf', 'geist-mono/GeistMono-Regular.ttf', 'geist-mono/GeistMono-Medium.ttf'].map((f) => FONTS + f)
 

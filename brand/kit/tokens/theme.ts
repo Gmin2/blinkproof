@@ -3,13 +3,25 @@ export const tokens = {
   "name": "blinkproof",
   "color": {
     "brand": {
-      "glow": "#A6F24A",
-      "glowSoft": "#D9F9B0",
-      "glowDim": "#6E9A3A",
-      "ink": "#141414",
-      "ink2": "#262626",
-      "paper": "#F6F6F4",
-      "lampOff": "#3A3A36"
+      "paper": "#FBFAF9",
+      "ink": "#343433",
+      "stone": "#D1CAC2",
+      "stoneSoft": "#DFD9D3",
+      "mist": "#F6F4F2",
+      "white": "#FFFFFF"
+    },
+    "code": {
+      "window": "#FFFFFF",
+      "chrome": "#FAFAFA",
+      "dot": "#E8E8E8",
+      "title": "#919191",
+      "line": "#B0B0B0",
+      "text": "#24292E",
+      "keyword": "#D73A49",
+      "fn": "#6F42C1",
+      "constant": "#005CC5",
+      "string": "#032F62",
+      "comment": "#8A8A8A"
     },
     "ui": {
       "light": {
@@ -34,11 +46,6 @@ export const tokens = {
         "bad": "#FF6B6F",
         "warn": "#FFAB3D"
       }
-    },
-    "gray": {
-      "100": "#ECECEC",
-      "300": "#D9D9D9",
-      "500": "#7F7F7F"
     }
   },
   "type": {
@@ -50,7 +57,7 @@ export const tokens = {
       "label": 16,
       "title": 24,
       "display": 40,
-      "og": 64
+      "og": 88
     },
     "weight": {
       "regular": 400,
@@ -58,20 +65,19 @@ export const tokens = {
       "semibold": 600
     },
     "tracking": {
-      "wordmark": -0.02
+      "wordmark": -0.03,
+      "display": -0.03
     }
+  },
+  "line": {
+    "og": 3,
+    "picto": 3.5
   },
   "radius": {
     "sm": 6,
     "md": 8,
     "lg": 12,
+    "window": 16,
     "pill": 999
-  },
-  "motion": {
-    "blinkOn": 500,
-    "blinkOff": 500,
-    "breathe": 4000,
-    "failFlash": 120,
-    "ease": "cubic-bezier(0.2, 0, 0, 1)"
   }
 } as const

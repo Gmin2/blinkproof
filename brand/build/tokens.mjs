@@ -7,12 +7,11 @@ const lines = (o, prefix) => Object.entries(o).map(([k, v]) => `  --${prefix}${k
 const css = `/* generated from brand/tokens.json */
 :root {
 ${lines(b, 'bp-').join('\n')}
+${lines(tokens.color.code, 'bp-code-').join('\n')}
 ${lines(tokens.color.ui.light, 'bp-ui-').join('\n')}
 ${Object.entries(tokens.radius).map(([k, v]) => `  --bp-radius-${k}: ${v}px;`).join('\n')}
   --bp-font: '${tokens.type.sans}', system-ui, sans-serif;
   --bp-mono: '${tokens.type.mono}', ui-monospace, monospace;
-  --bp-ease: ${tokens.motion.ease};
-  --bp-blink: ${tokens.motion.blinkOn + tokens.motion.blinkOff}ms;
 }
 
 :root[data-theme='dark'] {
