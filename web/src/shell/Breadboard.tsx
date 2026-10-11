@@ -449,26 +449,29 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
   )
 }
 
+// one end of a wire, said the short way: a hole or a pin in mono, a rail as which one and which side
+type Spot = { kind: 'hole' | 'pin' | 'rail'; text: string; on?: string }
+
 // what a step adds, as rows rather than sentences: a part and the holes its legs go in, a resistor, a wire
 type Row =
   | { kind: 'part'; id: string; type: string; legs: { pin: string; hole: string }[]; straddle: boolean }
-  | { kind: 'resistor'; id: string; value: string; bands: string[]; from: string; to: string }
-  | { kind: 'wire'; id: string; color: string; from: string; to: string }
+  | { kind: 'resistor'; id: string; value: string; bands: string[]; from: Spot; to: Spot }
+  | { kind: 'wire'; id: string; color: string; from: Spot; to: Spot }
   | { kind: 'beside'; id: string; type: string }
 function rowsOf(p: Proto, adds: string[]): Row[] {
   const say = (pin: string) => {
     const n = pin.replace(/\.\d$/, '')
     return /^\d+$/.test(n) ? `D${n}` : n
   }
-  const end = (e: End) => {
-    if ('hole' in e && 'rail' in e.hole) return `${e.hole.rail.startsWith('top') ? 'top' : 'bottom'} ${e.hole.rail.endsWith('+') ? `+ rail, ${p.power}` : '− rail, GND'}`
-    if ('hole' in e) return holeName(e.hole)
-    return 'board' in e ? `${p.board.name.toLowerCase()}:${say(e.board.split(':')[1])}` : `${e.part}:${e.pin}`
+  const end = (e: End): Spot => {
+    if ('hole' in e && 'rail' in e.hole) return { kind: 'rail', text: `${e.hole.rail.startsWith('top') ? 'top' : 'bottom'} ${e.hole.rail.endsWith('+') ? '+' : '−'}` }
+    if ('hole' in e) return { kind: 'hole', text: holeName(e.hole) }
+    return 'board' in e ? { kind: 'pin', on: p.board.name, text: say(e.board.split(':')[1]) } : { kind: 'pin', on: e.part, text: e.pin }
   }
   const out: Row[] = []
   for (const id of adds) {
     const x = p.placed.find((q) => q.id === id)
-    if (x?.type === 'wokwi-resistor') out.push({ kind: 'resistor', id, value: x.label.split(', ')[1], bands: x.bands ?? [], from: holeName(x.legs[0].hole), to: holeName(x.legs[1].hole) })
+    if (x?.type === 'wokwi-resistor') out.push({ kind: 'resistor', id, value: x.label.split(', ')[1], bands: x.bands ?? [], from: end({ hole: x.legs[0].hole }), to: end({ hole: x.legs[1].hole }) })
     else if (x) out.push({ kind: 'part', id, type: x.type, legs: x.legs.map((l) => ({ pin: l.pin, hole: holeName(l.hole) })), straddle: x.type === 'wokwi-pushbutton' || x.type === 'wokwi-7segment' })
     const b = p.beside.find((q) => q.id === id)
     if (b) out.push({ kind: 'beside', id, type: b.type })
@@ -497,6 +500,36 @@ function Line({ left, right, swatch, onHover }: { left: React.ReactNode; right: 
       {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
       <span className="min-w-0 truncate font-mono text-ink">{left}</span>
       <span className="ml-auto truncate font-mono text-dim">{right}</span>
+    </div>
+  )
+}
+
+// what a leg is called when you hold the part, where the pin name alone does not say it
+const LEG: Record<string, Record<string, string>> = {
+  'wokwi-led': { A: 'long leg', C: 'short leg' },
+  'wokwi-buzzer': { '2': '+ leg', '1': '− leg' },
+  'wokwi-rgb-led': { COM: 'longest' },
+}
+
+function SpotText({ spot }: { spot: Spot }) {
+  if (spot.kind === 'rail') return <span className="truncate text-ink">{spot.text} rail</span>
+  if (spot.kind === 'pin')
+    return (
+      <span className="truncate">
+        <span className="text-dim">{spot.on} </span>
+        <span className="font-mono text-ink">{spot.text}</span>
+      </span>
+    )
+  return <span className="truncate font-mono text-ink">{spot.text}</span>
+}
+
+function Wire({ color, from, to, onHover }: { color: string; from: Spot; to: Spot; onHover: (on: boolean) => void }) {
+  return (
+    <div onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)} className="grid h-6 grid-cols-[8px_minmax(0,1fr)_14px_minmax(0,1fr)] items-center gap-1.5 rounded-[7px] bg-input px-2 text-[11px] hover:bg-hover hover:shadow-[inset_0_0_0_1px_var(--divider)]">
+      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      <SpotText spot={from} />
+      <Icon name="chevron-right" size={9} className="justify-self-center text-icon-2" />
+      <SpotText spot={to} />
     </div>
   )
 }
@@ -575,27 +608,28 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
                         </div>
                         <div className="grid grid-cols-2 gap-1.5">
                           {r.legs.map((l, i) => (
-                            <Line key={i} left={l.pin} right={l.hole} />
+                            <Line key={i} left={<>{l.pin}{LEG[r.type]?.[l.pin] && <span className="font-sans text-dim"> {LEG[r.type][l.pin]}</span>}</>} right={l.hole} />
                           ))}
                         </div>
                       </div>
                     ))}
                     {others.length > 0 && (
                       <div className="space-y-1.5">
-                      {parts.length > 0 && others.some((r) => r.kind === 'wire') && <div className="pt-1 text-[11px] font-medium text-dim">then the wires</div>}
+                      {parts.length > 0 && others.some((r) => r.kind === 'wire') && <div className="pt-1 text-[11px] font-medium text-dim">then wire it</div>}
                         {others.map((r) =>
                           r.kind === 'resistor' ? (
-                            <div key={r.id} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                            <div key={r.id} title={`${r.value}, ${r.bands.slice(0, 3).join(' ')}`} className="grid h-6 grid-cols-[34px_minmax(0,1fr)_14px_minmax(0,1fr)] items-center gap-1.5 rounded-[7px] bg-input px-2 text-[11px]">
                               <Resistor bands={r.bands} />
-                              <span className="font-mono text-ink">{r.value}</span>
-                              <span className="ml-auto font-mono text-dim">
-                                {r.from} → {r.to}
+                              <span className="truncate">
+                                <span className="font-mono text-ink">{r.value}</span> <span className="text-dim">from</span> <SpotText spot={r.from} />
                               </span>
+                              <Icon name="chevron-right" size={9} className="justify-self-center text-icon-2" />
+                              <SpotText spot={r.to} />
                             </div>
                           ) : r.kind === 'beside' ? (
                             <Line key={r.id} left={r.id} right="beside the board" />
                           ) : (
-                            <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} onHover={(on) => guide.setHover(on ? r.id : null)} />
+                            <Wire key={r.id} color={r.color} from={r.from} to={r.to} onHover={(on) => guide.setHover(on ? r.id : null)} />
                           ),
                         )}
                       </div>
