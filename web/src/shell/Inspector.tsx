@@ -72,7 +72,7 @@ function Field({ label, icon, value, wide, menu }: { label?: string; icon?: Icon
 function Switch({ on, label }: { on: boolean; label: string }) {
   return (
     <div className="flex h-6 items-center gap-2 text-[12px] text-ink">
-      <span className={`relative h-3 w-[22px] rounded-full transition-colors ${on ? 'bg-accent' : 'bg-switch'}`}>
+      <span className={`relative h-3 w-[22px] rounded-full transition-colors ${on ? 'bg-accent hover:bg-accent-hover' : 'bg-switch'}`}>
         <span className={`absolute top-[1px] h-2.5 w-2.5 rounded-full bg-panel shadow transition-all ${on ? 'left-[11px]' : 'left-[1px]'}`} />
       </span>
       {label}
@@ -244,7 +244,7 @@ export function Inspector({
                         key={c}
                         title={c}
                         onClick={() => onRecolorWire(c)}
-                        className={`h-6 w-6 rounded-full ring-offset-2 ring-offset-panel ${wire[2] === c ? 'ring-2 ring-accent' : ''}`}
+                        className={`h-6 w-6 rounded-full ring-offset-2 ring-offset-panel ${wire[2] === c ? 'ring-2 ring-accent-line' : ''}`}
                         style={{ background: c }}
                       />
                     ))}

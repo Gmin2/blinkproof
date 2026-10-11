@@ -36,8 +36,8 @@ export function ModelMenu({ model, models, onModel }: { model: string; models: M
   const groups = ORDER.map((name) => [name, models.filter((m) => maker(m) === name)] as const).filter(([, list]) => list.length)
   return (
     <div ref={box} className="relative">
-      <button onClick={() => setOpen(!open)} title="the model that builds it" className={`flex h-9 items-center gap-2 rounded-full border pl-1 pr-2.5 text-[12px] font-medium text-ink transition-colors ${open ? 'border-accent/50 bg-hover' : 'border-line bg-panel hover:bg-hover'}`}>
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-on-accent">{pretty((current?.label ?? model).replace(/^claude /, '')).charAt(0)}</span>
+      <button onClick={() => setOpen(!open)} title="the model that builds it" className={`flex h-9 items-center gap-2 rounded-full border pl-1 pr-2.5 text-[12px] font-medium text-ink transition-colors ${open ? 'border-accent-line/50 bg-hover' : 'border-line bg-panel hover:bg-hover'}`}>
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent hover:bg-accent-hover text-[11px] font-semibold text-on-accent">{pretty((current?.label ?? model).replace(/^claude /, '')).charAt(0)}</span>
         <span className="max-w-[110px] truncate">{pretty((current?.label ?? model).replace(/^claude /, ''))}</span>
         <Icon name="chevron-down" size={11} className={`text-icon-2 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -55,7 +55,7 @@ export function ModelMenu({ model, models, onModel }: { model: string; models: M
                     <span className="block truncate text-[12.5px] font-medium text-ink">{pretty(m.label)}</span>
                     <span className="block truncate text-[11px] text-dim">{note(m)}</span>
                   </span>
-                  {m.id === model && <Icon name="check" size={13} className="text-accent" />}
+                  {m.id === model && <Icon name="check" size={13} className="text-accent-line" />}
                 </button>
               ))}
             </div>

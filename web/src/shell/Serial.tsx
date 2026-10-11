@@ -62,8 +62,8 @@ function Chart({ lines, simMs }: { lines: Line[]; simMs: number }) {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 block w-full" preserveAspectRatio="none" style={{ height: H }}>
         <line x1="0" x2={W} y1={H / 2} y2={H / 2} stroke="var(--separator)" strokeDasharray="3 3" />
-        <path d={`${line} L${W} ${H} L0 ${H} Z`} fill="var(--accent)" opacity="0.08" />
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d={`${line} L${W} ${H} L0 ${H} Z`} fill="var(--accent-line)" opacity="0.08" />
+        <path d={line} fill="none" stroke="var(--accent-line)" strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
       <div className="mt-1 flex justify-between font-mono text-[10px] text-dim">
         <span>{stamp(Math.max(0, simMs - span)).slice(0, 5)}</span>
@@ -158,7 +158,7 @@ export function Serial({ lines, simMs, speed, state, flash, ram, board, onSend }
           disabled={state === 'stop'}
           className="h-8 min-w-0 flex-1 rounded-[8px] bg-input px-2.5 font-mono text-[11px] text-ink outline-none placeholder:font-sans placeholder:text-dim"
         />
-        <button type="submit" disabled={state === 'stop'} className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-accent text-on-accent disabled:opacity-40" title="send">
+        <button type="submit" disabled={state === 'stop'} className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-accent hover:bg-accent-hover text-on-accent disabled:opacity-40" title="send">
           <Icon name="paper-plane-2" size={14} />
         </button>
       </form>

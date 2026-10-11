@@ -46,7 +46,7 @@ export function Grip({ side, width, onWidth, onReset, onDrag }: { side: 'left' |
       onDoubleClick={onReset}
       className={`group absolute inset-y-0 z-20 w-2 cursor-col-resize ${side === 'right' ? '-right-1' : '-left-1'}`}
     >
-      <span className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${on ? 'bg-accent' : 'bg-transparent group-hover:bg-accent/60'}`} />
+      <span className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${on ? 'bg-accent hover:bg-accent-hover' : 'bg-transparent group-hover:bg-accent/60'}`} />
     </div>
   )
 }

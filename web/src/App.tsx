@@ -62,7 +62,7 @@ function useTheme() {
 // an icon button inside a toolbar pill
 function Tool({ icon, label, onClick, active, disabled, children }: { icon?: IconName; label: string; onClick: () => void; active?: boolean; disabled?: boolean; children?: React.ReactNode }) {
   return (
-    <button onClick={onClick} disabled={disabled} title={label} className={`flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-35 ${active ? 'text-accent' : 'text-icon'}`}>
+    <button onClick={onClick} disabled={disabled} title={label} className={`flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-35 ${active ? 'text-accent-line' : 'text-icon'}`}>
       {children ?? (icon && <Icon name={icon} size={19} />)}
     </button>
   )
@@ -435,7 +435,7 @@ export default function App() {
               </button>
             </>
           )}
-          <button onClick={runEdited} disabled={(build.busy && live) || !code} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
+          <button onClick={runEdited} disabled={(build.busy && live) || !code} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent hover:bg-accent-hover px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
             <Icon name="play" size={11} />
             Run
           </button>
@@ -565,16 +565,22 @@ export default function App() {
           </div>
           {/* the views of one gadget, the way a pcb editor has pcb, schematic and 3d: the circuit running, or built on a breadboard */}
           {diagram && (
-            <div role="tablist" aria-label="view" className="pill pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-0.5 p-1">
+            <div role="tablist" aria-label="view" className="pill pointer-events-auto relative mx-3 grid shrink-0 grid-cols-2 p-[3px]">
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-input shadow-[inset_0_0_0_1px_var(--divider)] transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${mode === 'build' ? 100 : 0}%)` }}
+              />
               {(
                 [
-                  ['circuit', 'Circuit'],
-                  ['breadboard', 'Breadboard'],
+                  ['circuit', 'Circuit', 'chip', 'the circuit, running'],
+                  ['breadboard', 'Breadboard', 'grid', 'build it on a breadboard'],
                 ] as const
-              ).map(([v, label]) => {
+              ).map(([v, label, icon, hint]) => {
                 const on = (mode === 'build') === (v === 'breadboard')
                 return (
-                  <button key={v} role="tab" aria-selected={on} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`h-7 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'bg-accent text-on-accent' : 'text-dim hover:text-ink'}`}>
+                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
+                    <Icon name={icon} size={13} />
                     {label}
                   </button>
                 )
@@ -594,14 +600,14 @@ export default function App() {
                 <div className="menu absolute right-0 top-11 z-20 w-48 p-1.5 text-[12px]">
                   <div className="px-2 pb-1 pt-0.5 text-[11px] font-semibold text-dim">Appearance</div>
                   {(['light', 'dark'] as Theme[]).map((t) => (
-                    <button key={t} onClick={() => (setTheme(t), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-on-accent">
+                    <button key={t} onClick={() => (setTheme(t), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:bg-accent-hover hover:text-on-accent">
                       <Icon name={t === 'light' ? 'sun' : 'moon'} size={14} />
                       <span className="flex-1">{t === 'light' ? 'Light' : 'Dark'}</span>
                       {theme === t && <Icon name="check" size={12} />}
                     </button>
                   ))}
                   <div className="mx-2 my-1 border-t border-sep" />
-                  <button onClick={() => (dispatchEvent(new Event('resize')), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-on-accent">
+                  <button onClick={() => (dispatchEvent(new Event('resize')), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:bg-accent-hover hover:text-on-accent">
                     <Icon name="full-screen-2" size={14} />
                     Zoom to Fit
                   </button>
@@ -647,7 +653,7 @@ export default function App() {
             <button onClick={revert} className="h-7 rounded-full px-2.5 text-dim hover:bg-hover hover:text-ink">
               Revert
             </button>
-            <button onClick={saveFork} disabled={saving} title="save as a new build with its own link, cmd s" className="h-7 rounded-full bg-accent px-3 font-semibold text-on-accent disabled:opacity-40">
+            <button onClick={saveFork} disabled={saving} title="save as a new build with its own link, cmd s" className="h-7 rounded-full bg-accent hover:bg-accent-hover px-3 font-semibold text-on-accent disabled:opacity-40">
               {saving ? 'Saving...' : 'Save as New Build'}
             </button>
           </div>
