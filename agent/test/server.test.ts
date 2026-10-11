@@ -39,6 +39,29 @@ describe('server', () => {
     expect(list[0].sketch).toBeUndefined()
   })
 
+  it('forks a build into a new one, edited, pointing back at where it came from', async () => {
+    const parent = await store.create({ kind: 'example', title: 'Blink', status: 'proven', diagram: { version: 1, parts: [{ type: 'wokwi-arduino-uno', id: 'uno' }], connections: [] }, sketch: 'void setup(){} void loop(){}' })
+    const post = (body: object) => fetch(`${base}/builds/${parent.id}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const res = await post({ sketch: 'void setup(){ pinMode(13, OUTPUT); } void loop(){}' })
+    expect(res.status).toBe(201)
+    const fork = await res.json()
+    expect(fork).toMatchObject({ kind: 'build', title: 'Blink, edited', status: 'edited', forkOf: { id: parent.id, title: 'Blink' } })
+    expect(fork.id).not.toBe(parent.id)
+    expect((await store.get(parent.id))!.sketch).toBe('void setup(){} void loop(){}')
+    expect((await post({ sketch: 'nothing here' })).status).toBe(400)
+    expect((await post({ sketch: 'void setup(){}', diagram: { parts: 'no' } })).status).toBe(400)
+  })
+
+  it('renames a build, not an example, and not to nothing', async () => {
+    const b = await store.create({ kind: 'build', title: 'Night light', status: 'proven' })
+    const ex = await store.create({ kind: 'example', title: 'Blink', status: 'proven' })
+    const patch = (id: string, title: string) => fetch(`${base}/builds/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) })
+    expect((await patch(b.id, '  Bedside lamp  ')).status).toBe(200)
+    expect((await store.get(b.id))!.title).toBe('Bedside lamp')
+    expect((await patch(ex.id, 'mine')).status).toBe(403)
+    expect((await patch(b.id, '   ')).status).toBe(400)
+  })
+
   it('says 404 for an id it does not have, 400 for an empty request', async () => {
     expect((await fetch(`${base}/builds/nope`)).status).toBe(404)
     expect((await fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(400)

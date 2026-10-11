@@ -83,9 +83,11 @@ type Props = {
   onShare: () => void
   onDownload: () => void
   canShare: boolean
+  forkOf?: { id: string; title: string }
+  onOpen: (id: string) => void
 }
 
-export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare, onDownload, canShare }: Props) {
+export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare, onDownload, canShare, forkOf, onOpen }: Props) {
   const circuit = useMemo(() => (diagram ? Circuit.parse(diagram).circuit : undefined), [diagram])
   const part = selected ? diagram?.parts.find((p) => p.id === selected) : undefined
   const feedEnd = useRef<HTMLDivElement>(null)
@@ -225,6 +227,15 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
                   <Field icon="magnifier" value={bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '-'} />
                   <Field icon="stopwatch" value={bench?.build && diagram ? `${(bench.simMs / 1000).toFixed(1)}s` : '-'} />
                 </div>
+                {forkOf && (
+                  <button onClick={() => onOpen(forkOf.id)} className="mt-2.5 flex w-full items-center gap-2 rounded-[7px] bg-input px-2 py-1.5 text-left text-[11px] text-dim hover:text-ink">
+                    <Icon name="nodes" size={13} className="text-icon-2" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Edited from <span className="font-medium text-ink">{forkOf.title}</span>
+                    </span>
+                    <Icon name="chevron-right" size={11} />
+                  </button>
+                )}
                 {!diagram && <p className="mt-3 text-[11px] leading-4 text-dim">Describe a gadget and the agent builds it on the canvas, then has to pass a test before it hands it over.</p>}
               </Section>
               <Sep />

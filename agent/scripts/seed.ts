@@ -28,7 +28,7 @@ for (const [i, [id, title, dir, sketch]] of EXAMPLES.entries()) {
   await db.send(
     new PutCommand({
       TableName: 'blinkproof-builds',
-      Item: { id, kind: 'example', title, status: test ? 'proven' : 'building', diagram: JSON.parse(read(join(dir, 'diagram.json'))), sketch: read(sketch ?? join(dir, `${dir}.ino`)), ...(test && { test }), createdAt: at, updatedAt: at },
+      Item: { id, kind: 'example', title, status: test ? 'proven' : 'edited', diagram: JSON.parse(read(join(dir, 'diagram.json'))), sketch: read(sketch ?? join(dir, `${dir}.ino`)), ...(test && { test }), createdAt: at, updatedAt: at },
     }),
   )
   console.log(`seeded ${id}`)

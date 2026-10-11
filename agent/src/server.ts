@@ -1,3 +1,4 @@
+import { Circuit } from '@blinkproof/sim'
 import express from 'express'
 import { flush, init, shutdown } from 'neatlogs'
 import { build as agentBuild, type Event } from './agent.ts'
@@ -36,6 +37,31 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
 
   app.get('/builds/:id/events', async (req, res) => {
     res.json(await store.getEvents(req.params.id))
+  })
+
+  // rename a build. examples keep their names
+  app.patch('/builds/:id', async (req, res) => {
+    const b = await store.get(req.params.id)
+    if (!b) return void res.status(404).json({ error: 'no build with that id' })
+    if (b.kind !== 'build') return void res.status(403).json({ error: 'examples cannot be renamed' })
+    const title = String(req.body?.title ?? '').trim().slice(0, 80)
+    if (!title) return void res.status(400).json({ error: 'a name cannot be empty' })
+    await store.update(b.id, { title })
+    res.json({ ...b, title })
+  })
+
+  // save an edit as a new build: a link always shows what it showed, so changes go to a fresh id
+  app.post('/builds/:id/fork', async (req, res) => {
+    const parent = await store.get(req.params.id)
+    if (!parent) return void res.status(404).json({ error: 'no build with that id' })
+    const { sketch, diagram = parent.diagram, test = parent.test, title } = (req.body ?? {}) as { sketch?: string; diagram?: unknown; test?: string; title?: string }
+    if (typeof sketch !== 'string' || !sketch.includes('setup')) return void res.status(400).json({ error: 'the sketch needs a setup()' })
+    if (sketch.length > 100_000) return void res.status(400).json({ error: 'the sketch is over 100 kb' })
+    const { circuit, errors } = Circuit.parse(diagram)
+    if (!circuit) return void res.status(400).json({ error: `the circuit does not parse: ${errors[0]}` })
+    const name = (title?.trim() || `${parent.title}, edited`).slice(0, 80)
+    const b = await store.create({ kind: 'build', title: name, request: parent.request, model: parent.model, status: 'edited', diagram, sketch, test, forkOf: { id: parent.id, title: parent.title } })
+    res.status(201).json(b)
   })
 
   // POST /build {request, model?} -> server sent events, the first one says which id the build is stored under
