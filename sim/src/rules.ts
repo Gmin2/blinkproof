@@ -235,12 +235,12 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
     for (const p of c.diagram.parts) {
       // the rp2040 is not 5 v tolerant, a pin holds IOVDD + 0.5 = 3.8 V at most
       const outputs: [string, string][] =
-        p.type === 'wokwi-hc-sr04' ? [['ECHO', 'VCC']] : p.type === 'wokwi-ssd1306' ? [['DATA', 'VIN'], ['CLK', 'VIN']] : []
+        p.type === 'wokwi-hc-sr04' ? [['ECHO', 'VCC']] : p.type === 'wokwi-ssd1306' ? [['DATA', 'VIN'], ['CLK', 'VIN']] : p.type === 'wokwi-lcd1602' ? [['SDA', 'VCC'], ['SCL', 'VCC']] : []
       for (const [out, vcc] of outputs) {
         const gp = c.signal(`${p.id}:${out}`)
         if (gp && c.supply(`${p.id}:${vcc}`) === 5) {
           const why = p.type === 'wokwi-hc-sr04' ? 'its ECHO swings to 5 V' : 'the module pulls SDA and SCL up to its VIN'
-          add('five-volt-pin', 'error', [p.id], `${p.id} is on 5 V and ${why}, straight into ${gp}. the rp2040 takes 3.8 V at most. ${p.type === 'wokwi-hc-sr04' ? `put a divider on ECHO (1k from ECHO to ${gp}, 2k from ${gp} to GND)` : `power ${p.id} from 3V3`}`)
+          add('five-volt-pin', p.type === 'wokwi-lcd1602' ? 'warning' : 'error', [p.id], `${p.id} is on 5 V and ${why}, straight into ${gp}. the rp2040 takes 3.8 V at most. ${p.type === 'wokwi-hc-sr04' ? `put a divider on ECHO (1k from ECHO to ${gp}, 2k from ${gp} to GND)` : p.type === 'wokwi-lcd1602' ? 'the lcd needs its 5 V, so on a real board put a level shifter on SDA and SCL' : `power ${p.id} from 3V3`}`)
         }
       }
       if (p.type === 'wokwi-potentiometer') {

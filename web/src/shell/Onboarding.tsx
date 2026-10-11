@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
 import { BreadboardGuide } from './Breadboard'
+import { PartFacts } from './Facts'
 import { BuildGuide, bom } from './Guide'
 import { Account } from './Account'
 import { api, pending, type Saved, type useMe } from './library'
@@ -873,6 +874,8 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
       <LivePart id={part.id} type={part.type} live={live} />
       {/* the stored values only when nothing is running, the live ones say it better */}
       {!live.readings[part.id] && <Cards items={cards.slice(0, 4)} />}
+      <Heading>About it</Heading>
+      <PartFacts type={part.type} />
       <Heading>Wiring</Heading>
       <div className="space-y-px font-mono text-[11.5px]">
         {wires.map(([a, b, color], i) => {

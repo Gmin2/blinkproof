@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from '../icons/Icon'
 import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
+import { PartFacts } from './Facts'
 import { ModelMenu } from './ModelMenu'
 import { Grip, useWidth } from './Resize'
 import { HeaderButton, KIND } from './Sidebar'
@@ -322,6 +323,10 @@ export function Inspector({
                       ))}
                     </Section>
                   )}
+                  <Sep />
+                  <Section title="About it" sub>
+                    <PartFacts type={part.type} compact />
+                  </Section>
                   <Sep />
                   <Section title="Pins" sub>
                     <div className="space-y-1.5">
