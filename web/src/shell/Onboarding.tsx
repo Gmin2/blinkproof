@@ -6,6 +6,7 @@ import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
 import { BuildGuide } from './Guide'
 import { api, type Saved } from './library'
+import { useLive, type Happening, type Live, type Point } from '../lib/live'
 import { KIND } from './Sidebar'
 import { IDEAS, type Compiled, type FeedItem, type Run, type Verdict } from './useBuild'
 
@@ -236,7 +237,7 @@ function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
         <Icon name={data.icon} size={big ? 17 : 15} className="text-icon" />
         <span className="text-left">
           <span className={`block font-medium text-ink ${big ? 'text-[14px]' : 'text-[13px]'}`}>{data.label}</span>
-          {data.sub && <span className="block text-[11px] text-dim">{data.sub}</span>}
+          {data.sub && <span className="block max-w-[170px] truncate text-[11px] text-dim">{data.sub}</span>}
         </span>
         <span className={`ml-1.5 h-2.5 w-2.5 rounded-full ${dot}`} />
       </span>
@@ -277,7 +278,7 @@ const edgeTypes = { chip: ChipEdge }
 // the circuit as a signal path: inputs come in from the left, the board in the middle, outputs go out to the right
 type Idea = Omit<IdeaData, 'onPick' | 'open'>
 
-function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand) {
+function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand, lines?: Record<string, string>) {
   const board = d?.parts.find((p) => BOARDS.includes(p.type))
   const ideaNode = (open: boolean): Node => ({ id: 'idea', type: 'idea', position: { x: open ? -110 : 0, y: open ? -60 : -170 }, data: { ...idea!, open, badge: open ? idea!.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
   // nothing to draw yet but the request: the card you typed into, still open
@@ -326,8 +327,8 @@ function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onP
     ...(idea ? [ideaNode(false)] : []),
     node('usb', 'source', 50, 132, 'USB', 'bolt'),
     node(board.id, 'board', 0, 0, cap(KIND[board.type] ?? board.type), 'chip', `${items.length} ${items.length === 1 ? 'part' : 'parts'}`),
-    ...ins.map((i, k) => node(i.p.id, 'part', -340, column(ins.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', KIND[i.p.type])),
-    ...outs.map((i, k) => node(i.p.id, 'part', 360, column(outs.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', KIND[i.p.type])),
+    ...ins.map((i, k) => node(i.p.id, 'part', -340, column(ins.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type])),
+    ...outs.map((i, k) => node(i.p.id, 'part', 360, column(outs.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type])),
   ]
   const chipsOf = (i: (typeof items)[number]): Chip[] => [
     ...(i.signal.length ? [{ text: i.signal.map((s) => (/^\d+$/.test(s) ? `D${s}` : s)).join(' · ') }] : []),
@@ -363,7 +364,7 @@ function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onP
   return { nodes, edges }
 }
 
-function Path({ diagram, idea, picked, onPick, state, hand }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand }) {
+function Path({ diagram, idea, picked, onPick, state, hand, lines }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand; lines?: Record<string, string> }) {
   const flow = useReactFlow()
   // the part that came in last glows for a moment, the way a new connection lights up
   const seen = useRef(new Set<string>())
@@ -378,7 +379,8 @@ function Path({ diagram, idea, picked, onPick, state, hand }: { diagram: Diagram
       return () => clearTimeout(t)
     }
   }, [diagram])
-  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand])
+  const liveKey = lines ? Object.entries(lines).map(([k, v]) => k + v).join('|') : ''
+  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand, lines), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand, liveKey])
   const hasBoard = !!diagram?.parts.some((p) => BOARDS.includes(p.type))
   const edges = laid.edges
   // react flow measures nodes through onNodesChange, so they live in state and keep their sizes across relayouts
@@ -437,7 +439,124 @@ function Heading({ children, right }: { children: React.ReactNode; right?: React
   )
 }
 
-function Panel({ id, props }: { id: string; props: Props }) {
+const stamp = (ms: number) => {
+  const s = Math.floor(ms / 1000)
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(Math.floor(ms % 1000)).padStart(3, '0')}`
+}
+
+// one value over the last stretch of the run, a soft area under a line
+function Chart({ points, max, unit, title }: { points: Point[]; max?: number; unit?: string; title: string }) {
+  const W = 340
+  const H = 96
+  const top = Math.max(1, max ?? 0, ...points.map((p) => p.v))
+  const from = points[0]?.ms ?? 0
+  const to = points[points.length - 1]?.ms ?? 1
+  const x = (ms: number) => ((ms - from) / Math.max(1, to - from)) * W
+  const y = (v: number) => H - 6 - (v / top) * (H - 14)
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.ms).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between text-[12.5px]">
+        <span className="font-semibold text-ink">{title}</span>
+        <span className="text-[11.5px] text-dim">
+          up to {top}
+          {unit ? ` ${unit}` : ''}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block w-full" style={{ height: H }}>
+        <line x1="0" x2={W} y1={H / 2} y2={H / 2} stroke="var(--separator)" />
+        {points.length > 1 && (
+          <>
+            <path d={`${line} L${W} ${H} L0 ${H} Z`} fill="var(--accent)" opacity="0.09" />
+            <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
+          </>
+        )}
+      </svg>
+      <div className="mt-1 flex justify-between font-mono text-[10.5px] text-dim">
+        <span>{stamp(from).slice(0, 5)}</span>
+        <span>now</span>
+      </div>
+    </div>
+  )
+}
+
+function Logs({ items, live }: { items: Happening[]; live: boolean }) {
+  const list = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (list.current) list.current.scrollTop = list.current.scrollHeight
+  }, [items.length])
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
+        <span className="font-semibold text-ink">Logs</span>
+        <span className="flex items-center gap-1.5 text-[11.5px] text-dim">
+          <span className={`h-1.5 w-1.5 rounded-full ${live ? 'animate-pulse bg-ok' : 'bg-icon-2/60'}`} />
+          {live ? 'Live' : 'Off'}
+        </span>
+      </div>
+      <div ref={list} className="max-h-[220px] overflow-auto font-mono text-[11.5px] leading-[22px]">
+        {items.length === 0 && <p className="font-sans text-[12px] text-dim">Nothing yet.</p>}
+        {items.map((h, i) => (
+          <div key={i} className="flex items-center gap-2.5 rounded-[5px] px-1 hover:bg-hover">
+            <span className="shrink-0 text-dim">{stamp(h.ms)}</span>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${h.tone === 'bad' ? 'bg-bad' : h.tone === 'ok' ? 'bg-ok' : 'bg-icon-2/50'}`} />
+            <span className="min-w-0 flex-1 truncate text-ink" title={h.text}>
+              {h.text || '\u00a0'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// a person at the bench: turn the knob, move the hand in front of the sensor, hold the button
+function Control({ type, id, live, value }: { type: string; id: string; live: Live; value?: number }) {
+  if (type === 'wokwi-potentiometer')
+    return (
+      <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+        Turn it
+        <input type="range" min={0} max={100} defaultValue={value ?? 0} onChange={(e) => live.control(id, 'position', Number(e.target.value) / 100)} className="min-w-0 flex-1 accent-[var(--accent)]" />
+      </label>
+    )
+  if (type === 'wokwi-hc-sr04')
+    return (
+      <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+        Distance
+        <input type="range" min={2} max={400} defaultValue={value ?? 200} onChange={(e) => live.control(id, 'distance', Number(e.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" />
+      </label>
+    )
+  if (type === 'wokwi-pushbutton')
+    return (
+      <button onPointerDown={() => live.control(id, 'pressed', 1)} onPointerUp={() => live.control(id, 'pressed', 0)} onPointerLeave={() => live.control(id, 'pressed', 0)} className="h-9 w-full rounded-[9px] border border-line bg-input text-[12.5px] font-medium text-ink active:bg-accent active:text-on-accent">
+        Hold to press
+      </button>
+    )
+  return null
+}
+
+function LivePart({ id, type, live }: { id: string; type: string; live: Live }) {
+  const r = live.readings[id]
+  if (live.state === 'off') return null
+  if (!r) return <p className="mb-4 text-[12px] text-dim">{live.state === 'compiling' ? 'Compiling and starting the board...' : live.state === 'failed' ? `It did not compile: ${live.error}` : 'Waiting for the first reading...'}</p>
+  const h = live.history[id] ?? []
+  return (
+    <div className="mb-5 space-y-4">
+      <div>
+        <div className="mb-2 flex items-center justify-between text-[12.5px]">
+          <span className="font-semibold text-ink">Metrics</span>
+          <span className="text-[11.5px] text-dim">sim {(live.simMs / 1000).toFixed(1)} s</span>
+        </div>
+        <Cards items={r.cards} />
+      </div>
+      <Control type={type} id={id} live={live} value={h[h.length - 1]?.v} />
+      {r.value !== undefined && <Chart points={h} max={r.max} unit={r.unit} title={r.unit === '%' ? 'Over time' : r.unit ? `${cap(r.unit === 'cm' ? 'distance' : r.unit === 'hz' ? 'tone' : 'angle')} over time` : 'Over time'} />}
+      <Logs items={live.log[id] ?? []} live={live.state === 'running'} />
+    </div>
+  )
+}
+
+function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   const { diagram, source, test, runs, compiles, verdict, feed, request } = props
   if (id === 'guide') return diagram ? <BuildGuide diagram={diagram} /> : null
   if (id === 'idea')
@@ -470,9 +589,34 @@ function Panel({ id, props }: { id: string; props: Props }) {
     const last = compiles[compiles.length - 1]
     const run = runs[runs.length - 1]
     const num = (s?: string) => s?.split(' ')[0]
+    const lines = live.serial
+    const perSecond = (() => {
+      // serial lines per second of sim, in one second buckets
+      const out: Point[] = []
+      if (!lines.length) return out
+      // buckets grow with the run: a fresh boot gets quarter seconds, a long run whole ones
+      const end = live.simMs
+      const step = Math.max(250, Math.min(1000, end / 20))
+      for (let t = Math.max(step, end - step * 20); t <= end; t += step) out.push({ ms: t, v: Math.round(lines.filter((l) => l.ms > t - step && l.ms <= t).length * (1000 / step)) })
+      return out
+    })()
     return (
       <>
-        <Cards items={[['Flash', num(last?.flash) ? `${num(last?.flash)} b` : '-'], ['Ram', num(last?.ram) ? `${num(last?.ram)} b` : '-'], ['Test runs', String(runs.length)], ['Result', verdict ? (verdict.ok ? 'proven' : 'not proven') : run ? (run.ok ? 'passing' : 'fixing') : '-']]} />
+        {live.state !== 'off' && (
+          <div className="mb-5 space-y-4">
+            <div>
+              <div className="mb-2 flex items-center justify-between text-[12.5px]">
+                <span className="font-semibold text-ink">Metrics</span>
+                <span className="text-[11.5px] text-dim">{live.state === 'running' ? 'running now' : live.state}</span>
+              </div>
+              <Cards items={[['Sim time', `${(live.simMs / 1000).toFixed(1)} s`], ['Speed', `${Math.round(live.speed * 100)}%`], ['Serial lines', String(lines.length)], ['Flash', live.build?.flash ? `${(live.build.flash / 1024).toFixed(1)} kb` : '-']]} />
+            </div>
+            {live.state === 'failed' && <p className="text-[12px] text-bad">{live.error}</p>}
+            <Chart points={perSecond} title="Serial lines per second" />
+            <Logs items={lines} live={live.state === 'running'} />
+          </div>
+        )}
+        {(live.state === 'off' || runs.length > 0) && <Cards items={[['Flash', num(last?.flash) ? `${num(last?.flash)} b` : '-'], ['Ram', num(last?.ram) ? `${num(last?.ram)} b` : '-'], ['Test runs', String(runs.length)], ['Result', verdict ? (verdict.ok ? 'proven' : 'not proven') : run ? (run.ok ? 'passing' : 'fixing') : '-']]} />}
         <Heading>What you asked</Heading>
         <p className="rounded-[9px] bg-input px-3 py-2.5 text-[12.5px] leading-[19px] text-ink">{request}</p>
         {run && (
@@ -514,7 +658,9 @@ function Panel({ id, props }: { id: string; props: Props }) {
   const cards: [string, string][] = [['Part', cap(KIND[part.type] ?? part.type)], ['Wires', String(wires.length)], ...attrs.map(([k, v]) => [cap(k), part.type === 'wokwi-resistor' && k === 'value' ? ohms(v) : v] as [string, string])]
   return (
     <>
-      <Cards items={cards.slice(0, 4)} />
+      <LivePart id={part.id} type={part.type} live={live} />
+      {/* the stored values only when nothing is running, the live ones say it better */}
+      {!live.readings[part.id] && <Cards items={cards.slice(0, 4)} />}
       <Heading>Wiring</Heading>
       <div className="space-y-px font-mono text-[11.5px]">
         {wires.map(([a, b, color], i) => {
@@ -550,6 +696,9 @@ export function Onboarding(props: Props) {
   const [own, setOwn] = useState<Diagram | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
   const [what, setWhat] = useState('')
+  // the gadget running behind the path, once there is firmware that passed: a proven build or an example
+  const live = useLive(shown ? (shown.diagram ?? null) : diagram, shown ? shown.sketch : props.source, shown ? !!shown.sketch : !!verdict?.ok && !busy)
+  const liveLines = Object.fromEntries(Object.entries(live.readings).map(([id, r]) => [id, r.line]))
   const started = busy || !!request
   const input = useRef<HTMLInputElement>(null)
 
@@ -770,7 +919,7 @@ export function Onboarding(props: Props) {
       )}
       <div className="min-w-0 flex-1">
         <ReactFlowProvider>
-          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} />
+          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} />
         </ReactFlowProvider>
       </div>
       <aside className={`absolute bottom-0 right-0 top-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel transition-transform duration-300 ease-out ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
@@ -778,7 +927,7 @@ export function Onboarding(props: Props) {
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">
               <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-medium text-ink">
-                <Icon name={picked === 'guide' ? 'box' : picked === 'usb' ? 'bolt' : picked === 'idea' ? 'magic-wand' : (PART_ICON[diagram?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
+                <Icon name={picked === 'guide' ? 'box' : picked === 'usb' ? 'bolt' : picked === 'idea' ? 'magic-wand' : (PART_ICON[(shown?.diagram ?? diagram)?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
                 <span className="truncate">{picked === 'guide' ? 'What you need to build it' : picked === 'usb' ? 'Power' : picked === 'idea' ? 'What you asked' : picked}</span>
               </span>
               <button onClick={() => setPicked(null)} title="close" className="flex h-7 w-7 items-center justify-center rounded-full text-icon-2 hover:bg-hover hover:text-ink">
@@ -786,7 +935,7 @@ export function Onboarding(props: Props) {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-4">
-              <Panel id={picked} props={shown ? { ...props, diagram: shown.diagram ?? null, source: shown.sketch, test: shown.test, request: shown.title, runs: [], compiles: [], verdict: null, feed: [] } : props} />
+              <Panel id={picked} live={live} props={shown ? { ...props, diagram: shown.diagram ?? null, source: shown.sketch, test: shown.test, request: shown.title, runs: [], compiles: [], verdict: null, feed: [] } : props} />
             </div>
             {openId && (
               <div className="border-t border-sep p-3">
