@@ -18,7 +18,7 @@ export type Report = {
 }
 
 const WOKWI = ['delay', 'wait-serial', 'write-serial', 'set-control', 'expect-pin']
-const OURS = ['wait-text', 'expect-text', 'expect-pixels', 'expect-servo', 'expect-tone', 'expect-led', 'expect-serial']
+const OURS = ['wait-text', 'expect-text', 'expect-pixels', 'expect-servo', 'expect-tone', 'wait-led', 'expect-led', 'expect-serial']
 export const STEPS = [...WOKWI, ...OURS]
 
 const WAIT_LIMIT_MS = 10_000
@@ -220,6 +220,15 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
             if (arg?.hz !== undefined && Math.abs(buzzer.hz - Number(arg.hz)) > Number(arg.hz) * 0.02) throw new Fail(`${id} plays ${buzzer.hz} hz, expected ${arg.hz}`)
           }
           result.detail = buzzer.hz ? `${buzzer.hz} hz` : 'silent'
+          break
+        }
+        case 'wait-led': {
+          // a blink has no fixed phase, so a test waits for the edge and times from there
+          const id = arg?.['part-id']
+          const led = part(bench, id, 'wokwi-led')
+          const want = arg?.lit === undefined ? true : !!arg.lit
+          yield* until(() => (bench.parts[id] as typeof led).lit === want, arg?.timeout ? parseDuration(arg.timeout) : WAIT_LIMIT_MS, `${id} to go ${want ? 'lit' : 'dark'}`)
+          result.detail = want ? 'lit' : 'dark'
           break
         }
         case 'expect-led': {
