@@ -96,7 +96,7 @@ type IdeaData = { label: string; sub?: string; lines?: string[]; open: boolean; 
 // says inside it. once there is a board it folds into a node at the top of the path
 function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
   return (
-    <button className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent-line/60 bg-accent/60' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : 'w-[264px]'}`}>
+    <button className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent-line/60 bg-accent/10' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : 'w-[264px]'}`}>
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <span className={`block overflow-hidden rounded-[11px] border bg-panel ${selected ? 'border-accent-line' : 'border-line'}`}>
         <span className={`flex items-center gap-2.5 ${data.open ? 'border-b border-sep px-3.5 py-2.5' : 'px-3 py-2'}`}>
@@ -220,7 +220,7 @@ function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
   const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent hover:bg-accent-hover animate-pulse' : 'bg-icon-2/50'
   const big = data.kind === 'board'
   return (
-    <button className={`rise block rounded-[12px] border p-[3px] transition-colors ${selected ? 'border-accent-line/60 bg-accent/60' : 'border-line/80 bg-input/60'}`}>
+    <button className={`rise block rounded-[12px] border p-[3px] transition-colors ${selected ? 'border-accent-line/60 bg-accent/10' : 'border-line/80 bg-input/60'}`}>
       <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
@@ -244,7 +244,7 @@ function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
   const wait = data.state === 'wait'
   const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent hover:bg-accent-hover animate-pulse' : data.state === 'next' ? 'hidden' : 'bg-icon-2/40'
   return (
-    <button disabled={wait} className={`block w-[212px] rounded-[12px] border p-[3px] text-left transition-all duration-300 ${wait ? 'border-dashed border-line opacity-55' : selected ? 'border-accent-line/60 bg-accent/60' : data.state === 'work' ? 'border-accent-line/40 bg-accent/40' : 'border-line/80 bg-input/60'}`}>
+    <button disabled={wait} className={`block w-[212px] rounded-[12px] border p-[3px] text-left transition-all duration-300 ${wait ? 'border-dashed border-line opacity-55' : selected ? 'border-accent-line/60 bg-accent/10' : data.state === 'work' ? 'border-accent-line/40 bg-accent/5' : 'border-line/80 bg-input/60'}`}>
       <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
