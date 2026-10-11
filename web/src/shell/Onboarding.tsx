@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
 import { BuildGuide, bom } from './Guide'
-import { api, type Saved } from './library'
+import { Account } from './Account'
+import { api, pending, type Saved, type useMe } from './library'
 import { useSampler, type Happening, type Live, type Point } from '../lib/live'
 import { Workbench, type BenchState } from '../Workbench'
 import type { Bench } from '@blinkproof/sim'
@@ -34,6 +35,7 @@ type Props = {
   onReset: () => void
   // a circuit wired by hand here, and what it should do: the agent writes the code and the test for it
   onBuildCircuit: (what: string, circuit: Diagram) => void
+  me: ReturnType<typeof useMe>
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
@@ -907,6 +909,12 @@ export function Onboarding(props: Props) {
   useEffect(() => {
     if (step === 'describe') input.current?.focus()
   }, [step])
+  // back from signing in: pick up what you were about to build
+  useEffect(() => {
+    const p = pending.take()
+    if (p?.prompt) (onPrompt(p.prompt), setStep('describe'))
+    if (p?.circuit) (setOwn(p.circuit), setWhat(p.what ?? ''))
+  }, [])
   // a proven build opens what you need to build it
 
   // ideas and earlier requests that match what is being typed
@@ -961,6 +969,7 @@ export function Onboarding(props: Props) {
             Open in the editor
           </button>
         )}
+        <Account me={props.me} />
         <button onClick={() => onEditor()} title="skip onboarding and go to the editor" className="flex h-8 items-center gap-1 rounded-[8px] border border-line bg-panel px-3 text-[12px] font-medium text-ink hover:bg-hover">
           Skip
           <Icon name="chevron-right" size={11} />

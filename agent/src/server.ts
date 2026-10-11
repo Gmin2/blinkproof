@@ -2,6 +2,7 @@ import { Circuit } from '@blinkproof/sim'
 import express from 'express'
 import { flush, init, shutdown } from 'neatlogs'
 import { build as agentBuild, type Event } from './agent.ts'
+import { auth as githubAuth } from './auth.ts'
 import { listModels } from './models.ts'
 import { dynamoStore, memoryStore, type Build, type Store } from './store.ts'
 
@@ -9,9 +10,15 @@ type BuildFn = (request: string, opts: { model?: string; sessionId: string; tags
 
 // the editor's backend. every build gets an id the moment it starts, its record goes to the store as it runs,
 // and its event log at the end, so /b/:id can open and replay it later
-export function createApp({ store, build = agentBuild, after = flush }: { store: Store; build?: BuildFn; after?: () => Promise<unknown> }) {
+export function createApp({ store, build = agentBuild, after = flush, auth = githubAuth({}) }: { store: Store; build?: BuildFn; after?: () => Promise<unknown>; auth?: ReturnType<typeof githubAuth> }) {
   const app = express()
   app.use(express.json({ limit: '1mb' }))
+  app.use(auth.router)
+  // whose build this is, when someone is signed in
+  const by = (req: express.Request) => {
+    const u = auth.user(req)
+    return u ? { owner: u.id, ownerLogin: u.login } : {}
+  }
   let busy = false
 
   app.get('/health', (_req, res) => {
@@ -22,10 +29,12 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     res.json(await listModels())
   })
 
-  // the sidebar: builds newest first, examples, without the heavy fields
+  // the sidebar: builds newest first, examples, without the heavy fields. with sign in on, the builds are your own
   app.get('/builds', async (req, res) => {
     const kind = req.query.kind === 'example' ? 'example' : 'build'
-    const list = await store.list(kind, Math.min(100, Number(req.query.limit ?? 30)))
+    const limit = Math.min(100, Number(req.query.limit ?? 30))
+    const user = auth.user(req)
+    const list = kind === 'build' && auth.on ? (user ? await store.mine(user.id, limit) : []) : await store.list(kind, limit)
     res.json(list.map(({ diagram, sketch, test, ...rest }) => rest))
   })
 
@@ -44,6 +53,7 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     const b = await store.get(req.params.id)
     if (!b) return void res.status(404).json({ error: 'no build with that id' })
     if (b.kind !== 'build') return void res.status(403).json({ error: 'examples cannot be renamed' })
+    if (auth.on && b.owner && b.owner !== auth.user(req)?.id) return void res.status(403).json({ error: 'only whoever made it can rename it' })
     const title = String(req.body?.title ?? '').trim().slice(0, 80)
     if (!title) return void res.status(400).json({ error: 'a name cannot be empty' })
     await store.update(b.id, { title })
@@ -61,7 +71,7 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     if (!blank) return void res.status(400).json({ error: 'board is uno, nano or pico' })
     const diagram = { version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: blank.type, id: blank.id, left: 0, top: 0 }], connections: [] }
     const sketch = `void setup() {\n  Serial.begin(${blank.baud});\n}\n\nvoid loop() {\n}\n`
-    const b = await store.create({ kind: 'build', title: blank.title, status: 'edited', diagram, sketch })
+    const b = await store.create({ kind: 'build', title: blank.title, status: 'edited', diagram, sketch, ...by(req) })
     res.status(201).json(b)
   })
 
@@ -75,7 +85,7 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     const { circuit, errors } = Circuit.parse(diagram)
     if (!circuit) return void res.status(400).json({ error: `the circuit does not parse: ${errors[0]}` })
     const name = (title?.trim() || `${parent.title}, edited`).slice(0, 80)
-    const b = await store.create({ kind: 'build', title: name, request: parent.request, model: parent.model, status: 'edited', diagram, sketch, test, forkOf: { id: parent.id, title: parent.title } })
+    const b = await store.create({ kind: 'build', title: name, request: parent.request, model: parent.model, status: 'edited', diagram, sketch, test, forkOf: { id: parent.id, title: parent.title }, ...by(req) })
     res.status(201).json(b)
   })
 
@@ -84,6 +94,8 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     const { request, model, circuit } = (req.body ?? {}) as { request?: string; model?: string; circuit?: unknown }
     if (circuit !== undefined && !Circuit.parse(circuit).circuit) return void res.status(400).send('that circuit does not parse')
     if (!request?.trim()) return void res.status(400).send('say what to build')
+    // the agent spends tokens, so building with it needs an account
+    if (auth.on && !auth.user(req)) return void res.status(401).send('sign in with github to build with the agent')
     // one build at a time, the budget is shared
     if (busy) return void res.status(409).send('a build is already running')
     busy = true
@@ -95,7 +107,7 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     }
     let record: Build | undefined
     try {
-      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}) })
+      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}), ...by(req) })
       res.write(`data: ${JSON.stringify({ type: 'saved', id: record.id })}\n\n`)
       const result = await build(request, { model, sessionId: record.id, tags: circuit ? ['web', 'hand-wired'] : ['web'], onEvent: send, circuit })
       const ws = result.workspace
@@ -127,7 +139,9 @@ async function main() {
   // a long running server: init once here, flush after each build, shut down on exit
   await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1 })
   const store = process.env.BP_STORE === 'memory' ? memoryStore() : dynamoStore()
-  const app = createApp({ store })
+  const auth = githubAuth({ clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET, secret: process.env.BP_SESSION_SECRET, publicUrl: process.env.BP_PUBLIC_URL })
+  if (!auth.on) console.log('github sign in is off, set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to turn it on')
+  const app = createApp({ store, auth })
   app.listen(PORT, '127.0.0.1', () => console.log(`agent on http://127.0.0.1:${PORT} (${process.env.BP_STORE === 'memory' ? 'memory store' : 'dynamodb + s3'})`))
   const stop = async () => {
     await shutdown()

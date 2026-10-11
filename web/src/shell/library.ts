@@ -120,3 +120,44 @@ export const drafts = {
     }
   },
 }
+
+// who is signed in. auth false means the server has sign in off, then nobody needs to be
+export type User = { id: string; login: string; name?: string; avatar?: string }
+export type Me = { auth: boolean; user: User | null }
+
+export function useMe() {
+  const [me, setMe] = useState<Me & { loaded: boolean }>({ auth: false, user: null, loaded: false })
+  useEffect(() => {
+    fetch('/agent/me')
+      .then((r) => (r.ok ? (r.json() as Promise<Me>) : { auth: false, user: null }))
+      .catch(() => ({ auth: false, user: null }))
+      .then((m) => setMe({ ...m, loaded: true }))
+  }, [])
+  const signIn = (next = location.pathname) => location.assign(`/agent/auth/github?next=${encodeURIComponent(next)}`)
+  const signOut = async () => {
+    await fetch('/agent/auth/logout', { method: 'POST' }).catch(() => {})
+    location.reload()
+  }
+  // the agent needs an account: true when you have to sign in before it can build
+  const needs = me.auth && !me.user
+  return { ...me, needs, signIn, signOut }
+}
+
+// what you were about to build, kept across the trip to github and back
+export type Pending = { prompt?: string; what?: string; circuit?: Diagram }
+export const pending = {
+  save(p: Pending) {
+    try {
+      localStorage.setItem('bp-pending', JSON.stringify(p))
+    } catch {}
+  },
+  take(): Pending | null {
+    try {
+      const p = localStorage.getItem('bp-pending')
+      localStorage.removeItem('bp-pending')
+      return p ? JSON.parse(p) : null
+    } catch {
+      return null
+    }
+  },
+}
