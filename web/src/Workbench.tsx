@@ -108,6 +108,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
   const [report, setReport] = useState<Report | null>(null)
   const [sonars, setSonars] = useState<Record<string, number>>({})
   const [lights, setLights] = useState<Record<string, number>>({})
+  const [climates, setClimates] = useState<Record<string, { temperature: number; humidity: number }>>({})
   const benchRef = useRef<Bench | null>(null)
   const runningRef = useRef(running)
   runningRef.current = running
@@ -262,6 +263,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     const frames = new Map<string, number>()
     const distances: Record<string, number> = {}
     const luxes: Record<string, number> = {}
+    const climate: Record<string, { temperature: number; humidity: number }> = {}
     const cleanups: (() => void)[] = []
 
     for (const [id, part] of Object.entries(bench.parts)) {
@@ -281,6 +283,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
       }
       if (part.type === 'wokwi-hc-sr04') distances[id] = part.distance
       if (part.type === 'wokwi-photoresistor-sensor') luxes[id] = part.lux
+      if (part.type === 'wokwi-dht22') climate[id] = { temperature: part.temperature, humidity: part.humidity }
       if (part.type === 'wokwi-ssd1306') {
         // dark until the sketch draws on it
         const px = (el.imageData as ImageData).data
@@ -291,6 +294,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     }
     setSonars(distances)
     setLights(luxes)
+    setClimates(climate)
     setSerial('')
     setLines([])
     // serial text arrives in pieces, a line is stamped with the sim time its newline came in
@@ -670,6 +674,28 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                 [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => (
                   <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
                 ))}
+            </div>
+          )
+        })}
+        {Object.entries(climates).map(([id, v]) => {
+          const p = diagram.parts.find((q) => q.id === id)
+          if (!p) return null
+          const set = (name: 'temperature' | 'humidity', n: number) => {
+            setClimates((s) => ({ ...s, [id]: { ...s[id], [name]: n } }))
+            benchRef.current?.control(id, name, n)
+          }
+          return (
+            <div key={id} className="pill absolute space-y-0.5 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: at(p).x - 40, top: at(p).y + 115 }}>
+              <label className="flex items-center gap-2">
+                <span className="w-9">temp</span>
+                <input type="range" min={-40} max={80} step={0.5} value={v.temperature} className="w-24 accent-[var(--accent)]" onChange={(e) => set('temperature', Number(e.target.value))} />
+                <span className="w-14 text-ink">{v.temperature} °C</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="w-9">humid</span>
+                <input type="range" min={0} max={100} value={v.humidity} className="w-24 accent-[var(--accent)]" onChange={(e) => set('humidity', Number(e.target.value))} />
+                <span className="w-14 text-ink">{v.humidity}%</span>
+              </label>
             </div>
           )
         })}

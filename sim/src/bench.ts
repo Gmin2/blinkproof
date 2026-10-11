@@ -1,6 +1,7 @@
 import { PinState } from 'avr8js'
 import { Circuit } from './circuit'
 import { Buzzer } from './parts/buzzer'
+import { DHT22 } from './parts/dht22'
 import { Duty } from './parts/duty'
 import { HCSR04 } from './parts/hcsr04'
 import { Servo } from './parts/servo'
@@ -22,6 +23,7 @@ export type PartState =
   | { type: 'wokwi-hc-sr04'; sensor: HCSR04 | null; distance: number }
   | { type: 'wokwi-buzzer'; buzzer: Buzzer | null }
   // volts is what AO puts out, dark is DO
+  | { type: 'wokwi-dht22'; sensor: DHT22 | null; temperature: number; humidity: number }
   | { type: 'wokwi-photoresistor-sensor'; lux: number; volts: number; dark: boolean; powered: boolean }
   | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' | 'wokwi-pi-pico' }
 
@@ -65,6 +67,7 @@ export class Bench {
         case 'wokwi-hc-sr04': this.sonar(id); break
         case 'wokwi-buzzer': this.buzzer(id); break
         case 'wokwi-photoresistor-sensor': this.light(id); break
+        case 'wokwi-dht22': this.dht(id); break
         default: this.parts[id] = { type: p.type }
       }
     }
@@ -225,6 +228,16 @@ export class Bench {
     })
   }
 
+  private dht(id: string) {
+    const c = this.circuit
+    const temperature = Number(c.attr(id, 'temperature') ?? 24)
+    const humidity = Number(c.attr(id, 'humidity') ?? 40)
+    const pin = c.signal(`${id}:SDA`)
+    // it runs on 3.3 to 6 volts
+    const sensor = pin && isDigital(pin) && this.powered(id, 'VCC', 'GND', 3.3) ? new DHT22(this.board, pin, temperature, humidity) : null
+    this.parts[id] = { type: 'wokwi-dht22', sensor, temperature, humidity }
+  }
+
   // a person turning a knob, pressing a button, or moving the car closer
   control(id: string, name: string, value: number) {
     const part = this.parts[id]
@@ -234,6 +247,10 @@ export class Bench {
     else if (part.type === 'wokwi-hc-sr04' && name === 'distance') {
       part.distance = value
       if (part.sensor) part.sensor.distance = value
+    } else if (part.type === 'wokwi-dht22' && (name === 'temperature' || name === 'humidity')) {
+      const v = name === 'temperature' ? Math.min(80, Math.max(-40, value)) : Math.min(100, Math.max(0, value))
+      part[name] = v
+      if (part.sensor) part.sensor[name] = v
     } else if (part.type === 'wokwi-photoresistor-sensor' && name === 'lux') part.lux = Math.min(100_000, Math.max(0.1, value))
     else throw new Error(`${id} has no control ${name}`)
     this.update()
@@ -253,6 +270,7 @@ export class Bench {
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
       }
       if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
+      if (p.type === 'wokwi-dht22') out.push(`${id}: ${!p.sensor ? 'not powered or SDA not on a digital pin' : `${p.temperature} C, ${p.humidity}% humidity, read ${p.sensor.reads} times${p.sensor.short ? `, ${p.sensor.short} starts too short` : ''}`}`)
       if (p.type === 'wokwi-photoresistor-sensor') out.push(`${id}: ${!p.powered ? 'not powered' : `${p.lux} lux, AO ${p.volts.toFixed(2)} V, DO ${p.dark ? 'high (dark)' : 'low (light)'}`}`)
       if (p.type === 'wokwi-pushbutton') out.push(`${id}: ${p.pressed ? 'pressed' : 'released'}, ${p.presses} presses`)
       if (p.type === 'wokwi-neopixel' || p.type === 'wokwi-led-ring') {

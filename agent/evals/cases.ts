@@ -242,6 +242,20 @@ export const CASES: Case[] = [
 - set-control: { part-id: $light, control: lux, value: 800 }
 - wait-led: { part-id: $led, lit: false, timeout: 1s }`),
   },
+  {
+    id: 'too-hot',
+    board: 'uno',
+    request: 'a too hot warning on an arduino uno: a dht22 measures the room, a red led lights when it is over 30 C and goes out again below, and it prints the temperature to serial',
+    trap: 'the dht22 only answers every 2 seconds, polling it faster reads NAN',
+    hidden: test('red over 30 only', `
+- set-control: { part-id: $dht, control: temperature, value: 22 }
+- delay: 3s
+- expect-led: { part-id: $led, lit: false }
+- set-control: { part-id: $dht, control: temperature, value: 34 }
+- wait-led: { part-id: $led, lit: true, timeout: 5s }
+- set-control: { part-id: $dht, control: temperature, value: 25 }
+- wait-led: { part-id: $led, lit: false, timeout: 5s }`),
+  },
 ]
 
 const KINDS: Record<string, string> = {
@@ -255,6 +269,7 @@ const KINDS: Record<string, string> = {
   sonar: 'wokwi-hc-sr04',
   buzzer: 'wokwi-buzzer',
   light: 'wokwi-photoresistor-sensor',
+  dht: 'wokwi-dht22',
 }
 
 // $led, $led.2, $led:red -> the id of that part in the agent's circuit

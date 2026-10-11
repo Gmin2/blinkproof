@@ -18,7 +18,7 @@ export function bom(d: Diagram): Line[] {
   for (const p of d.parts) {
     if (p.hide) continue
     const a = p.attrs ?? {}
-    const detail = p.type === 'wokwi-resistor' ? ohms(a.value ?? '220') : p.type === 'wokwi-led' ? `${a.color ?? 'red'}, 5 mm` : p.type === 'wokwi-led-ring' ? `${a.pixels ?? 16} pixels, ws2812` : p.type === 'wokwi-pushbutton' ? 'tactile, 6 mm' : p.type === 'wokwi-ssd1306' ? 'i2c, 0.96 inch' : p.type === 'wokwi-servo' ? 'sg90 or similar' : p.type === 'wokwi-buzzer' ? 'passive' : p.type === 'wokwi-potentiometer' ? '10 kΩ' : p.type === 'wokwi-photoresistor-sensor' ? 'ldr module, AO and DO' : undefined
+    const detail = p.type === 'wokwi-resistor' ? ohms(a.value ?? '220') : p.type === 'wokwi-led' ? `${a.color ?? 'red'}, 5 mm` : p.type === 'wokwi-led-ring' ? `${a.pixels ?? 16} pixels, ws2812` : p.type === 'wokwi-pushbutton' ? 'tactile, 6 mm' : p.type === 'wokwi-ssd1306' ? 'i2c, 0.96 inch' : p.type === 'wokwi-servo' ? 'sg90 or similar' : p.type === 'wokwi-buzzer' ? 'passive' : p.type === 'wokwi-potentiometer' ? '10 kΩ' : p.type === 'wokwi-photoresistor-sensor' ? 'ldr module, AO and DO' : p.type === 'wokwi-dht22' ? 'dht22, temperature and humidity' : undefined
     const key = `${p.type}|${detail ?? ''}`
     const line = out.get(key) ?? { type: p.type, name: (KIND[p.type] ?? p.type).replace(/^./, (c) => c.toUpperCase()), detail, count: 0 }
     line.count++

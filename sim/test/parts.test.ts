@@ -182,3 +182,40 @@ void loop() { Serial.print(analogRead(A0)); Serial.print(' '); Serial.println(di
     expect(b.describe()).toContain('ldr1: not powered')
   })
 })
+
+describe('dht22', () => {
+  const dht = { id: 'dht1', type: 'wokwi-dht22', attrs: { temperature: '21.5', humidity: '55' } }
+  const wires = [['dht1:VCC', 'uno:5V'], ['dht1:GND', 'uno:GND.1'], ['dht1:SDA', 'uno:2']]
+  const sketch = `#include <DHT.h>
+DHT dht(2, DHT22);
+void setup() { Serial.begin(9600); dht.begin(); }
+void loop() {
+  delay(2100);
+  float t = dht.readTemperature(), h = dht.readHumidity();
+  if (isnan(t) || isnan(h)) Serial.println("fail");
+  else { Serial.print(t, 1); Serial.print(' '); Serial.println(h, 1); }
+}`
+  const lines = (b: Bench) => b.board.serial.trim().split('\n')
+
+  it('answers the adafruit library with the temperature and humidity it is set to', async () => {
+    const b = bench([dht], wires, await build(sketch))
+    b.run(2300)
+    expect(lines(b).at(-1)).toBe('21.5 55.0')
+    expect(get<'wokwi-dht22'>(b, 'dht1').sensor!.short).toBe(0)
+  })
+
+  it('follows a change, below zero too', async () => {
+    const b = bench([dht], wires, await build(sketch))
+    b.run(2300)
+    b.control('dht1', 'temperature', -7.3)
+    b.control('dht1', 'humidity', 81)
+    b.run(2200)
+    expect(lines(b).at(-1)).toBe('-7.3 81.0')
+  })
+
+  it('reads as a failure when it has no power', async () => {
+    const b = bench([dht], wires.slice(1), await build(sketch))
+    b.run(2300)
+    expect(lines(b).at(-1)).toBe('fail')
+  })
+})

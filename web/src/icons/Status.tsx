@@ -44,4 +44,5 @@ export const PART_ICON: Record<string, IconName> = {
   'wokwi-hc-sr04': 'signal-2',
   'wokwi-buzzer': 'volume-up',
   'wokwi-photoresistor-sensor': 'sun',
+  'wokwi-dht22': 'cloud',
 }
