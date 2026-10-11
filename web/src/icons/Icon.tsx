@@ -40,15 +40,13 @@ export function Icon({ name, size = 18, className = '', title }: Props) {
   )
 }
 
-// our mark, a yellow led
-export function Logo({ size = 20 }: { size?: number }) {
+// our mark: a 5mm led side on, from brand/src/mark.mjs. it takes the text colour
+const MARK = 'M29 58 V27 A21 21 0 0 1 71 27 V58 Z M26 58 H74 Q77 58 77 61 V64 Q77 67 74 67 H26 Q23 67 23 64 V61 Q23 58 26 58 Z M34.5 66 H42 V92.25 A3.75 3.75 0 0 1 34.5 92.25 Z M58 66 H65.5 V84.25 A3.75 3.75 0 0 1 58 84.25 Z'
+
+export function Logo({ size = 20, className = 'text-ink' }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" className="shrink-0" aria-hidden>
-      <path d="M5 10.5V8a5 5 0 0 1 10 0v2.5Z" fill="#ffd23f" />
-      <path d="M5 10.5V8a5 5 0 0 1 3.2-4.66C7 4.6 6.6 7 6.6 10.5Z" fill="#fff3b0" />
-      <rect x="3.5" y="10.5" width="13" height="2.5" rx="1" fill="#f5a900" />
-      <path d="M8 13v4.5M12 13v3" stroke="#9aa0a6" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M5 10.5V8a5 5 0 0 1 10 0v2.5" fill="none" stroke="#e09600" strokeWidth="1" />
+    <svg width={size} height={size} viewBox="0 0 100 100" className={`shrink-0 ${className}`} aria-hidden>
+      <path d={MARK} fill="currentColor" />
     </svg>
   )
 }

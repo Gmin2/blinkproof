@@ -194,14 +194,14 @@ export default function App() {
                 <div className="menu absolute right-0 top-11 z-20 w-48 p-1.5 text-[12px]">
                   <div className="px-2 pb-1 pt-0.5 text-[11px] font-semibold text-dim">Appearance</div>
                   {(['light', 'dark'] as Theme[]).map((t) => (
-                    <button key={t} onClick={() => (setTheme(t), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-white">
+                    <button key={t} onClick={() => (setTheme(t), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-on-accent">
                       <Icon name={t === 'light' ? 'sun' : 'moon'} size={14} />
                       <span className="flex-1">{t === 'light' ? 'Light' : 'Dark'}</span>
                       {theme === t && <Icon name="check" size={12} />}
                     </button>
                   ))}
                   <div className="mx-2 my-1 border-t border-sep" />
-                  <button onClick={() => (dispatchEvent(new Event('resize')), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-white">
+                  <button onClick={() => (dispatchEvent(new Event('resize')), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-on-accent">
                     <Icon name="full-screen-2" size={14} />
                     Zoom to Fit
                   </button>
@@ -259,14 +259,14 @@ export default function App() {
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {IDEAS.map((idea) => (
-                  <button key={idea} onClick={() => setPrompt(idea)} className={`h-6 rounded-[7px] px-2 text-[11px] ${prompt === idea ? 'bg-accent text-white' : 'bg-input text-dim hover:text-ink'}`}>
+                  <button key={idea} onClick={() => setPrompt(idea)} className={`h-6 rounded-[7px] px-2 text-[11px] ${prompt === idea ? 'bg-accent text-on-accent' : 'bg-input text-dim hover:text-ink'}`}>
                     {idea.split(':')[0].replace(/^./, (c) => c.toUpperCase())}
                   </button>
                 ))}
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-sep pt-3">
                 <span className="text-[11px] text-dim">⌘ Return to build</span>
-                <button onClick={start} disabled={build.busy} className="h-7 rounded-[7px] bg-accent px-3.5 text-[12px] font-semibold text-white disabled:opacity-50">
+                <button onClick={start} disabled={build.busy} className="h-7 rounded-[7px] bg-accent px-3.5 text-[12px] font-semibold text-on-accent disabled:opacity-50">
                   {build.busy ? 'Building...' : 'Build It'}
                 </button>
               </div>

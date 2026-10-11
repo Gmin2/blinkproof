@@ -54,16 +54,16 @@ function Row({ selected, current, soft, onClick, icon, children, depth = 0, righ
   right?: React.ReactNode
   dim?: boolean
 }) {
-  const tone = selected ? 'bg-accent font-semibold text-white' : soft ? 'bg-accent-soft text-accent-ink' : current ? 'bg-row text-ink' : 'text-ink hover:bg-hover'
+  const tone = selected ? 'bg-accent font-semibold text-on-accent' : soft ? 'bg-accent-soft text-accent-ink' : current ? 'bg-row text-ink' : 'text-ink hover:bg-hover'
   return (
     <div className="relative">
       {Array.from({ length: depth }, (_, i) => (
         <span key={i} className="absolute bottom-0 top-0 w-px bg-tree" style={{ left: 27 + i * 15 }} />
       ))}
       <button onClick={onClick} className={`relative mx-2.5 flex h-[25px] w-[calc(100%-20px)] items-center gap-2 rounded-[6px] pr-2 text-left text-[12px] ${tone}`} style={{ paddingLeft: 9 + depth * 15 }}>
-        {icon && <Icon name={icon} size={16} className={selected ? 'text-white' : soft ? 'text-accent-ink' : 'text-icon-2'} />}
+        {icon && <Icon name={icon} size={16} className={selected ? 'text-on-accent' : soft ? 'text-accent-ink' : 'text-icon-2'} />}
         <span className={`min-w-0 flex-1 truncate ${dim && !selected ? 'text-dim' : ''}`}>{children}</span>
-        {right && <span className={selected ? 'text-white/80' : 'text-icon-2'}>{right}</span>}
+        {right && <span className={selected ? 'text-on-accent/80' : 'text-icon-2'}>{right}</span>}
       </button>
     </div>
   )
