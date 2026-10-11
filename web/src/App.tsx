@@ -2,9 +2,9 @@ import { PARTS } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
-import { EXAMPLES } from './shell/examples'
 import { Inspector, type Mode } from './shell/Inspector'
-import { KIND, Sidebar, type Page } from './shell/Sidebar'
+import { api, useLibrary, useRoute, type Saved } from './shell/library'
+import { KIND, Sidebar } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
 
@@ -65,7 +65,11 @@ function download(name: string, text: string) {
 
 export default function App() {
   const [theme, setTheme] = useTheme()
-  const [page, setPage] = useState<Page>({ kind: 'build' })
+  const [route, go] = useRoute()
+  const lib = useLibrary()
+  // the stored build or example the link points at, when it is not the one being built live
+  const [doc, setDoc] = useState<Saved | null>()
+  const [toast, setToast] = useState('')
   const [mode, setMode] = useState<Mode>('design')
   const [float, setFloat] = useState<Float>('prompt')
   const [zoomMenu, setZoomMenu] = useState(false)
@@ -81,7 +85,32 @@ export default function App() {
   const build = useBuild(
     () => setTestRun((n) => n + 1),
     (t) => (t === 'code' ? setFloat('code') : setMode(t)),
+    (id) => {
+      go({ kind: 'doc', id }, true)
+      lib.refresh()
+    },
   )
+  const live = route.kind === 'new' || build.savedId === route.id
+
+  useEffect(() => {
+    if (route.kind !== 'doc' || build.savedId === route.id) return
+    setDoc(undefined)
+    setSelected(null)
+    setTestRun(0)
+    setBench(null)
+    api.get(route.id).then((d) => setDoc(d ?? null)).catch(() => setDoc(null))
+  }, [route])
+
+  // a build that just finished changes its status in the list
+  useEffect(() => {
+    if (!build.busy) lib.refresh()
+  }, [build.busy])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 1800)
+    return () => clearTimeout(t)
+  }, [toast])
 
   useEffect(() => {
     fetch('/agent/models')
@@ -90,23 +119,48 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  const example = page.kind === 'example' ? EXAMPLES[page.name] : undefined
-  const diagram = example ? example.diagram : build.diagram
-  const source = example ? example.source : build.source
-  const test = example ? example.test : build.test
-  const code = example ? example.source : build.code
-  const title = example ? example.title.charAt(0).toUpperCase() + example.title.slice(1) : build.request ? build.request.split(/[:,.]/)[0].replace(/^./, (c) => c.toUpperCase()) : 'New Build'
+  const diagram = (live ? build.diagram : doc?.diagram) ?? null
+  const source = live ? build.source : doc?.sketch
+  const test = live ? build.test : doc?.test
+  const code = (live ? build.code : doc?.sketch) ?? ''
+  const request = live ? build.request : (doc?.request ?? '')
+  const title = live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
 
   useEffect(() => {
     codeEnd.current?.scrollIntoView({ block: 'end' })
   }, [code])
 
-  const open = (p: Page) => {
-    setPage(p)
+  const openNew = () => {
+    if (!build.busy) build.reset()
+    go({ kind: 'new' })
     setSelected(null)
     setTestRun(0)
     setBench(null)
-    setFloat(p.kind === 'build' && !build.diagram ? 'prompt' : null)
+    setFloat('prompt')
+  }
+
+  const open = (id: string) => {
+    go({ kind: 'doc', id })
+    setFloat(null)
+  }
+
+  // play the stored build again, the way it happened
+  const replay = async () => {
+    if (route.kind !== 'doc' || build.busy) return
+    const events = await api.events(route.id)
+    if (!events.length) return setToast('Nothing to replay for this one')
+    setFloat(null)
+    build.replay(route.id, events)
+  }
+
+  const share = async () => {
+    if (route.kind !== 'doc') return
+    try {
+      await navigator.clipboard.writeText(location.href)
+      setToast('Link copied')
+    } catch {
+      setToast(location.href)
+    }
   }
 
   const onState = (s: BenchState) => {
@@ -133,19 +187,19 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar page={page} onPage={open} diagram={diagram} title={title} selected={selected} onSelect={select} canReplay={build.canReplay} onReplay={build.replay} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar route={route} onOpen={open} onNew={openNew} builds={lib.builds} examples={lib.examples} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {diagram ? (
           <Workbench
-            key={page.kind === 'example' ? page.name : 'build'}
+            key={route.kind === 'doc' ? route.id : 'new'}
             diagram={diagram}
             source={source}
             test={test}
             testRun={testRun}
             running={running}
             sound={sound}
-            reveal={page.kind === 'build'}
+            reveal={live}
             onState={onState}
             title={title}
             selected={selected}
@@ -157,7 +211,15 @@ export default function App() {
             <div className="relative">
               <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}</span>
               <div className="flex h-[260px] w-[440px] items-center justify-center bg-frame px-16 text-center text-[12px] leading-[18px] text-dim">
-                {build.busy ? 'The agent is picking parts...' : 'Describe a gadget. The agent wires it, writes the firmware, and has to pass a test before it hands it over.'}
+                {doc === null && !live
+                  ? 'There is no build at this link. It may have been made on another server.'
+                  : !live && doc
+                    ? 'This build stopped before it had a circuit.'
+                    : route.kind === 'doc' && !live
+                      ? 'Loading...'
+                      : build.busy
+                        ? 'The agent is picking parts...'
+                        : 'Describe a gadget. The agent wires it, writes the firmware, and has to pass a test before it hands it over.'}
               </div>
             </div>
           </div>
@@ -166,17 +228,17 @@ export default function App() {
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-between px-2.5">
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
-              <Tool label="describe a gadget" onClick={() => (page.kind !== 'build' && open({ kind: 'build' }), toggle('prompt'))} active={float === 'prompt'}>
+              <Tool label="describe a gadget" onClick={() => (route.kind !== 'new' ? openNew() : toggle('prompt'))} active={float === 'prompt'}>
                 <Logo size={20} />
               </Tool>
-              <Tool icon="plus" label="new build" onClick={() => (open({ kind: 'build' }), setFloat('prompt'))} />
+              <Tool icon="plus" label="new build" onClick={openNew} />
             </div>
             <div className="pill flex items-center">
               <Tool icon={running ? 'pause' : 'play'} label={running ? 'pause' : 'run'} onClick={() => setRunning((r) => !r)} disabled={!diagram} />
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
-              <Tool icon="refresh-2" label="replay the last build" onClick={() => (open({ kind: 'build' }), setFloat(null), build.replay())} disabled={!build.canReplay || build.busy} />
+              <Tool icon="refresh-2" label="replay how the agent built it" onClick={replay} disabled={route.kind !== 'doc' || build.busy || lib.examples.some((e) => e.id === route.id)} />
               <Tool icon={sound ? 'volume-up' : 'volume'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} active={sound} />
             </div>
           </div>
@@ -245,7 +307,7 @@ export default function App() {
           </Panel>
         )}
 
-        {float === 'prompt' && page.kind === 'build' && (
+        {float === 'prompt' && route.kind === 'new' && (
           <Panel title="Describe a Gadget" onClose={() => setFloat(null)} className="bottom-3 left-1/2 w-[min(560px,calc(100%-40px))] -translate-x-1/2">
             <div className="px-3 pb-3">
               <textarea
@@ -273,6 +335,7 @@ export default function App() {
             </div>
           </Panel>
         )}
+        {toast && <div className="pill absolute left-1/2 top-[60px] z-30 -translate-x-1/2 px-4 py-2 text-[12px] font-medium text-ink">{toast}</div>}
       </main>
 
       <Inspector
@@ -283,14 +346,16 @@ export default function App() {
         bench={bench}
         feed={build.feed}
         verdict={build.verdict}
-        request={build.request}
+        request={request}
         test={test}
         testRun={testRun}
         onRunTest={runTest}
         model={model}
         models={models}
         onModel={setModel}
-        onShare={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}
+        canShare={route.kind === 'doc'}
+        onShare={share}
+        onDownload={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}
       />
     </div>
   )

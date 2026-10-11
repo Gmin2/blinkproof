@@ -2,7 +2,7 @@ import type { Diagram } from '@blinkproof/sim'
 import { useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
-import { EXAMPLES } from './examples'
+import type { Route, Saved } from './library'
 
 export const KIND: Record<string, string> = {
   'wokwi-arduino-uno': 'arduino uno',
@@ -22,7 +22,6 @@ export const KIND: Record<string, string> = {
 
 export const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
 
-export type Page = { kind: 'build' } | { kind: 'example'; name: string }
 
 // a small round header button, the circled + and the collapse arrows next to "Documents"
 export function HeaderButton({ icon, title, onClick }: { icon: IconName; title: string; onClick?: () => void }) {
@@ -70,19 +69,22 @@ function Row({ selected, current, soft, onClick, icon, children, depth = 0, righ
 }
 
 type Props = {
-  page: Page
-  onPage: (p: Page) => void
+  route: Route
+  onOpen: (id: string) => void
+  onNew: () => void
+  builds: Saved[]
+  examples: Saved[]
   diagram: Diagram | null
   title: string
   selected: string | null
   onSelect: (id: string | null) => void
-  canReplay: boolean
-  onReplay: () => void
   busy: boolean
   onParts: () => void
 }
 
-export function Sidebar({ page, onPage, diagram, title, selected, onSelect, canReplay, onReplay, busy, onParts }: Props) {
+const STATUS: Record<Saved['status'], IconName> = { proven: 'circle-check', failed: 'circle-xmark', building: 'loader' }
+
+export function Sidebar({ route, onOpen, onNew, builds, examples, diagram, title, selected, onSelect, busy, onParts }: Props) {
   const [query, setQuery] = useState('')
   const [docsOpen, setDocsOpen] = useState(true)
   const [examplesOpen, setExamplesOpen] = useState(true)
@@ -92,7 +94,8 @@ export function Sidebar({ page, onPage, diagram, title, selected, onSelect, canR
   const match = (s: string) => !q || s.toLowerCase().includes(q)
   const parts = (diagram?.parts.filter((p) => p !== board) ?? []).filter((p) => match(p.id) || match(KIND[p.type] ?? ''))
   const wires = (diagram?.connections ?? []).filter(([a, b]) => match(a) || match(b))
-  const exampleName = page.kind === 'example' ? EXAMPLES[page.name].title.replace(/^./, (c) => c.toUpperCase()) : 'Examples'
+  const openId = route.kind === 'doc' ? route.id : undefined
+  const example = examples.find((e) => e.id === openId)
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
@@ -107,34 +110,41 @@ export function Sidebar({ page, onPage, diagram, title, selected, onSelect, canR
       </div>
 
       <div className="h-1.5" />
-      <Header right={<><HeaderButton icon="collapse" title={docsOpen ? 'collapse' : 'expand'} onClick={() => setDocsOpen((o) => !o)} /><HeaderButton icon="circle-plus" title="new build" onClick={() => onPage({ kind: 'build' })} /></>}>
-        Documents
+      <Header right={<><HeaderButton icon="collapse" title={docsOpen ? 'collapse' : 'expand'} onClick={() => setDocsOpen((o) => !o)} /><HeaderButton icon="circle-plus" title="new build" onClick={onNew} /></>}>
+        Builds
       </Header>
       {docsOpen && (
-        <div className="mt-1 space-y-px">
-          <Row icon="cloud" soft={page.kind === 'build'} onClick={() => onPage({ kind: 'build' })}>
-            {page.kind === 'build' ? title : 'New Build'}
+        <div className="mt-1 max-h-[232px] space-y-px overflow-auto">
+          <Row icon="circle-plus" soft={route.kind === 'new'} onClick={onNew}>
+            New Build
           </Row>
-          {canReplay && (
-            <Row icon="refresh-2" onClick={() => (onPage({ kind: 'build' }), onReplay())} right={busy ? <span className="text-[10px]">playing</span> : undefined}>
-              Last Build
+          {builds.map((b) => (
+            <Row
+              key={b.id}
+              icon="cloud"
+              soft={openId === b.id}
+              onClick={() => onOpen(b.id)}
+              right={busy && openId === b.id ? <span className="text-[10px]">building</span> : <Icon name={STATUS[b.status]} size={13} className={b.status === 'proven' ? 'text-ok' : b.status === 'failed' ? 'text-bad' : ''} />}
+            >
+              {b.title}
             </Row>
-          )}
+          ))}
         </div>
       )}
 
       <div className="h-4" />
-      <Header right={<><HeaderButton icon="collapse" title={examplesOpen ? 'collapse' : 'expand'} onClick={() => setExamplesOpen((o) => !o)} /><HeaderButton icon="circle-plus" title="new build" onClick={() => onPage({ kind: 'build' })} /></>}>
-        {exampleName}
+      <Header right={<HeaderButton icon="collapse" title={examplesOpen ? 'collapse' : 'expand'} onClick={() => setExamplesOpen((o) => !o)} />}>
+        {example?.title ?? 'Examples'}
         <Icon name="chevron-expand-y" size={12} className="text-ink" />
       </Header>
       {examplesOpen && (
         <div className="mt-1 space-y-px">
-          {Object.entries(EXAMPLES).map(([name, ex]) => (
-            <Row key={name} current={page.kind === 'example' && page.name === name} onClick={() => onPage({ kind: 'example', name })}>
-              {ex.title.charAt(0).toUpperCase() + ex.title.slice(1)}
+          {examples.map((ex) => (
+            <Row key={ex.id} current={openId === ex.id} onClick={() => onOpen(ex.id)}>
+              {ex.title}
             </Row>
           ))}
+          {!examples.length && <p className="px-[18px] py-1 text-[12px] text-dim">Start the agent server to load them</p>}
         </div>
       )}
 

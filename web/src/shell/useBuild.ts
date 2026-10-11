@@ -1,7 +1,8 @@
 import type { Diagram, Report } from '@blinkproof/sim'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 export type AgentEvent =
+  | { type: 'saved'; id: string }
   | { type: 'start'; request: string; model: string; version: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool'; name: string; args: any; result: Record<string, any>; ms: number }
@@ -22,7 +23,6 @@ export const IDEAS = [
 ]
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const LAST = 'blinkproof:last-build'
 
 // one line saying what a tool came back with
 function note(name: string, r: Record<string, any>) {
@@ -40,7 +40,7 @@ function note(name: string, r: Record<string, any>) {
 }
 
 // the agent's build, played on screen at a pace a person can follow
-export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 'code') => void) {
+export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 'code') => void, onSaved: (id: string) => void) {
   const [busy, setBusy] = useState(false)
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [diagram, setDiagram] = useState<Diagram | null>(null)
@@ -49,14 +49,9 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
   const [test, setTest] = useState<string>()
   const [verdict, setVerdict] = useState<Verdict | null>(null)
   const [request, setRequest] = useState('')
-  const [canReplay, setCanReplay] = useState(false)
+  // the stored build this state belongs to, so the page knows whether to show it
+  const [savedId, setSavedId] = useState<string>()
   const reportWaiter = useRef<(() => void) | null>(null)
-
-  useEffect(() => {
-    try {
-      setCanReplay(!!localStorage.getItem(LAST))
-    } catch {}
-  }, [])
 
   // the canvas tells us when the test it plays has a report
   const reported = (report: Report | null) => {
@@ -69,6 +64,7 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
   const say = (item: FeedItem) => setFeed((f) => [...f, item])
 
   async function show(e: AgentEvent) {
+    if (e.type === 'saved') return
     if (e.type === 'start') {
       setRequest(e.request)
       say({ kind: 'say', text: `building with ${e.model}, prompt ${e.version}` })
@@ -128,6 +124,7 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setCode('')
     setTest(undefined)
     setVerdict(null)
+    setSavedId(undefined)
   }
 
   async function start(text: string, model: string) {
@@ -136,7 +133,6 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setRequest(text)
     setBusy(true)
     onTab('agent')
-    const events: AgentEvent[] = []
     const queue: AgentEvent[] = []
     let finished = false
     // the agent and the screen run at their own pace, the screen works through a queue
@@ -162,7 +158,11 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
         for (const c of chunks) {
           if (!c.startsWith('data: ')) continue
           const e = JSON.parse(c.slice(6)) as AgentEvent
-          events.push(e)
+          // the server stores the build as soon as it starts, the page moves to its link
+          if (e.type === 'saved') {
+            setSavedId(e.id)
+            onSaved(e.id)
+          }
           queue.push(e)
         }
       }
@@ -171,25 +171,19 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     }
     finished = true
     await pump
-    try {
-      localStorage.setItem(LAST, JSON.stringify(events))
-      setCanReplay(true)
-    } catch {}
     setBusy(false)
   }
 
-  async function replay() {
-    let events: AgentEvent[] = []
-    try {
-      events = JSON.parse(localStorage.getItem(LAST) ?? '[]')
-    } catch {}
+  // play a stored build's events again, at the same pace as live
+  async function replay(id: string, events: AgentEvent[]) {
     if (!events.length || busy) return
     reset()
+    setSavedId(id)
     setBusy(true)
     onTab('agent')
     for (const e of events) await show(e)
     setBusy(false)
   }
 
-  return { busy, feed, diagram, source, code, test, verdict, request, canReplay, start, replay, reported, reset }
+  return { busy, feed, diagram, source, code, test, verdict, request, savedId, start, replay, reported, reset }
 }
