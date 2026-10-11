@@ -142,6 +142,10 @@ async function main() {
   const auth = githubAuth({ clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET, secret: process.env.BP_SESSION_SECRET, publicUrl: process.env.BP_PUBLIC_URL })
   if (!auth.on) console.log('github sign in is off, set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to turn it on')
   const app = createApp({ store, auth })
+  // a build the server was in the middle of when it last stopped never finished, say so instead of spinning forever
+  const stale = (await store.list('build', 100).catch(() => [])).filter((b) => b.status === 'building')
+  for (const b of stale) await store.update(b.id, { status: 'failed' }).catch(() => {})
+  if (stale.length) console.log(`marked ${stale.length} unfinished ${stale.length === 1 ? 'build' : 'builds'} as failed`)
   app.listen(PORT, '127.0.0.1', () => console.log(`agent on http://127.0.0.1:${PORT} (${process.env.BP_STORE === 'memory' ? 'memory store' : 'dynamodb + s3'})`))
   const stop = async () => {
     await shutdown()

@@ -291,3 +291,81 @@ void loop() { lcd.setCursor(0, 1); lcd.print("count "); lcd.print(n++); delay(20
     expect(get<'wokwi-lcd1602'>(b, 'lcd1').lcd).toBeNull()
   })
 })
+
+describe('rgb led', () => {
+  const parts = [
+    { id: 'rgb1', type: 'wokwi-rgb-led' },
+    { id: 'r1', type: 'wokwi-resistor', attrs: { value: '220' } },
+    { id: 'r2', type: 'wokwi-resistor', attrs: { value: '220' } },
+    { id: 'r3', type: 'wokwi-resistor', attrs: { value: '220' } },
+  ]
+  const wires = [['uno:9', 'r1:1'], ['r1:2', 'rgb1:R'], ['uno:10', 'r2:1'], ['r2:2', 'rgb1:G'], ['uno:11', 'r3:1'], ['r3:2', 'rgb1:B'], ['rgb1:COM', 'uno:GND.1']]
+  const sketch = `void setup() { pinMode(9, OUTPUT); pinMode(10, OUTPUT); pinMode(11, OUTPUT); }
+void loop() { analogWrite(9, 255); analogWrite(10, 64); digitalWrite(11, LOW); }`
+
+  it('mixes each channel by its pwm duty', async () => {
+    const b = bench(parts, wires, await build(sketch))
+    b.run(100)
+    const s = get<'wokwi-rgb-led'>(b, 'rgb1')
+    expect(s.r).toBeGreaterThan(0.95)
+    expect(s.g).toBeGreaterThan(0.2)
+    expect(s.g).toBeLessThan(0.3)
+    expect(s.b).toBe(0)
+  })
+
+  it('lights on a low pin when it is common anode', async () => {
+    const anode = [{ ...parts[0], attrs: { common: 'anode' } }, ...parts.slice(1)]
+    const b = bench(anode, [...wires.slice(0, 6), ['rgb1:COM', 'uno:5V']], await build(sketch))
+    b.run(100)
+    const s = get<'wokwi-rgb-led'>(b, 'rgb1')
+    expect(s.r).toBeLessThan(0.05)
+    expect(s.b).toBeGreaterThan(0.95)
+  })
+})
+
+describe('slide switch', () => {
+  const sw = { id: 'sw1', type: 'wokwi-slide-switch' }
+  const wires = [['sw1:2', 'uno:4'], ['sw1:1', 'uno:GND.1'], ['sw1:3', 'uno:5V']]
+  const sketch = `void setup() { Serial.begin(9600); pinMode(4, INPUT); }
+void loop() { Serial.println(digitalRead(4)); delay(50); }`
+  const last = (b: Bench) => b.board.serial.trim().split('\n').at(-1)
+
+  it('reads the end the lever joins the middle to', async () => {
+    const b = bench([sw], wires, await build(sketch))
+    b.run(120)
+    expect(last(b)).toBe('0')
+    b.control('sw1', 'value', 1)
+    b.run(120)
+    expect(last(b)).toBe('1')
+  })
+
+  it('leans on the pull up when the far end goes nowhere', async () => {
+    const b = bench([sw], wires.slice(0, 2), await build(sketch.replace('INPUT)', 'INPUT_PULLUP)')))
+    b.control('sw1', 'value', 1)
+    b.run(120)
+    expect(last(b)).toBe('1')
+    b.control('sw1', 'value', 0)
+    b.run(120)
+    expect(last(b)).toBe('0')
+  })
+})
+
+describe('7 segment digit', () => {
+  const seg = { id: 'seg1', type: 'wokwi-7segment' }
+  const r = { id: 'r1', type: 'wokwi-resistor', attrs: { value: '220' } }
+  const wires = [...'ABCDEFG'.split('').map((x, i) => [`seg1:${x}`, `uno:${i + 2}`]), ['seg1:COM.1', 'r1:1'], ['r1:2', 'uno:GND.1']]
+  const sketch = `const byte N[10] = { 0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f };
+int d = 0;
+void setup() { for (int i = 2; i <= 8; i++) pinMode(i, OUTPUT); }
+void loop() { for (int s = 0; s < 7; s++) digitalWrite(2 + s, (N[d] >> s) & 1); d = (d + 1) % 10; delay(500); }`
+
+  it('reads back the digit the sketch draws', async () => {
+    const b = bench([seg, r], wires, await build(sketch))
+    b.run(250)
+    expect(b.describe()).toContain('seg1: shows "0"')
+    b.run(500)
+    expect(b.describe()).toContain('seg1: shows "1"')
+    b.run(1000)
+    expect(b.describe()).toContain('seg1: shows "3"')
+  })
+})

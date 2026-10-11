@@ -20,9 +20,12 @@ const CONNECT: [keyof typeof PARTS, string, string][][] = [
     ['wokwi-led', 'LED', 'Light it from a pin, resistor included'],
     ['wokwi-buzzer', 'Buzzer', 'Beeps and tunes with tone()'],
     ['wokwi-led-ring', 'LED ring', '16 colour pixels on one pin'],
+    ['wokwi-rgb-led', 'RGB LED', 'Any colour from three pwm pins'],
+    ['wokwi-7segment', '7 segment digit', 'One number, seven pins'],
   ],
   [
     ['wokwi-pushbutton', 'Button', 'Read a press with INPUT_PULLUP'],
+    ['wokwi-slide-switch', 'Slide switch', 'Stays where you leave it'],
     ['wokwi-potentiometer', 'Knob', 'A dial you read with analogRead'],
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Measure distance, 2 to 400 cm'],
     ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright it is, on an analog pin'],

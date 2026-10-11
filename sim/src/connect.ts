@@ -48,6 +48,9 @@ const PREFIX: Record<string, string> = {
   'wokwi-dht22': 'dht',
   'wokwi-pir-motion-sensor': 'pir',
   'wokwi-lcd1602': 'lcd',
+  'wokwi-rgb-led': 'rgb',
+  'wokwi-slide-switch': 'sw',
+  'wokwi-7segment': 'seg',
 }
 
 export type Added = { parts: DiagramPart[]; connections: Connection[]; pins: Record<string, string>; error?: string }
@@ -81,6 +84,8 @@ const KIND_OF: Record<string, 'pwm' | 'digital' | 'analog'> = {
   'wokwi-photoresistor-sensor': 'analog',
   'wokwi-dht22': 'digital',
   'wokwi-pir-motion-sensor': 'digital',
+  'wokwi-rgb-led': 'pwm',
+  'wokwi-slide-switch': 'digital',
 }
 
 export function freePins(d: Diagram, type: keyof typeof PARTS): { pin: string; label: string }[] {
@@ -174,6 +179,46 @@ export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number
       wire(`${id}:GND`, B(ground()), GROUND)
       wire(`${id}:AO`, B(pin), color())
       got.AO = pin
+      break
+    }
+    case 'wokwi-rgb-led': {
+      // a pwm pin and a resistor for each colour, so it can mix
+      const want = ['R', 'G', 'B'].map((x, i) => [x, i === 0 ? take(pins.pwm) ?? take(pins.digital) : (take(pins.pwm) ?? take(pins.digital))] as const)
+      if (want.some(([, pin]) => !pin)) return fail('An rgb led needs three free pins')
+      const tint: Record<string, string> = { R: '#ef4444', G: '#22c55e', B: '#3b82f6' }
+      want.forEach(([x, pin], i) => {
+        const r = idFor('wokwi-resistor')
+        parts.unshift({ type: 'wokwi-resistor', id: r, left: at.left, top: at.top + i * 30, attrs: { value: '220' } })
+        wire(B(pin!), `${r}:1`, tint[x])
+        wire(`${r}:2`, `${id}:${x}`, tint[x])
+        got[x] = pin!
+      })
+      part.left = at.left + 110
+      wire(`${id}:COM`, B(ground()), GROUND)
+      break
+    }
+    case 'wokwi-7segment': {
+      const segs = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+      const list = segs.map(() => take(pins.digital))
+      if (list.some((p) => !p)) return fail('A 7 segment digit needs seven free digital pins')
+      segs.forEach((x, i) => {
+        wire(B(list[i]!), `${id}:${x}`, color())
+        got[x] = list[i]!
+      })
+      // one resistor on the common pin: simpler than seven, a digit with more segments lit is a little dimmer
+      const r = idFor('wokwi-resistor')
+      parts.push({ type: 'wokwi-resistor', id: r, left: at.left, top: at.top + 120, attrs: { value: '220' } })
+      wire(`${id}:COM.1`, `${r}:1`, GROUND)
+      wire(`${r}:2`, B(ground()), GROUND)
+      break
+    }
+    case 'wokwi-slide-switch': {
+      const pin = take(pins.digital)
+      if (!pin) return fail('No free pin left for a switch')
+      wire(`${id}:2`, B(pin), color())
+      wire(`${id}:1`, B(ground()), GROUND)
+      wire(`${id}:3`, B(logic), POWER)
+      got['2'] = pin
       break
     }
     case 'wokwi-lcd1602': {

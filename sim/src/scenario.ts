@@ -1,5 +1,5 @@
 import { parse as parseYaml } from 'yaml'
-import type { Bench, PartState } from './bench'
+import { showsDigit, type Bench, type PartState } from './bench'
 import { PARTS } from './catalog'
 
 // wokwi's automation scenario shape: name, version 1, steps. each step is one key, plus an optional name.
@@ -18,7 +18,7 @@ export type Report = {
 }
 
 const WOKWI = ['delay', 'wait-serial', 'write-serial', 'set-control', 'expect-pin']
-const OURS = ['wait-text', 'expect-text', 'expect-pixels', 'expect-servo', 'expect-tone', 'wait-led', 'expect-led', 'expect-serial']
+const OURS = ['wait-text', 'expect-text', 'expect-pixels', 'expect-servo', 'expect-tone', 'wait-led', 'expect-led', 'expect-serial', 'wait-color', 'expect-color', 'wait-digit', 'expect-digit']
 export const STEPS = [...WOKWI, ...OURS]
 
 const WAIT_LIMIT_MS = 10_000
@@ -230,6 +230,33 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
           const want = arg?.lit === undefined ? true : !!arg.lit
           yield* until(() => (bench.parts[id] as typeof led).lit === want, arg?.timeout ? parseDuration(arg.timeout) : WAIT_LIMIT_MS, `${id} to go ${want ? 'lit' : 'dark'}`)
           result.detail = want ? 'lit' : 'dark'
+          break
+        }
+        case 'wait-color':
+        case 'expect-color': {
+          // an rgb led by the colour a person would call it: red, green, blue, yellow, cyan, magenta, white, off
+          const id = arg?.['part-id']
+          part(bench, id, 'wokwi-rgb-led')
+          const want = String(arg?.color ?? '').toLowerCase()
+          const now = () => {
+            const p = bench.parts[id] as Extract<PartState, { type: 'wokwi-rgb-led' }>
+            return colorName([p.r * 255, p.g * 255, p.b * 255])
+          }
+          if (kind === 'wait-color') yield* until(() => now() === want, arg?.timeout ? parseDuration(arg.timeout) : WAIT_LIMIT_MS, `${id} to turn ${want}`)
+          else if (now() !== want) throw new Fail(`${id} is ${now()}, expected ${want}`)
+          result.detail = now()
+          break
+        }
+        case 'wait-digit':
+        case 'expect-digit': {
+          const id = arg?.['part-id']
+          part(bench, id, 'wokwi-7segment')
+          const want = String(arg?.shows ?? '')
+          const now = () => showsDigit((bench.parts[id] as Extract<PartState, { type: 'wokwi-7segment' }>).segments)
+          const good = () => now() === `shows "${want}"`
+          if (kind === 'wait-digit') yield* until(good, arg?.timeout ? parseDuration(arg.timeout) : WAIT_LIMIT_MS, `${id} to show ${want}`)
+          else if (!good()) throw new Fail(`${id} ${now()}, expected it to show "${want}"`)
+          result.detail = now()
           break
         }
         case 'expect-led': {

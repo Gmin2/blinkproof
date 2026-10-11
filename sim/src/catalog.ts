@@ -39,6 +39,12 @@ export const PARTS = {
   'wokwi-photoresistor-sensor': { pins: ['VCC', 'GND', 'DO', 'AO'] },
   'wokwi-dht22': { pins: ['VCC', 'SDA', 'NC', 'GND'] },
   'wokwi-pir-motion-sensor': { pins: ['VCC', 'OUT', 'GND'] },
+  // common cathode unless attrs say common: anode
+  'wokwi-rgb-led': { pins: ['R', 'COM', 'G', 'B'] },
+  // value 0 joins 2 to 1, value 1 joins 2 to 3
+  'wokwi-slide-switch': { pins: ['1', '2', '3'] },
+  // one digit, its two common pins are one piece of metal
+  'wokwi-7segment': { pins: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'DP', 'COM.1', 'COM.2'], same: [['COM.1', 'COM.2']] },
   // the i2c backpack version, drawn with pins="i2c"
   'wokwi-lcd1602': { pins: ['GND', 'VCC', 'SDA', 'SCL'] },
 } satisfies Record<string, { pins: string[]; same?: string[][]; board?: boolean }>
