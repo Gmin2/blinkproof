@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import heroDark from './art/hero-dark.svg'
 import heroLight from './art/hero-light.svg'
+import loopDark from './art/loop-dark.svg'
+import loopLight from './art/loop-light.svg'
 import { Icon } from './icons/Icon'
 import type { IconName } from './icons/hand'
 import { EXAMPLES } from './shell/examples'
@@ -111,11 +113,12 @@ export default function App() {
             onSelect={select}
           />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center px-10 pb-36">
-            <img src={theme === 'dark' ? heroDark : heroLight} alt="" className="w-full max-w-[560px] select-none" draggable={false} />
-            <p className="mt-2 max-w-sm text-center text-[13px] leading-5 text-dim">
+          <div className="flex h-full flex-col items-center justify-center gap-4 overflow-hidden px-10 pb-40 pt-16">
+            <img src={theme === 'dark' ? heroDark : heroLight} alt="" className="min-h-0 w-full max-w-[460px] select-none" draggable={false} />
+            <p className="max-w-md text-center text-[13px] leading-5 text-dim">
               {build.busy ? 'the agent is picking parts...' : 'describe a gadget in plain words. the agent wires it, writes the firmware, and has to pass a test before it hands it over'}
             </p>
+            <img src={theme === 'dark' ? loopDark : loopLight} alt="how it works: describe it, it builds, it tests, it fixes, proven" className="w-full max-w-[720px] select-none" draggable={false} />
           </div>
         )}
 

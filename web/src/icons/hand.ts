@@ -161,6 +161,16 @@ export const ICONS = {
     blob: { circle: [11.2, 11.2, 11] },
     accent: 'yellow',
   },
+  clock: {
+    shapes: [{ circle: [12, 12, 18] }, { poly: [12, 6.5, 12, 12, 16, 14.5], close: false }],
+    blob: { circle: [12.6, 12.6, 15] },
+    accent: 'blue',
+  },
+  wire: {
+    shapes: [{ path: 'M3 18 C8 18 7 6 12 6 C17 6 16 18 21 18' }, { circle: [3, 18, 3] }, { circle: [21, 18, 3] }],
+    blob: { rect: [6, 8, 12, 9] },
+    accent: 'orange',
+  },
   pass: { shapes: [{ circle: [12, 12, 17.5] }, { poly: [7.8, 12.3, 10.8, 15.2, 16.4, 9], close: false }], blob: { circle: [12.6, 12.6, 15] }, accent: 'green' },
   fail: { shapes: [{ circle: [12, 12, 17.5] }, { line: [8.6, 8.6, 15.4, 15.4] }, { line: [15.4, 8.6, 8.6, 15.4] }], blob: { circle: [12.6, 12.6, 15] }, accent: 'pink' },
   warn: {
