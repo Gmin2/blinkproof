@@ -16,31 +16,31 @@
 
 /* the editor palette, light and dark: neutral greys, ink buttons and white chips, the same as the pcb editor's */
 :root {
-  --canvas: #f4f4f5;
-  --panel: #f2f2f2;
+  --canvas: #e9e9eb;
+  --panel: #f5f5f5;
   --frame: #ffffff;
-  --divider: #e5e5e5;
+  --divider: #dedede;
   --text: #2b2b2b;
-  --text-2: #8c8c8c;
-  --icon: #555555;
+  --text-2: #6f6f6f;
+  --icon: #3f3f3f;
   --accent: #1d1d1d;
   --accent-hover: #383838;
   --on-accent: #ffffff;
   --accent-line: #1d1d1d;
   --accent-soft: #ececec;
-  --input: #e9e9e9;
+  --input: #e8e8e9;
   --row-current: #ffffff;
-  --row-hover: #ebebeb;
+  --row-hover: #ececec;
   --pill: #ffffff;
-  --pill-ring: rgba(0, 0, 0, 0.07);
+  --pill-ring: rgba(0, 0, 0, 0.09);
   --pill-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.18);
   --panel-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.06), 0 16px 32px -12px rgba(0, 0, 0, 0.22);
-  --frame-label: #8c8c8c;
-  --icon-2: #a3a3a3;
-  --separator: #ebebeb;
-  --tree: #e2e2e2;
+  --frame-label: #6f6f6f;
+  --icon-2: #858585;
+  --separator: #e3e3e3;
+  --tree: #d6d6d6;
   --accent-ink: #1d1d1d;
-  --switch: #d4d4d4;
+  --switch: #c8c8c8;
   --select: #1d1d1d;
   --menu-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.06), 0 16px 32px -12px rgba(0, 0, 0, 0.22);
   --ok: #16a34a;
@@ -50,27 +50,27 @@
 }
 
 :root[data-theme='dark'] {
-  --canvas: #18181b;
+  --canvas: #141416;
   --panel: #1f1f22;
   --frame: #26262a;
   --divider: #303035;
   --text: #ececec;
-  --text-2: #8e8e93;
+  --text-2: #a1a1a6;
   --icon: #c7c7cc;
   --accent: #f2f2f2;
   --accent-hover: #dcdcdc;
   --on-accent: #1d1d1d;
   --accent-line: #f2f2f2;
   --accent-soft: #2c2c31;
-  --input: #2a2a2e;
+  --input: #2d2d32;
   --row-current: #2e2e33;
   --row-hover: #27272b;
   --pill: #26262a;
   --pill-ring: rgba(255, 255, 255, 0.08);
   --pill-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
   --panel-shadow: 0 0 0 1px #34343a, 0 10px 30px rgba(0, 0, 0, 0.5);
-  --frame-label: #8e8e93;
-  --icon-2: #7c7c82;
+  --frame-label: #a1a1a6;
+  --icon-2: #93939a;
   --separator: #2c2c31;
   --tree: #34343a;
   --accent-ink: #ececec;
@@ -126,6 +126,12 @@ body {
 }
 
 /* a floating toolbar pill */
+/* a chip lifted off the panel: the open build, the current tab */
+.chip {
+  background: var(--row-current);
+  box-shadow: 0 0 0 1px var(--pill-ring), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
 .pill {
   background: var(--pill);
   box-shadow: 0 0 0 1px var(--pill-ring), var(--pill-shadow);

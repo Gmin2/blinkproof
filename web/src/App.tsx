@@ -62,7 +62,7 @@ function useTheme() {
 // an icon button inside a toolbar pill
 function Tool({ icon, label, onClick, active, disabled, children }: { icon?: IconName; label: string; onClick: () => void; active?: boolean; disabled?: boolean; children?: React.ReactNode }) {
   return (
-    <button onClick={onClick} disabled={disabled} title={label} className={`flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-35 ${active ? 'text-accent-line' : 'text-icon'}`}>
+    <button onClick={onClick} disabled={disabled} title={label} className={`flex h-9 w-9 items-center justify-center rounded-full disabled:text-icon-2 disabled:opacity-60 ${active ? 'text-accent-line' : 'text-icon'}`}>
       {children ?? (icon && <Icon name={icon} size={19} />)}
     </button>
   )
@@ -489,7 +489,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar me={me} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar me={me} loading={lib.loading} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {/* building it for real: the breadboard takes the stage, the simulator stops until you come back */}

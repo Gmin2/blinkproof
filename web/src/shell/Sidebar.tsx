@@ -98,7 +98,7 @@ function Row({
     : soft
       ? "bg-accent-soft text-accent-line-ink"
       : current
-        ? "bg-row text-ink"
+        ? "chip text-ink"
         : "text-ink hover:bg-hover";
   return (
     <div className="relative">
@@ -144,6 +144,7 @@ function Row({
 
 type Props = {
   me: ReturnType<typeof useMe>;
+  loading?: boolean;
   route: Route;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -169,6 +170,7 @@ const STATUS: Record<Saved["status"], IconName> = {
 
 export function Sidebar({
   me,
+  loading = false,
   route,
   onOpen,
   onNew,
@@ -347,7 +349,7 @@ export function Sidebar({
           ))}
           {!examples.length && (
             <p className="px-[18px] py-1 text-[12px] text-dim">
-              Start the agent server to load them
+              {loading ? "Loading..." : "Start the agent server to load them"}
             </p>
           )}
         </div>
