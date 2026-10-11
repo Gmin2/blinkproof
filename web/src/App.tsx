@@ -565,10 +565,10 @@ export default function App() {
           </div>
           {/* the views of one gadget, the way a pcb editor has pcb, schematic and 3d: the circuit running, or built on a breadboard */}
           {diagram && (
-            <div role="tablist" aria-label="view" className="pill pointer-events-auto relative mx-3 grid shrink-0 grid-cols-2 p-[3px]">
+            <div role="tablist" aria-label="view" className="pointer-events-auto relative mx-3 grid shrink-0 grid-cols-2 rounded-[11px] bg-input p-[3px]">
               <span
                 aria-hidden="true"
-                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-accent transition-transform duration-300 ease-out"
+                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-frame shadow-[0_0_0_1px_rgba(0,0,0,.07),0_1px_2px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
                 style={{ transform: `translateX(${mode === 'build' ? 100 : 0}%)` }}
               />
               {(
@@ -579,7 +579,7 @@ export default function App() {
               ).map(([v, label, icon, hint]) => {
                 const on = (mode === 'build') === (v === 'breadboard')
                 return (
-                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-on-accent' : 'text-dim hover:text-ink'}`}>
+                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
                     <Icon name={icon} size={13} />
                     {label}
                   </button>

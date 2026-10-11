@@ -14,23 +14,23 @@
   font-display: swap;
 }
 
-/* the editor palette, light and dark: neutral greys and a blue accent, the same as the pcb editor's */
+/* the editor palette, light and dark: neutral greys, ink buttons and white chips, the same as the pcb editor's */
 :root {
   --canvas: #f4f4f5;
-  --panel: #f7f7f7;
+  --panel: #f2f2f2;
   --frame: #ffffff;
   --divider: #e5e5e5;
   --text: #2b2b2b;
   --text-2: #8c8c8c;
   --icon: #555555;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
+  --accent: #1d1d1d;
+  --accent-hover: #383838;
   --on-accent: #ffffff;
-  --accent-line: #2563eb;
-  --accent-soft: #eaf2ff;
-  --input: #f0f0f1;
-  --row-current: #eaf2ff;
-  --row-hover: #efefef;
+  --accent-line: #1d1d1d;
+  --accent-soft: #ececec;
+  --input: #e9e9e9;
+  --row-current: #ffffff;
+  --row-hover: #ebebeb;
   --pill: #ffffff;
   --pill-ring: rgba(0, 0, 0, 0.07);
   --pill-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.18);
@@ -39,9 +39,9 @@
   --icon-2: #a3a3a3;
   --separator: #ebebeb;
   --tree: #e2e2e2;
-  --accent-ink: #2563eb;
+  --accent-ink: #1d1d1d;
   --switch: #d4d4d4;
-  --select: #3b82f6;
+  --select: #1d1d1d;
   --menu-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.06), 0 16px 32px -12px rgba(0, 0, 0, 0.22);
   --ok: #16a34a;
   --bad: #dc4f70;
@@ -57,13 +57,13 @@
   --text: #ececec;
   --text-2: #8e8e93;
   --icon: #c7c7cc;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --on-accent: #ffffff;
-  --accent-line: #60a5fa;
-  --accent-soft: #1d2a42;
+  --accent: #f2f2f2;
+  --accent-hover: #dcdcdc;
+  --on-accent: #1d1d1d;
+  --accent-line: #f2f2f2;
+  --accent-soft: #2c2c31;
   --input: #2a2a2e;
-  --row-current: #1d2a42;
+  --row-current: #2e2e33;
   --row-hover: #27272b;
   --pill: #26262a;
   --pill-ring: rgba(255, 255, 255, 0.08);
@@ -73,9 +73,9 @@
   --icon-2: #7c7c82;
   --separator: #2c2c31;
   --tree: #34343a;
-  --accent-ink: #60a5fa;
+  --accent-ink: #ececec;
   --switch: #44444a;
-  --select: #60a5fa;
+  --select: #f2f2f2;
   --menu-shadow: 0 0 0 1px #34343a, 0 10px 30px rgba(0, 0, 0, 0.55);
   --ok: #3ccf82;
   --bad: #ff6b8a;
