@@ -46,6 +46,7 @@ const PREFIX: Record<string, string> = {
   'wokwi-buzzer': 'bz',
   'wokwi-photoresistor-sensor': 'ldr',
   'wokwi-dht22': 'dht',
+  'wokwi-pir-motion-sensor': 'pir',
 }
 
 export type Added = { parts: DiagramPart[]; connections: Connection[]; pins: Record<string, string>; error?: string }
@@ -78,6 +79,7 @@ const KIND_OF: Record<string, 'pwm' | 'digital' | 'analog'> = {
   'wokwi-potentiometer': 'analog',
   'wokwi-photoresistor-sensor': 'analog',
   'wokwi-dht22': 'digital',
+  'wokwi-pir-motion-sensor': 'digital',
 }
 
 export function freePins(d: Diagram, type: keyof typeof PARTS): { pin: string; label: string }[] {
@@ -171,6 +173,16 @@ export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number
       wire(`${id}:GND`, B(ground()), GROUND)
       wire(`${id}:AO`, B(pin), color())
       got.AO = pin
+      break
+    }
+    case 'wokwi-pir-motion-sensor': {
+      const pin = take(pins.digital)
+      if (!pin) return fail('No free digital pin left for a motion sensor')
+      // it wants 5 volts even next to a pico, its OUT is 3.3 V so that is safe
+      wire(`${id}:VCC`, B(pins.five), POWER)
+      wire(`${id}:GND`, B(ground()), GROUND)
+      wire(`${id}:OUT`, B(pin), color())
+      got.OUT = pin
       break
     }
     case 'wokwi-dht22': {

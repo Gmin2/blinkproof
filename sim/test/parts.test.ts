@@ -219,3 +219,41 @@ void loop() {
     expect(lines(b).at(-1)).toBe('fail')
   })
 })
+
+describe('pir motion sensor', () => {
+  const pir = { id: 'pir1', type: 'wokwi-pir-motion-sensor', attrs: { delayTime: '2' } }
+  const wires = [['pir1:VCC', 'uno:5V'], ['pir1:GND', 'uno:GND.1'], ['pir1:OUT', 'uno:3']]
+  const sketch = `void setup() { Serial.begin(9600); pinMode(3, INPUT); }
+void loop() { Serial.println(digitalRead(3)); delay(100); }`
+  const last = (b: Bench) => b.board.serial.trim().split('\n').at(-1)
+
+  it('goes high on motion and holds for its delay after it stops', async () => {
+    const b = bench([pir], wires, await build(sketch))
+    b.run(300)
+    expect(last(b)).toBe('0')
+    b.control('pir1', 'motion', 1)
+    b.run(300)
+    expect(last(b)).toBe('1')
+    b.control('pir1', 'motion', 0)
+    b.run(1500)
+    expect(last(b)).toBe('1')
+    b.run(800)
+    expect(last(b)).toBe('0')
+    expect(get<'wokwi-pir-motion-sensor'>(b, 'pir1').triggers).toBe(1)
+  })
+
+  it('moving again inside the hold keeps it high', async () => {
+    const b = bench([pir], wires, await build(sketch))
+    b.control('pir1', 'motion', 1)
+    b.run(200)
+    b.control('pir1', 'motion', 0)
+    b.run(1500)
+    b.control('pir1', 'motion', 1)
+    b.run(200)
+    b.control('pir1', 'motion', 0)
+    b.run(1500)
+    expect(last(b)).toBe('1')
+    b.run(800)
+    expect(last(b)).toBe('0')
+  })
+})

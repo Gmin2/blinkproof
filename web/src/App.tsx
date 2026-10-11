@@ -27,6 +27,7 @@ const CONNECT: [keyof typeof PARTS, string, string][][] = [
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Measure distance, 2 to 400 cm'],
     ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright it is, on an analog pin'],
     ['wokwi-dht22', 'Temperature sensor', 'Degrees and humidity, DHT22'],
+    ['wokwi-pir-motion-sensor', 'Motion sensor', 'High while someone moves, PIR'],
   ],
   [
     ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels over i2c'],

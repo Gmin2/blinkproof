@@ -256,6 +256,19 @@ export const CASES: Case[] = [
 - set-control: { part-id: $dht, control: temperature, value: 25 }
 - wait-led: { part-id: $led, lit: false, timeout: 5s }`),
   },
+  {
+    id: 'hall-light',
+    board: 'uno',
+    request: 'a hallway light on an arduino uno: a pir motion sensor turns an led on when someone walks by, and the led goes off again once nobody has moved for a while',
+    trap: 'the pir holds OUT high for its own delay, the light has to follow OUT and not stay on forever',
+    hidden: test('follows the motion', `
+- delay: 500ms
+- expect-led: { part-id: $led, lit: false }
+- set-control: { part-id: $pir, control: motion, value: 1 }
+- wait-led: { part-id: $led, lit: true, timeout: 1s }
+- set-control: { part-id: $pir, control: motion, value: 0 }
+- wait-led: { part-id: $led, lit: false, timeout: 20s }`),
+  },
 ]
 
 const KINDS: Record<string, string> = {
@@ -270,6 +283,7 @@ const KINDS: Record<string, string> = {
   buzzer: 'wokwi-buzzer',
   light: 'wokwi-photoresistor-sensor',
   dht: 'wokwi-dht22',
+  pir: 'wokwi-pir-motion-sensor',
 }
 
 // $led, $led.2, $led:red -> the id of that part in the agent's circuit
