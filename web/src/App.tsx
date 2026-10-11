@@ -7,7 +7,7 @@ import { Start } from './shell/Start'
 import { Onboarding } from './shell/Onboarding'
 import { Serial } from './shell/Serial'
 import { Inspector, type Mode } from './shell/Inspector'
-import { api, drafts, useLibrary, useRoute, type Draft, type Saved } from './shell/library'
+import { api, drafts, useLibrary, useRoute, type Draft, type Saved, useMe, pending } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
@@ -90,6 +90,9 @@ export default function App() {
   const [theme, setTheme] = useTheme()
   const [route, go] = useRoute()
   const lib = useLibrary()
+  const me = useMe()
+  // the agent needs an account: without one, keep what you were building and go sign in
+  const withAccount = (p: Parameters<typeof pending.save>[0], run: () => void) => (me.needs ? (pending.save(p), me.signIn()) : run())
   // the stored build or example the link points at, when it is not the one being built live
   const [doc, setDoc] = useState<Saved | null>()
   const [toast, setToast] = useState('')
@@ -117,6 +120,12 @@ export default function App() {
   const serialIn = useRef<((text: string) => void) | null>(null)
   const [sound, setSound] = useState(false)
   const [prompt, setPrompt] = useState(IDEAS[1])
+  // back from signing in in the editor: put back what you typed. onboarding takes its own
+  useEffect(() => {
+    if (route.kind === 'onboard') return
+    const p = pending.take()
+    if (p?.prompt) setPrompt(p.prompt)
+  }, [])
   const [model, setModel] = useState('claude-haiku')
   const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
   // onboarding keeps its own page while it builds, the editor moves to the build's link
@@ -245,10 +254,11 @@ export default function App() {
     setMode('test')
   }
 
-  const start = () => {
-    build.start(prompt, model)
-    setFloat(null)
-  }
+  const start = () =>
+    withAccount({ prompt }, () => {
+      build.start(prompt, model)
+      setFloat(null)
+    })
 
   const toggle = (f: Float) => setFloat((cur) => (cur === f ? null : f))
 
@@ -440,7 +450,7 @@ export default function App() {
         request={build.request}
         prompt={prompt}
         onPrompt={setPrompt}
-        onStart={() => build.start(prompt, model)}
+        onStart={() => withAccount({ prompt }, () => build.start(prompt, model))}
         feed={build.feed}
         diagram={build.diagram}
         source={build.source}
@@ -454,13 +464,14 @@ export default function App() {
         onEditor={(id) => (id ? open(id) : openNew())}
         onBlank={blank}
         onReset={() => build.reset()}
-        onBuildCircuit={(what, circuit) => build.start(what, model, circuit)}
+        onBuildCircuit={(what, circuit) => withAccount({ what, circuit }, () => build.start(what, model, circuit))}
+        me={me}
       />
     )
 
   return (
     <div className="flex h-full">
-      <Sidebar route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar me={me} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {diagram ? (

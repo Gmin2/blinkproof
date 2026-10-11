@@ -2,7 +2,8 @@ import type { Diagram } from "@blinkproof/sim";
 import { useState } from "react";
 import { Icon, Logo, type IconName } from "../icons/Icon";
 import { PART_ICON } from "../icons/Status";
-import type { Route, Saved } from "./library";
+import type { Route, Saved, useMe } from "./library";
+import { Account } from "./Account";
 
 export const KIND: Record<string, string> = {
   "wokwi-arduino-uno": "arduino uno",
@@ -134,6 +135,7 @@ function Row({
 }
 
 type Props = {
+  me: ReturnType<typeof useMe>;
   route: Route;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -158,6 +160,7 @@ const STATUS: Record<Saved["status"], IconName> = {
 };
 
 export function Sidebar({
+  me,
   route,
   onOpen,
   onNew,
@@ -404,6 +407,11 @@ export function Sidebar({
         )}
       </div>
 
+      {me.auth && me.loaded && (
+        <div className="flex h-11 shrink-0 items-center border-t border-sep px-2">
+          <Account me={me} />
+        </div>
+      )}
       <div className="flex h-[50px] shrink-0 items-center gap-2 pl-2.5 pr-3">
         <label className="flex h-[30px] flex-1 items-center gap-2 rounded-full bg-input px-2.5">
           <Icon name="filter" size={14} className="text-icon-2" />

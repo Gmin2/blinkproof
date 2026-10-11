@@ -21,6 +21,9 @@ export type Build = {
   traceId?: string
   // the build this one was saved from
   forkOf?: { id: string; title: string }
+  // who made it: their github id, and their login to show. examples and builds from before sign in have none
+  owner?: string
+  ownerLogin?: string
   createdAt: string
   updatedAt: string
 }
@@ -30,6 +33,7 @@ export type Store = {
   update(id: string, patch: Partial<Build>): Promise<void>
   get(id: string): Promise<Build | undefined>
   list(kind: Build['kind'], limit?: number): Promise<Build[]>
+  mine(owner: string, limit?: number): Promise<Build[]>
   putEvents(id: string, events: unknown[]): Promise<void>
   getEvents(id: string): Promise<unknown[]>
 }
@@ -71,6 +75,12 @@ export function dynamoStore({ table = 'blinkproof-builds', bucket = 'blinkproof-
       )
       return (r.Items ?? []) as Build[]
     },
+    async mine(owner, limit = 50) {
+      const r = await db.send(
+        new QueryCommand({ TableName: table, IndexName: 'by-owner', KeyConditionExpression: '#o = :o', ExpressionAttributeNames: { '#o': 'owner' }, ExpressionAttributeValues: { ':o': owner }, ScanIndexForward: false, Limit: limit }),
+      )
+      return (r.Items ?? []) as Build[]
+    },
     async putEvents(id, events) {
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: `builds/${id}/events.json`, Body: JSON.stringify(events), ContentType: 'application/json' }))
     },
@@ -105,6 +115,9 @@ export function memoryStore(): Store {
     },
     async list(kind, limit = 50) {
       return [...builds.values()].filter((b) => b.kind === kind).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit)
+    },
+    async mine(owner, limit = 50) {
+      return [...builds.values()].filter((b) => b.owner === owner).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit)
     },
     async putEvents(id, e) {
       events.set(id, e)
