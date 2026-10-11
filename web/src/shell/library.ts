@@ -52,6 +52,8 @@ export function useLibrary() {
   const [builds, setBuilds] = useState<Saved[]>([])
   const [examples, setExamples] = useState<Saved[]>([])
   const [offline, setOffline] = useState(false)
+  // nothing has come back yet: the lists are loading, not empty
+  const [loading, setLoading] = useState(true)
   // a first request can fail while the server or the store wakes up, so try again a few times before calling it offline
   const refresh = useCallback(async () => {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -60,19 +62,21 @@ export function useLibrary() {
         setBuilds(b)
         setExamples(e)
         setOffline(false)
+        setLoading(false)
         return
       } catch {
         await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
       }
     }
     setOffline(true)
+    setLoading(false)
   }, [])
   useEffect(() => {
     refresh()
   }, [refresh])
   // the list comes from an index that catches up a moment after a write, so show changes straight away
   const upsert = useCallback((b: Saved) => setBuilds((list) => (list.some((x) => x.id === b.id) ? list.map((x) => (x.id === b.id ? { ...x, ...b } : x)) : [b, ...list])), [])
-  return { builds, examples, offline, refresh, upsert }
+  return { builds, examples, offline, loading, refresh, upsert }
 }
 
 // three pages: / is onboarding, /new is the editor with nothing open, /b/:id is anything stored
