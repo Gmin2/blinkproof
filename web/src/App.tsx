@@ -10,6 +10,27 @@ import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
 
 type Theme = 'light' | 'dark'
+
+// what a part gets when you add it by hand, and the start of its id
+const DEFAULTS: Record<string, Record<string, string>> = {
+  'wokwi-led': { color: 'red' },
+  'wokwi-resistor': { value: '220' },
+  'wokwi-pushbutton': { color: 'green' },
+  'wokwi-led-ring': { pixels: '16' },
+  'wokwi-hc-sr04': { distance: '200' },
+}
+const PREFIX: Record<string, string> = {
+  'wokwi-led': 'led',
+  'wokwi-resistor': 'r',
+  'wokwi-pushbutton': 'btn',
+  'wokwi-ssd1306': 'oled',
+  'wokwi-potentiometer': 'pot',
+  'wokwi-neopixel': 'pixel',
+  'wokwi-led-ring': 'ring',
+  'wokwi-servo': 'servo',
+  'wokwi-hc-sr04': 'sonar',
+  'wokwi-buzzer': 'bz',
+}
 type Float = 'prompt' | 'code' | 'serial' | 'parts' | null
 
 function useTheme() {
@@ -75,6 +96,7 @@ export default function App() {
   const [float, setFloat] = useState<Float>('prompt')
   const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+  const [selectedWire, setSelectedWire] = useState<string | null>(null)
   const [bench, setBench] = useState<BenchState | null>(null)
   const [testRun, setTestRun] = useState(0)
   // the sim, like wokwi: running, paused, or stopped with the power off
@@ -196,6 +218,7 @@ export default function App() {
 
   const select = (id: string | null) => {
     setSelected(id)
+    setSelectedWire(null)
     if (id) setMode('design')
   }
 
@@ -232,6 +255,47 @@ export default function App() {
 
   // a finished change to the circuit: one step of undo
   const editCircuit = (d: Diagram | undefined) => setEdits((e) => ({ past: [...e.past.slice(-49), e.present], present: d, future: [] }))
+
+  // the diagram with what is on screen, so taking a wire out does not move anything
+  const removeWire = (key: string) => {
+    if (!diagram) return
+    editCircuit({ ...diagram, connections: diagram.connections.filter((c) => `${c[0]}|${c[1]}` !== key) })
+    setSelectedWire(null)
+  }
+
+  // a new part: sensible defaults, a readable id, set just right of the circuit, picked so it can be wired at once
+  const addPart = (type: keyof typeof PARTS) => {
+    if (!diagram) return setToast('Open a build first, then add parts to it')
+    if ('board' in (PARTS[type as keyof typeof PARTS] ?? {})) return setToast('A circuit has one board')
+    const prefix = PREFIX[type] ?? type.replace('wokwi-', '')
+    let n = 1
+    while (diagram.parts.some((p) => p.id === `${prefix}${n}`)) n++
+    const id = `${prefix}${n}`
+    const right = Math.max(...diagram.parts.map((p) => (p.left ?? 0) + ('board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) ? 300 : 120)))
+    const board = diagram.parts.find((p) => 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}))
+    editCircuit({ ...diagram, parts: [...diagram.parts, { type, id, left: Math.round(right / 5) * 5 + 40, top: board?.top ?? 0, attrs: { ...DEFAULTS[type] } }] })
+    select(id)
+    setMode('design')
+  }
+
+  const removePart = (id: string) => {
+    if (!diagram) return
+    const p = diagram.parts.find((q) => q.id === id)
+    if (!p) return
+    if ('board' in (PARTS[p.type as keyof typeof PARTS] ?? {})) return setToast('The board stays, every part hangs off it')
+    editCircuit({ ...diagram, parts: diagram.parts.filter((q) => q.id !== id), connections: diagram.connections.filter((c) => !c[0].startsWith(`${id}:`) && !c[1].startsWith(`${id}:`)) })
+    select(null)
+  }
+
+  const setAttr = (id: string, key: string, value: string) => {
+    if (!diagram) return
+    editCircuit({ ...diagram, parts: diagram.parts.map((p) => (p.id === id ? { ...p, attrs: { ...p.attrs, [key]: value } } : p)) })
+  }
+
+  const recolorWire = (key: string, color: string) => {
+    if (!diagram) return
+    editCircuit({ ...diagram, connections: diagram.connections.map((c) => (`${c[0]}|${c[1]}` === key ? [c[0], c[1], color, c[3]] : c)) })
+  }
 
   const undo = () => setEdits((e) => (e.past.length ? { past: e.past.slice(0, -1), present: e.past[e.past.length - 1], future: [e.present, ...e.future] } : e))
 
@@ -273,6 +337,16 @@ export default function App() {
       }
       // the code editor and text boxes keep their own undo
       const typing = (e.target as HTMLElement).closest?.('input, textarea')
+      if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && !(build.busy && live)) {
+        if (selectedWire) {
+          e.preventDefault()
+          removeWire(selectedWire)
+        } else if (selected) {
+          e.preventDefault()
+          removePart(selected)
+        }
+      }
+      if (!typing && e.key === 'Escape') setSelectedWire(null)
       if (!typing && mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -316,6 +390,8 @@ export default function App() {
             onDiagram={editCircuit}
             onHint={setToast}
             fixed={!!circuit || (!live && !!doc?.forkOf)}
+            selectedWire={selectedWire}
+            onSelectWire={(k) => (setSelectedWire(k), k && setMode('design'))}
             sound={sound}
             reveal={live}
             onState={onState}
@@ -366,6 +442,9 @@ export default function App() {
             <div className="pill flex items-center">
               <Tool icon="code" label="sketch.ino" onClick={() => toggle('code')} active={float === 'code'} disabled={!code} />
               <Tool icon="terminal" label="serial monitor" onClick={() => toggle('serial')} active={float === 'serial'} disabled={!diagram} />
+            </div>
+            <div className="pill flex items-center">
+              <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
             </div>
             <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
               <button onClick={() => setZoomMenu((o) => !o)} className="pill flex h-9 items-center gap-3 pl-3.5 pr-2.5 text-[13px] font-medium text-ink">
@@ -454,13 +533,22 @@ export default function App() {
         {float === 'parts' && (
           <Panel title="Parts" onClose={() => setFloat(null)} className="left-2.5 top-[56px] w-[260px]" right={<span className="text-[11px] font-normal text-dim">{Object.keys(PARTS).length}</span>}>
             <div className="max-h-[420px] space-y-px overflow-auto px-1.5 pb-1.5">
-              {Object.keys(PARTS).map((t) => (
-                <div key={t} className="flex h-[26px] items-center gap-2 rounded-[6px] px-2 text-[12px] text-ink hover:bg-hover">
-                  <Icon name={PART_ICON[t] ?? 'box'} size={16} className="text-icon-2" />
-                  <span className="flex-1">{KIND[t] ? KIND[t].charAt(0).toUpperCase() + KIND[t].slice(1) : t}</span>
-                  <span className="font-mono text-[10px] text-dim">{t.replace('wokwi-', '')}</span>
-                </div>
-              ))}
+              {Object.keys(PARTS).map((t) => {
+                const isBoard = 'board' in PARTS[t as keyof typeof PARTS]
+                return (
+                  <button
+                    key={t}
+                    onClick={() => addPart(t as keyof typeof PARTS)}
+                    disabled={isBoard || !diagram || (build.busy && live)}
+                    title={isBoard ? 'a circuit has one board' : !diagram ? 'open a build to add parts' : `add a ${KIND[t] ?? t}`}
+                    className="group flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-[12px] text-ink enabled:hover:bg-hover disabled:text-dim"
+                  >
+                    <Icon name={PART_ICON[t] ?? 'box'} size={16} className="text-icon-2" />
+                    <span className="flex-1">{KIND[t] ? KIND[t].charAt(0).toUpperCase() + KIND[t].slice(1) : t}</span>
+                    {isBoard ? <span className="text-[10px] text-dim">board</span> : <Icon name="plus" size={12} className="text-icon-2 opacity-0 group-enabled:group-hover:opacity-100" />}
+                  </button>
+                )
+              })}
             </div>
           </Panel>
         )}
@@ -531,6 +619,12 @@ export default function App() {
         models={models}
         onModel={setModel}
         forkOf={live ? undefined : doc?.forkOf}
+        wire={selectedWire && diagram ? diagram.connections.find((c) => `${c[0]}|${c[1]}` === selectedWire) : undefined}
+        onRecolorWire={(c) => selectedWire && recolorWire(selectedWire, c)}
+        onRemoveWire={() => selectedWire && removeWire(selectedWire)}
+        editable={!(build.busy && live)}
+        onRemovePart={removePart}
+        onSetAttr={setAttr}
         onOpen={open}
         canShare={route.kind === 'doc'}
         onShare={share}

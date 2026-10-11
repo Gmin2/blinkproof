@@ -51,6 +51,9 @@ type Props = {
   // said when someone tries to move a part that cannot move right now
   onHint?: (text: string) => void
   onDiagram?: (d: Diagram) => void
+  // a wire picked on the canvas, by its key
+  selectedWire?: string | null
+  onSelectWire?: (key: string | null) => void
   // the parts sit where the diagram says, no tidying and no refitting while someone arranges them
   fixed?: boolean
 }
@@ -58,9 +61,9 @@ type Props = {
 // diagram types we draw ourselves
 const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
-const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
+export const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram: given, editable = false, onDiagram, onHint, fixed = false, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
+export function Workbench({ diagram: given, editable = false, onDiagram, onHint, fixed = false, selectedWire = null, onSelectWire, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
   // a part being dragged: the diagram with it moved, drawn until the pointer lets go
   const [moving, setMoving] = useState<Diagram | null>(null)
@@ -432,6 +435,53 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     setMoving(null)
   }
 
+  // drawing a wire: from a pin, a dashed line follows the cursor, let go on another pin to connect
+  const [drawing, setDrawing] = useState<{ from: string; a: Point; b: Point } | null>(null)
+  const [hoverPin, setHoverPin] = useState<string | null>(null)
+
+  const toDiagram = (x: number, y: number) => {
+    const r = box.current!.getBoundingClientRect()
+    return { x: (x - r.left - fit.x) / fit.scale, y: (y - r.top - fit.y) / fit.scale }
+  }
+
+  const pinsOf = (p: Diagram['parts'][number]) => (els.current[p.id]?.pinInfo ?? []).map((pin) => ({ ref: `${p.id}:${pin.name}`, name: pin.name, x: at(p).x + pin.x, y: at(p).y + pin.y }))
+
+  // power red, ground grey, signals take the next colour along
+  const SIGNAL = ['#22c55e', '#f59e0b', '#38bdf8', '#a78bfa', '#eab308', '#ec4899']
+  const colorFor = (a: string, b: string) => {
+    const pins = [a, b].map((r) => r.split(':')[1] ?? '')
+    if (pins.some((n) => /^GND/.test(n))) return '#94a3b8'
+    if (pins.some((n) => /^(5V|3V3|3\.3V|VCC|VIN|VBUS|VSYS|V\+)/.test(n))) return '#ef4444'
+    return SIGNAL[diagram.connections.length % SIGNAL.length]
+  }
+
+  const startWire = (e: React.PointerEvent, ref: string, at0: Point) => {
+    if (!editable || e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+    onSelectWire?.(null)
+    setDrawing({ from: ref, a: at0, b: at0 })
+    const move = (ev: PointerEvent) => setDrawing((w) => (w ? { ...w, b: toDiagram(ev.clientX, ev.clientY) } : w))
+    const finish = (ev: PointerEvent | KeyboardEvent) => {
+      removeEventListener('pointermove', move)
+      removeEventListener('pointerup', finish)
+      removeEventListener('keydown', esc)
+      setDrawing(null)
+      if (!('clientX' in ev)) return
+      // the pin under the pointer, if any, is where the wire ends
+      const target = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-pin]')?.dataset.pin
+      if (!target || target === ref) return
+      const exists = given.connections.some(([x, y]) => (x === ref && y === target) || (x === target && y === ref))
+      if (exists) return onHint?.('Those two pins are already wired')
+      const base = { ...given, parts: given.parts.map((q) => ({ ...q, left: at(q).x, top: at(q).y })) }
+      onDiagram?.({ ...base, connections: [...given.connections, [ref, target, colorFor(ref, target), []]] })
+    }
+    const esc = (ev: KeyboardEvent) => ev.key === 'Escape' && finish(ev)
+    addEventListener('pointermove', move)
+    addEventListener('pointerup', finish)
+    addEventListener('keydown', esc)
+  }
+
   const partDelay = (id: string) => fresh.parts.indexOf(id) * 0.15
   const wireDelay = (key: string) => fresh.parts.length * 0.15 + 0.3 + fresh.wires.indexOf(key) * 0.08
 
@@ -473,12 +523,53 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             const style = isNew ? { animationDelay: `${wireDelay(p.key)}s` } : undefined
             return (
               <g key={p.key}>
+                {selectedWire === p.key && <path d={p.d} stroke="var(--accent)" strokeOpacity={0.55} strokeWidth={10} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
                 <path d={p.d} pathLength={1} className={isNew ? 'draw' : ''} style={style} stroke="black" strokeOpacity={0.45} strokeWidth={5} fill="none" transform="translate(0 2)" />
                 <path d={p.d} pathLength={1} className={isNew ? 'draw' : ''} style={style} stroke={p.color} strokeWidth={3} fill="none" strokeLinecap="round" />
+                {editable && (
+                  <path
+                    d={p.d}
+                    stroke="transparent"
+                    strokeWidth={12 / fit.scale}
+                    fill="none"
+                    style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                    onPointerDown={(e) => (e.stopPropagation(), onSelect?.(null), onSelectWire?.(p.key))}
+                  />
+                )}
               </g>
             )
           })}
         </svg>
+        {drawing && (
+          <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
+            <path d={`M${drawing.a.x} ${drawing.a.y} L${drawing.b.x} ${drawing.b.y}`} stroke="var(--accent)" strokeWidth={2 / fit.scale} strokeDasharray={`${6 / fit.scale} ${4 / fit.scale}`} fill="none" strokeLinecap="round" />
+          </svg>
+        )}
+        {editable &&
+          diagram.parts
+            .filter((p) => !p.hide && (drawing || hover === p.id))
+            .flatMap(pinsOf)
+            .map((pin) => {
+              const on = hoverPin === pin.ref || drawing?.from === pin.ref
+              const d = (on ? 11 : 7) / fit.scale
+              return (
+                <div
+                  key={pin.ref}
+                  data-pin={pin.ref}
+                  className={`absolute z-10 rounded-full border ${on ? 'border-accent bg-accent' : 'border-accent bg-panel/80'}`}
+                  style={{ left: pin.x - d / 2, top: pin.y - d / 2, width: d, height: d, borderWidth: 1 / fit.scale, cursor: 'crosshair' }}
+                  onPointerDown={(e) => startWire(e, pin.ref, { x: pin.x, y: pin.y })}
+                  onPointerEnter={() => (setHoverPin(pin.ref), setHover(pin.ref.split(':')[0]))}
+                  onPointerLeave={() => setHoverPin((h) => (h === pin.ref ? null : h))}
+                >
+                  {on && (
+                    <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[4px] bg-ink px-1.5 py-0.5 font-mono text-on-accent" style={{ bottom: `calc(100% + ${4 / fit.scale}px)`, fontSize: 10 / fit.scale, lineHeight: 1.2 }}>
+                      {pin.ref}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
         {[hover, selected].map((id, k) => {
           const part = id ? diagram.parts.find((q) => q.id === id) : undefined
           const r = id && rects[id] && part ? { ...rects[id], ...at(part) } : undefined

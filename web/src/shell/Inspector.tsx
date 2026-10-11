@@ -8,6 +8,16 @@ import type { FeedItem, Verdict } from './useBuild'
 
 export type Mode = 'design' | 'test' | 'agent'
 
+// the colours a part comes in, and what to paint the dot
+const COLORS: Record<string, string[]> = {
+  'wokwi-led': ['red', 'green', 'blue', 'yellow', 'orange', 'white', 'purple'],
+  'wokwi-pushbutton': ['red', 'green', 'blue', 'yellow', 'black', 'white'],
+}
+const SWATCH: Record<string, string> = { red: '#ef4444', green: '#22c55e', blue: '#3b82f6', yellow: '#eab308', orange: '#f97316', white: '#f5f5f5', purple: '#a855f7', black: '#171717' }
+
+// what a wire can be, red for power, grey for ground, the rest for signals
+const WIRE_COLORS = ['#ef4444', '#94a3b8', '#141414', '#22c55e', '#f59e0b', '#38bdf8', '#a78bfa', '#eab308', '#ec4899']
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 // a section: main ones in near black, the secondary level in grey, actions on the right
@@ -85,9 +95,15 @@ type Props = {
   canShare: boolean
   forkOf?: { id: string; title: string }
   onOpen: (id: string) => void
+  wire?: Diagram['connections'][number]
+  onRecolorWire: (color: string) => void
+  onRemoveWire: () => void
+  editable: boolean
+  onRemovePart: (id: string) => void
+  onSetAttr: (id: string, key: string, value: string) => void
 }
 
-export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare, onDownload, canShare, forkOf, onOpen }: Props) {
+export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare, onDownload, canShare, forkOf, onOpen, wire, onRecolorWire, onRemoveWire, editable, onRemovePart, onSetAttr }: Props) {
   const circuit = useMemo(() => (diagram ? Circuit.parse(diagram).circuit : undefined), [diagram])
   const part = selected ? diagram?.parts.find((p) => p.id === selected) : undefined
   const feedEnd = useRef<HTMLDivElement>(null)
@@ -147,7 +163,29 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto pb-6">
+        {mode === 'design' && wire && (
+          <>
+            <Section first title="Wire" right={<HeaderButton icon="trash" title="remove the wire, delete" onClick={onRemoveWire} />}>
+              <div className="space-y-1.5">
+                {[wire[0], wire[1]].map((end, i) => (
+                  <div key={i} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                    <span className="text-dim">{i ? 'To' : 'From'}</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-mono text-ink">{end}</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+            <Section title="Colour" sub>
+              <div className="flex flex-wrap gap-2">
+                {WIRE_COLORS.map((c) => (
+                  <button key={c} title={c} onClick={() => onRecolorWire(c)} className={`h-6 w-6 rounded-full ring-offset-2 ring-offset-panel ${wire[2] === c ? 'ring-2 ring-accent' : ''}`} style={{ background: c }} />
+                ))}
+              </div>
+            </Section>
+          </>
+        )}
         {mode === 'design' &&
+          !wire &&
           (part && circuit ? (
             <>
               <Section
@@ -158,7 +196,12 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
                     <Icon name="chevron-expand-y" size={11} />
                   </>
                 }
-                right={<span className="font-mono text-[11px] text-dim">{part.id}</span>}
+                right={
+                  <>
+                    <span className="font-mono text-[11px] text-dim">{part.id}</span>
+                    {editable && !('board' in (PARTS[part.type as keyof typeof PARTS] ?? {})) && <HeaderButton icon="trash" title="remove the part and its wires, delete" onClick={() => onRemovePart(part.id)} />}
+                  </>
+                }
               >
                 <div className="grid grid-cols-2 gap-2.5">
                   <Field label="X" value={Math.round(part.left ?? 0)} />
@@ -172,9 +215,34 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
                   <Sep />
                   <Section title="Attributes">
                     <div className="grid grid-cols-2 gap-2.5">
-                      {Object.entries(part.attrs ?? {}).map(([k, v]) => (
-                        <Field key={k} label={k} value={v} wide={v.length > 6} menu={k === 'color'} />
-                      ))}
+                      {Object.entries(part.attrs ?? {}).map(([k, v]) =>
+                        editable && k === 'color' && COLORS[part.type] ? (
+                          <label key={k} className="relative col-span-2 flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                            <span className="text-dim">{k}</span>
+                            <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: SWATCH[v] ?? v }} />
+                            <span className="flex-1 text-ink">{v}</span>
+                            <Icon name="chevron-expand-y" size={11} className="text-icon-2" />
+                            <select value={v} onChange={(e) => onSetAttr(part.id, k, e.target.value)} className="absolute inset-0 cursor-pointer opacity-0">
+                              {COLORS[part.type].map((c) => (
+                                <option key={c}>{c}</option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : editable && ['value', 'pixels'].includes(k) ? (
+                          <label key={k} className="flex h-6 min-w-0 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                            <span className="text-dim">{k}</span>
+                            <input
+                              defaultValue={v}
+                              key={`${part.id}-${v}`}
+                              onBlur={(e) => e.target.value.trim() && e.target.value !== v && onSetAttr(part.id, k, e.target.value.trim())}
+                              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                              className="min-w-0 flex-1 bg-transparent text-right font-mono text-ink outline-none"
+                            />
+                          </label>
+                        ) : (
+                          <Field key={k} label={k} value={v} wide={v.length > 6} menu={k === 'color'} />
+                        ),
+                      )}
                     </div>
                   </Section>
                 </>
