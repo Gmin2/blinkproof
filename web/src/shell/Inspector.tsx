@@ -27,7 +27,7 @@ function Sep() {
   return <div className="mx-4 mt-5 border-t border-sep" />
 }
 
-// sketch's field: grey label or icon inside on the left, the value in mono
+// a field: grey label or icon inside on the left, the value in mono
 function Field({ label, icon, value, wide, menu }: { label?: string; icon?: IconName; value: React.ReactNode; wide?: boolean; menu?: boolean }) {
   return (
     <div className={`flex h-6 min-w-0 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px] ${wide ? 'col-span-2' : ''}`}>
@@ -115,7 +115,7 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
           ))}
         </div>
         <div className="flex-1" />
-        {/* where sketch shows who is in the document, we show who builds it */}
+        {/* who builds it */}
         <label className="relative flex h-9 items-center gap-1.5 text-[12px] font-medium text-ink" title="model">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">{(current?.label ?? model).charAt(0).toUpperCase()}</span>
           <span className="max-w-[78px] truncate">{(current?.label ?? model).split(' ').slice(-2).join(' ')}</span>

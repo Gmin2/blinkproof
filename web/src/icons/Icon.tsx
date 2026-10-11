@@ -1,6 +1,6 @@
 import { NUCLEO } from './nucleo'
 
-// the few sketch style line icons nucleo has no match for, drawn on the same 18 grid at 1.5
+// the few line icons nucleo has no match for, drawn on the same 18 grid at 1.5
 const OWN = {
   frame: '<path d="M5 2.5v13M13 2.5v13M2.5 5h13M2.5 13h13" />',
   play: '<path d="M5.5 3.6v10.8a.8.8 0 0 0 1.2.7l8.6-5.4a.8.8 0 0 0 0-1.4L6.7 2.9a.8.8 0 0 0-1.2.7Z" />',
@@ -40,7 +40,7 @@ export function Icon({ name, size = 18, className = '', title }: Props) {
   )
 }
 
-// our mark, where sketch keeps its yellow diamond: a yellow led
+// our mark, a yellow led
 export function Logo({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" className="shrink-0" aria-hidden>

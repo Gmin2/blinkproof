@@ -37,7 +37,7 @@ function Tool({ icon, label, onClick, active, disabled, children }: { icon?: Ico
   )
 }
 
-// a detached panel floating over the canvas, like sketch's color or prototyping panels
+// a panel floating over the canvas
 function Panel({ title, onClose, children, className = '', right }: { title: string; onClose: () => void; children: React.ReactNode; className?: string; right?: React.ReactNode }) {
   return (
     <div className={`float absolute flex flex-col overflow-hidden ${className}`}>
@@ -152,7 +152,7 @@ export default function App() {
             onSelect={select}
           />
         ) : (
-          // an empty frame waiting for the agent, the way a new sketch document opens
+          // an empty frame waiting for the agent
           <div className="flex h-full items-center justify-center pb-[230px]">
             <div className="relative">
               <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}</span>
