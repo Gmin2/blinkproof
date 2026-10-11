@@ -2,6 +2,7 @@ import { PARTS } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
+import { CodeEditor } from './shell/CodeEditor'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, useLibrary, useRoute, type Saved } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
@@ -76,12 +77,18 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null)
   const [bench, setBench] = useState<BenchState | null>(null)
   const [testRun, setTestRun] = useState(0)
-  const [running, setRunning] = useState(true)
+  // the sim, like wokwi: running, paused, or stopped with the power off
+  const [sim, setSim] = useState<'run' | 'pause' | 'stop'>('run')
+  const [restart, setRestart] = useState(0)
+  // your edits to the sketch: the draft you type, and what you last pressed run on
+  const [draft, setDraft] = useState<string>()
+  const [applied, setApplied] = useState<string>()
+  const [serialLine, setSerialLine] = useState('')
+  const serialIn = useRef<((text: string) => void) | null>(null)
   const [sound, setSound] = useState(false)
   const [prompt, setPrompt] = useState(IDEAS[1])
   const [model, setModel] = useState('claude-haiku')
   const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
-  const codeEnd = useRef<HTMLDivElement>(null)
   const build = useBuild(
     () => setTestRun((n) => n + 1),
     (t) => (t === 'code' ? setFloat('code') : setMode(t)),
@@ -91,6 +98,12 @@ export default function App() {
     },
   )
   const live = route.kind === 'new' || build.savedId === route.id
+
+  useEffect(() => {
+    setDraft(undefined)
+    setApplied(undefined)
+    setSim('run')
+  }, [route.kind === 'doc' ? route.id : 'new'])
 
   useEffect(() => {
     if (route.kind !== 'doc' || build.savedId === route.id) return
@@ -120,15 +133,14 @@ export default function App() {
   }, [])
 
   const diagram = (live ? build.diagram : doc?.diagram) ?? null
-  const source = live ? build.source : doc?.sketch
+  const original = live ? build.source : doc?.sketch
+  const source = applied ?? original
   const test = live ? build.test : doc?.test
-  const code = (live ? build.code : doc?.sketch) ?? ''
+  const code = draft ?? (live ? build.code : doc?.sketch) ?? ''
+  const edited = draft !== undefined && draft !== original
   const request = live ? build.request : (doc?.request ?? '')
   const title = live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
 
-  useEffect(() => {
-    codeEnd.current?.scrollIntoView({ block: 'end' })
-  }, [code])
 
   const openNew = () => {
     if (!build.busy) build.reset()
@@ -185,6 +197,19 @@ export default function App() {
 
   const toggle = (f: Float) => setFloat((cur) => (cur === f ? null : f))
 
+  // run the sketch as it is in the editor: compile it if it changed, boot the board fresh
+  const runEdited = () => {
+    if (draft !== undefined) setApplied(draft)
+    setSim('run')
+    setRestart((n) => n + 1)
+  }
+
+  const sendSerial = () => {
+    if (!serialIn.current) return
+    serialIn.current(serialLine + '\n')
+    setSerialLine('')
+  }
+
   return (
     <div className="flex h-full">
       <Sidebar route={route} onOpen={open} onNew={openNew} builds={lib.builds} examples={lib.examples} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
@@ -197,7 +222,10 @@ export default function App() {
             source={source}
             test={test}
             testRun={testRun}
-            running={running}
+            running={sim === 'run'}
+            stopped={sim === 'stop'}
+            restart={restart}
+            serialIn={serialIn}
             sound={sound}
             reveal={live}
             onState={onState}
@@ -234,7 +262,9 @@ export default function App() {
               <Tool icon="plus" label="new build" onClick={openNew} />
             </div>
             <div className="pill flex items-center">
-              <Tool icon={running ? 'pause' : 'play'} label={running ? 'pause' : 'run'} onClick={() => setRunning((r) => !r)} disabled={!diagram} />
+              <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram} active={sim !== 'stop'} />
+              <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop'} />
+              <Tool icon="rotate" label="restart the simulation" onClick={runEdited} disabled={!diagram} />
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
@@ -274,22 +304,55 @@ export default function App() {
         </div>
 
         {float === 'code' && (
-          <Panel title="sketch.ino" onClose={() => setFloat(null)} className="right-2.5 top-[56px] bottom-20 w-[380px]" right={<span className="font-mono text-[11px] font-normal text-dim">{code.split('\n').length} lines</span>}>
-            <pre className="min-h-0 flex-1 overflow-auto px-3 pb-3 font-mono text-[11px] leading-[18px] text-ink">
-              {code.split('\n').map((line, i) => (
-                <div key={i} className="flex gap-3">
-                  <span className="w-5 shrink-0 select-none text-right text-dim/60">{i + 1}</span>
-                  <span className="whitespace-pre">{line}</span>
-                </div>
-              ))}
-              <div ref={codeEnd} />
-            </pre>
+          <Panel
+            title={edited ? 'sketch.ino, edited' : 'sketch.ino'}
+            onClose={() => setFloat(null)}
+            className="right-2.5 top-[56px] bottom-20 w-[400px]"
+            right={
+              <>
+                {edited && (
+                  <button onClick={() => (setDraft(undefined), setApplied(undefined), setRestart((n) => n + 1))} className="text-[11px] font-normal text-dim hover:text-ink">
+                    Revert
+                  </button>
+                )}
+                <button onClick={runEdited} disabled={build.busy && live} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
+                  <Icon name="play" size={11} />
+                  Run
+                </button>
+              </>
+            }
+          >
+            <CodeEditor value={code} onChange={setDraft} onRun={runEdited} readOnly={build.busy && live} />
+            {bench?.build && !bench.build.ok && (
+              <div className="border-t border-sep px-3 py-2 font-mono text-[10.5px] leading-4 text-bad">
+                {bench.build.diagnostics.slice(0, 3).map((d, i) => (
+                  <div key={i}>
+                    line {d.line}: {d.message}
+                  </div>
+                ))}
+              </div>
+            )}
           </Panel>
         )}
 
         {float === 'serial' && (
-          <Panel title="Serial Monitor" onClose={() => setFloat(null)} className="right-2.5 top-[56px] h-[280px] w-[340px]" right={<span className="font-mono text-[11px] font-normal text-dim">9600 baud</span>}>
+          <Panel title="Serial Monitor" onClose={() => setFloat(null)} className="right-2.5 top-[56px] h-[320px] w-[360px]" right={<span className="font-mono text-[11px] font-normal text-dim">9600 baud</span>}>
             <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-4 pb-3 font-mono text-[11px] leading-[18px] text-ink">{bench?.serial || <span className="text-dim">Nothing printed yet</span>}</pre>
+            <form
+              onSubmit={(e) => (e.preventDefault(), sendSerial())}
+              className="flex items-center gap-2 border-t border-sep px-2.5 py-2"
+            >
+              <input
+                value={serialLine}
+                onChange={(e) => setSerialLine(e.target.value)}
+                placeholder={sim === 'stop' ? 'Start the simulation to type here' : 'Type and press return to send'}
+                disabled={sim === 'stop'}
+                className="h-7 min-w-0 flex-1 rounded-[7px] bg-input px-2 font-mono text-[11px] text-ink outline-none placeholder:font-sans placeholder:text-dim"
+              />
+              <button type="submit" disabled={sim === 'stop'} className="h-7 rounded-[7px] bg-input px-2.5 text-[11px] font-medium text-ink disabled:opacity-40">
+                Send
+              </button>
+            </form>
           </Panel>
         )}
 

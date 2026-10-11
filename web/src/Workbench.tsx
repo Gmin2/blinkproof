@@ -20,6 +20,8 @@ export type BenchState = {
   parts: Record<string, PartState>
   simMs: number
   zoom: number
+  // sim time over wall time, 1 is real time
+  speed: number
 }
 
 type Props = {
@@ -29,6 +31,12 @@ type Props = {
   // bump to play the test on a fresh bench
   testRun?: number
   running?: boolean
+  // stopped: no bench at all, every part dark, like before you press play
+  stopped?: boolean
+  // bump to throw the bench away and boot the firmware again
+  restart?: number
+  // the serial monitor types into the board through this
+  serialIn?: { current: ((text: string) => void) | null }
   sound?: boolean
   // drop new parts in and draw new wires, for a build happening live
   reveal?: boolean
@@ -44,7 +52,7 @@ const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram, source, test, testRun = 0, running = true, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
+export function Workbench({ diagram, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const els = useRef<Record<string, Wokwi>>({})
   const [paths, setPaths] = useState<{ key: string; d: string; color: string }[]>([])
@@ -56,6 +64,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   const [live, setLive] = useState<Record<string, PartState>>({})
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
+  const [speed, setSpeed] = useState(0)
   const [ram, setRam] = useState<{ leastFree: number; heapBytes: number; crashed: boolean } | null>(null)
   const [build, setBuild] = useState<Build | null>(null)
   const [problem, setProblem] = useState('')
@@ -165,6 +174,24 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
 
   useEffect(() => {
     const firmware = build?.hex ?? build?.uf2
+    if (stopped) {
+      // power off: leds dark, screens blank, no sound
+      for (const [id, el] of Object.entries(els.current)) {
+        const type = diagram.parts.find((p) => p.id === id)?.type
+        if (type === 'wokwi-led') el.value = false
+        if (type === 'wokwi-led-ring') el.reset?.()
+        if (type === 'wokwi-ssd1306' && el.imageData) {
+          const px = (el.imageData as ImageData).data
+          for (let i = 0; i < px.length; i++) px[i] = i % 4 === 3 ? 255 : 0
+          el.redraw()
+        }
+        if (type === 'wokwi-arduino-uno' || type === 'wokwi-arduino-nano') Object.assign(el, { led13: false, ledPower: false })
+        if (type === 'wokwi-pi-pico') el.led = false
+      }
+      setSimMs(0)
+      setSpeed(0)
+      return
+    }
     if (!firmware || !parsed.circuit) return
     const bench = new Bench(parsed.circuit, firmware, build?.symbols)
     benchRef.current = bench
@@ -204,12 +231,19 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     }
     setSonars(distances)
     setSerial('')
+    // the uart holds one byte, so typed text goes in a byte at a time, 2 ms of sim apart, like a real 9600 line
+    const typed: number[] = []
+    if (serialIn) serialIn.current = (text) => typed.push(...new TextEncoder().encode(text))
     let raf = 0
     let last = performance.now()
+    // speed over a half second window: how much sim time each wall second bought
+    let window = { wall: 0, sim: 0 }
 
     const tick = (now: number) => {
-      const dt = Math.min(50, now - last)
+      const wall = now - last
+      const dt = Math.min(50, wall)
       last = now
+      const simBefore = bench.board.ms
       if (playing) {
         const until = bench.board.ms + dt * 2
         while (bench.board.ms < until) {
@@ -220,7 +254,15 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           }
           if (next.value) setSteps((s) => [...s, next.value!])
         }
-      } else if (runningRef.current) bench.run(dt)
+      } else if (runningRef.current) {
+        let left = dt
+        while (typed.length && left > 0) {
+          bench.board.writeSerial(typed.shift()!)
+          bench.run(2)
+          left -= 2
+        }
+        if (left > 0) bench.run(left)
+      }
       for (const [id, part] of Object.entries(bench.parts)) {
         const el = els.current[id]
         if (!el) continue
@@ -261,6 +303,13 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       }
       setSerial(bench.board.serial)
       setSimMs(Math.floor(bench.board.ms / 100) * 100)
+      if (runningRef.current || playing) {
+        window = { wall: window.wall + wall, sim: window.sim + bench.board.ms - simBefore }
+        if (window.wall >= 500) {
+          setSpeed(window.sim / window.wall)
+          window = { wall: 0, sim: 0 }
+        }
+      } else setSpeed(0)
       setLive(bench.parts)
       const mem = bench.board.memory()
       setRam(mem ? { ...mem, crashed: bench.board.collidedAtMs !== undefined } : null)
@@ -271,9 +320,10 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       cancelAnimationFrame(raf)
       speaker.current.stop()
       benchRef.current = null
+      if (serialIn) serialIn.current = null
       for (const c of cleanups) c()
     }
-  }, [build, testRun, parsed])
+  }, [build, testRun, parsed, stopped, restart])
 
   const status =
     problem ||
@@ -288,8 +338,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
             : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)
 
   useEffect(() => {
-    onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale })
-  }, [status, build, serial, steps, report, findings, simMs, fit.scale])
+    onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale, speed })
+  }, [status, build, serial, steps, report, findings, simMs, fit.scale, speed])
 
   const partDelay = (id: string) => fresh.parts.indexOf(id) * 0.15
   const wireDelay = (key: string) => fresh.parts.length * 0.15 + 0.3 + fresh.wires.indexOf(key) * 0.08
@@ -388,7 +438,14 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
 
       {/* a canvas notification: how far the sim got, what the build cost */}
       <div className={`pill absolute bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center gap-4 whitespace-nowrap px-4 font-mono text-[11px] text-dim ${build ? '' : 'hidden'}`}>
-        {build && !build.ok ? <span className="text-bad">{status}</span> : <span>sim {(simMs / 1000).toFixed(2)}s</span>}
+        {build && !build.ok ? (
+          <span className="text-bad">{status}</span>
+        ) : (
+          <>
+            <span>sim {(simMs / 1000).toFixed(1)}s</span>
+            <span title="simulated time per second of real time">{stopped ? 'stopped' : !running && !testRun ? 'paused' : `${Math.round(speed * 100)}%`}</span>
+          </>
+        )}
         {build?.ok && <span>flash {build.flash} b</span>}
         {ram && build && (
           <span className="flex items-center gap-2" title="globals, heap and stack in the uno's 2048 bytes">
