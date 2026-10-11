@@ -7,6 +7,7 @@ import { Start } from './shell/Start'
 import { Onboarding } from './shell/Onboarding'
 import { Serial } from './shell/Serial'
 import { BuildView, useGuide } from './shell/Breadboard'
+import { SchematicView, useSheet } from './shell/Schematic'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, drafts, useLibrary, useRoute, type Draft, type Saved, useMe, pending } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
@@ -104,7 +105,7 @@ export default function App() {
   // the stored build or example the link points at, when it is not the one being built live
   const [doc, setDoc] = useState<Saved | null>()
   const [toast, setToast] = useState('')
-  const [mode, setMode] = useState<Mode>(() => (route.kind === 'doc' && route.view === 'build' ? 'build' : 'design'))
+  const [mode, setMode] = useState<Mode>(() => (route.kind === 'doc' && route.view ? route.view : 'design'))
   const [float, setFloat] = useState<Float>(null)
   const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -201,15 +202,18 @@ export default function App() {
   const title = live && listed ? listed : live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
   // the breadboard guide for whatever is open, and its own link: /b/<id>/build
   const guide = useGuide(diagram, route.kind === 'doc' ? route.id : 'new')
+  const sheet = useSheet(diagram, route.kind === 'doc' ? route.id : 'new')
+  // the breadboard and the schematic take the whole stage, the simulator waits
+  const stage = mode === 'build' || mode === 'schematic'
   // in the breadboard view each layer says which step puts it on the board
   const stepOf: Record<string, string> = {}
   guide.p?.steps.forEach((st, i) => st.adds.forEach((id) => (stepOf[id] ??= `step ${i + 1}`)))
   useEffect(() => {
-    if (route.kind === 'doc' && route.view === 'build') setMode('build')
+    if (route.kind === 'doc' && route.view) setMode(route.view)
   }, [route])
   useEffect(() => {
     if (route.kind !== 'doc') return
-    const want = `/b/${route.id}${mode === 'build' ? '/build' : ''}`
+    const want = `/b/${route.id}${stage ? `/${mode}` : ''}`
     if (location.pathname !== want) history.replaceState(null, '', want)
   }, [mode, route])
 
@@ -492,12 +496,14 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar me={me} loading={lib.loading} meta={mode === 'build' ? stepOf : undefined} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={mode === 'build' ? guide.picked : selected} onSelect={mode === 'build' ? guide.setPicked : select} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar me={me} loading={lib.loading} meta={mode === 'build' ? stepOf : undefined} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={mode === 'build' ? guide.picked : mode === 'schematic' ? sheet.part : selected} onSelect={mode === 'build' ? guide.setPicked : mode === 'schematic' ? (id) => (sheet.setNet(null), sheet.setPart(id)) : select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {/* building it for real: the breadboard takes the stage, the simulator stops until you come back */}
         {diagram && mode === 'build' ? (
           <BuildView guide={guide} diagram={diagram} title={title} />
+        ) : diagram && mode === 'schematic' ? (
+          <SchematicView state={sheet} title={title} />
         ) : diagram ? (
           <Workbench
             key={route.kind === 'doc' ? route.id : 'new'}
@@ -556,9 +562,9 @@ export default function App() {
               <Tool icon="plus" label="new build" onClick={openNew} />
             </div>
             <div className="pill flex items-center">
-              <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram || mode === 'build'} active={sim !== 'stop' && mode !== 'build'} />
-              <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop' || mode === 'build'} />
-              <Tool icon="rotate" label="restart the simulation" onClick={runEdited} disabled={!diagram || mode === 'build'} />
+              <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram || stage} active={sim !== 'stop' && !stage} />
+              <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop' || stage} />
+              <Tool icon="rotate" label="restart the simulation" onClick={runEdited} disabled={!diagram || stage} />
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
@@ -568,21 +574,23 @@ export default function App() {
           </div>
           {/* the views of one gadget, the way a pcb editor has pcb, schematic and 3d: the circuit running, or built on a breadboard */}
           {diagram && (
-            <div role="tablist" aria-label="view" className="pointer-events-auto relative mx-3 grid shrink-0 grid-cols-2 rounded-[11px] bg-input p-[3px]">
+            <div role="tablist" aria-label="view" className="pointer-events-auto relative mx-3 grid shrink-0 grid-cols-3 rounded-[11px] bg-input p-[3px]">
               <span
                 aria-hidden="true"
-                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-frame shadow-[0_0_0_1px_rgba(0,0,0,.07),0_1px_2px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
-                style={{ transform: `translateX(${mode === 'build' ? 100 : 0}%)` }}
+                className="absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-[8px] bg-frame shadow-[0_0_0_1px_rgba(0,0,0,.07),0_1px_2px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${mode === 'build' ? 100 : mode === 'schematic' ? 200 : 0}%)` }}
               />
               {(
                 [
                   ['circuit', 'Circuit', 'chip', 'the circuit, running'],
                   ['breadboard', 'Breadboard', 'grid', 'build it on a breadboard'],
+                  ['schematic', 'Schematic', 'resistor', 'the circuit as a schematic'],
                 ] as const
               ).map(([v, label, icon, hint]) => {
-                const on = (mode === 'build') === (v === 'breadboard')
+                const to: Mode = v === 'breadboard' ? 'build' : v === 'schematic' ? 'schematic' : 'design'
+                const on = (stage ? mode : 'design') === to
                 return (
-                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
+                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(to)} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
                     <Icon name={icon} size={13} />
                     {label}
                   </button>
@@ -594,7 +602,7 @@ export default function App() {
             <div className="pill flex items-center">
               <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
             </div>
-            <div className={`relative ${mode === 'build' ? 'hidden' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`relative ${stage ? 'hidden' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <button onClick={() => setZoomMenu((o) => !o)} className="pill flex h-9 items-center gap-3 pl-3.5 pr-2.5 text-[13px] font-medium text-ink">
                 {bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '100%'}
                 <Icon name="chevron-down" size={12} className="text-icon" />
@@ -694,6 +702,7 @@ export default function App() {
         mode={mode}
         onMode={setMode}
         guide={guide}
+        sheet={sheet}
         diagram={diagram}
         selected={selected}
         bench={bench}

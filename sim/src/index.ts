@@ -11,4 +11,5 @@ export { parseScenario, play, run, colorName, STEPS, type Scenario, type Step, t
 export { checkRules, readSketch, type Finding } from './rules'
 export { connect, boardOf, freePins, type Added } from './connect'
 export { FACTS, type Facts } from './facts'
+export { schematic, type Sheet, type Sym, type SPin, type SWire, type SLabel, type SPower, type SGround, type SNet, type NetKind } from './schematic'
 export { proto, bands, holeName, type Proto, type Placed, type Jumper, type Step as BuildStep, type Hole, type End } from './proto'
