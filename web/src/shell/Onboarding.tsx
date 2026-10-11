@@ -82,28 +82,7 @@ function Tab({ label, onBack }: { label: string; onBack?: () => void }) {
 
 /* ---------- the path ---------- */
 
-type NodeData = { kind: 'source' | 'board' | 'part'; label: string; sub?: string; icon: IconName; state: 'work' | 'done' | 'fail' | 'idle'; onPick: () => void }
-
-function SourceNode({ data }: NodeProps<Node<NodeData>>) {
-  // the usb cable feeding the board, lettered round its ring like the public internet glyph
-  return (
-    <button onClick={data.onPick} className="relative block h-[60px] w-[60px] text-icon-2 hover:text-ink">
-      <svg viewBox="0 0 60 60" className="absolute inset-0">
-        <defs>
-          <path id="usb-ring" d="M30 30 m-24 0 a24 24 0 1 1 48 0 a24 24 0 1 1 -48 0" />
-        </defs>
-        <text fontSize="6.8" letterSpacing="1.2" fill="currentColor" fontFamily="Geist Mono, monospace">
-          <textPath href="#usb-ring" startOffset="2%">
-            USB POWER · 5 VOLTS · USB ·
-          </textPath>
-        </text>
-        <circle cx="30" cy="30" r="12" fill="var(--panel)" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M26 27.5h8v5a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2zM28 27.5v-3M32 27.5v-3M30 34.5v3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-      <Handle type="source" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-    </button>
-  )
-}
+type NodeData = { kind: 'board' | 'part'; label: string; sub?: string; icon: IconName; state: 'work' | 'done' | 'fail' | 'idle'; onPick: () => void }
 
 type IdeaData = { label: string; sub?: string; lines?: string[]; open: boolean; badge?: string; onPick: () => void }
 
@@ -111,14 +90,14 @@ type IdeaData = { label: string; sub?: string; lines?: string[]; open: boolean; 
 // says inside it. once there is a board it folds into a node at the top of the path
 function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
   return (
-    <button onClick={data.onPick} className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : ''}`}>
-      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
+    <button onClick={data.onPick} className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : 'w-[264px]'}`}>
+      <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <span className={`block overflow-hidden rounded-[11px] border bg-panel ${selected ? 'border-accent' : 'border-line'}`}>
         <span className={`flex items-center gap-2.5 ${data.open ? 'border-b border-sep px-3.5 py-2.5' : 'px-3 py-2'}`}>
           <Icon name="magic-wand" size={15} className="text-icon" />
           <span className="min-w-0 flex-1">
-            <span className={`block truncate font-medium text-ink ${data.open ? 'text-[14px]' : 'max-w-[220px] text-[13px]'}`}>{data.label}</span>
-            {!data.open && data.sub && <span className="block text-[11px] text-dim">{data.sub}</span>}
+            <span className={`block truncate font-medium text-ink ${data.open ? 'text-[14px]' : 'max-w-[230px] text-[13px]'}`}>{data.label}</span>
+            {!data.open && data.sub && <span className="line-clamp-2 block max-w-[230px] text-[11px] leading-[15px] text-dim">{data.sub}</span>}
           </span>
           {data.badge && (
             <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[11.5px] font-medium text-ink">
@@ -140,7 +119,7 @@ function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
       {data.open && (
         <span className="flex items-center gap-2 px-3.5 py-2 text-[12px] text-dim">
           <Icon name="loader" size={13} className="animate-spin" />
-          Picking a board and parts, it has to pass a test before you get it
+          It has to pass its test before you get it
         </span>
       )}
     </button>
@@ -170,8 +149,8 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
 function PlusNode({ data }: NodeProps<Node<{ open: boolean; side: Side; onClick: () => void }>>) {
   return (
     <button onClick={data.onClick} title={data.side === 'in' ? 'connect an input' : 'connect an output'} className="nodrag flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-on-accent shadow-[0_1px_3px_rgba(0,0,0,.15)] transition-transform hover:scale-105">
-      <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-      <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Icon name={data.open ? 'xmark' : 'plus'} size={data.open ? 11 : 15} />
     </button>
   )
@@ -229,10 +208,10 @@ function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
   const big = data.kind === 'board'
   return (
     <button onClick={data.onPick} className={`rise block rounded-[12px] border p-[3px] transition-colors ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'}`}>
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
+      <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
-      <Handle type="target" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <span className={`flex items-center gap-2.5 rounded-[9px] border bg-panel ${selected ? 'border-accent' : 'border-line'} ${big ? 'px-3.5 py-2.5' : 'px-3 py-2'}`}>
         <Icon name={data.icon} size={big ? 17 : 15} className="text-icon" />
         <span className="text-left">
@@ -245,13 +224,35 @@ function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
   )
 }
 
+export type StepData = { title: string; line: string; icon: IconName; state: 'wait' | 'work' | 'done' | 'fail'; onPick?: () => void }
+
+// one stop on the line, saying in a few words what the agent is doing there. not reached yet it is dashed and faint
+function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
+  const wait = data.state === 'wait'
+  const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent animate-pulse' : 'bg-icon-2/40'
+  return (
+    <button onClick={data.onPick} disabled={wait} className={`block w-[224px] rounded-[12px] border p-[3px] text-left transition-all duration-300 ${wait ? 'border-dashed border-line opacity-55' : selected ? 'border-accent/60 bg-accent/10' : data.state === 'work' ? 'border-accent/40 bg-accent/5' : 'border-line/80 bg-input/60'}`}>
+      <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <span className={`flex items-center gap-2.5 rounded-[9px] px-3 py-2 ${wait ? '' : `border bg-panel ${selected ? 'border-accent' : 'border-line'}`}`}>
+        <Icon name={data.state === 'work' ? 'loader' : data.icon} size={15} className={data.state === 'work' ? 'animate-spin text-accent' : 'text-icon'} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium text-ink">{data.title}</span>
+          <span className={`block truncate text-[11px] ${data.state === 'fail' ? 'text-bad' : 'text-dim'}`}>{data.line}</span>
+        </span>
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
+      </span>
+    </button>
+  )
+}
+
 type Chip = { text: string; icon?: IconName }
 
 // an edge with the wiring on it: the pin it lands on, and the resistor it goes through, as little chips
 function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, style }: EdgeProps<Edge<{ chips: Chip[]; hot?: boolean; at?: 'source' | 'target' }>>) {
   const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 10 })
   // the chips sit on the part's own leg of the edge, so branches off one pin do not pile them up
-  const [lx, ly] = data?.at === 'source' ? [sourceX + 70, sourceY] : [targetX - 70, targetY]
+  const [lx, ly] = data?.at === 'source' ? [sourceX, sourceY + 30] : [targetX, targetY - 30]
   const chips = data?.chips ?? []
   return (
     <>
@@ -272,99 +273,114 @@ function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   )
 }
 
-const nodeTypes = { source: SourceNode, card: CardNode, idea: IdeaNode, plus: PlusNode, menu: MenuNode }
+const nodeTypes = { step: StepNode, card: CardNode, idea: IdeaNode, plus: PlusNode, menu: MenuNode }
 const edgeTypes = { chip: ChipEdge }
 
-// the circuit as a signal path: inputs come in from the left, the board in the middle, outputs go out to the right
 type Idea = Omit<IdeaData, 'onPick' | 'open'>
+export type Stop = StepData & { id: string }
 
-function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand, lines?: Record<string, string>) {
+const line = (hot: boolean, faint?: boolean) => ({ stroke: hot ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, ...(faint ? { strokeDasharray: '4 4', opacity: 0.6 } : {}) })
+const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent)' : 'var(--icon-2)' })
+
+// one line read left to right: what you asked, the board with its parts hanging off it, then the firmware, the
+// test and the result. inputs sit above the board and feed down into it, outputs hang below it
+function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand, lines?: Record<string, string>, stops: Stop[] = []) {
   const board = d?.parts.find((p) => BOARDS.includes(p.type))
-  const ideaNode = (open: boolean): Node => ({ id: 'idea', type: 'idea', position: { x: open ? -110 : 0, y: open ? -60 : -170 }, data: { ...idea!, open, badge: open ? idea!.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
-  // nothing to draw yet but the request: the card you typed into, still open
-  if (!d || !board) return { nodes: idea ? [ideaNode(true)] : [], edges: [] as Edge[] }
-  const resistors = new Set(d.parts.filter((p) => p.type === 'wokwi-resistor').map((p) => p.id))
-  const peers = (ref: string) => d.connections.filter(([a, b]) => a === ref || b === ref).map(([a, b]) => (a === ref ? b : a))
-  // what a part's signal pins reach on the board, straight or through a resistor
-  const reach = (id: string) => {
-    const pins: string[] = []
-    let through: string | undefined
-    for (const [a, b] of d.connections) {
-      const mine = a.startsWith(`${id}:`) ? a : b.startsWith(`${id}:`) ? b : null
-      if (!mine) continue
-      const other = mine === a ? b : a
-      const [oid, opin] = other.split(':')
-      if (oid === board.id) pins.push(opin)
-      else if (resistors.has(oid)) {
-        through = oid
-        for (const r of peers(`${oid}:${opin === '1' ? '2' : '1'}`)) if (r.startsWith(`${board.id}:`)) pins.push(r.split(':')[1])
+  const nodes: Node[] = []
+  const edges: Edge[] = []
+  const open = !!idea && !board
+  if (idea) nodes.push({ id: 'idea', type: 'idea', position: { x: 0, y: open ? -40 : -6 }, data: { ...idea, open, badge: open ? idea.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
+  const x0 = !idea ? 0 : open ? 500 : 340
+  const GAP = 290
+  let prev = idea ? 'idea' : null
+  const link = (to: string, s: Stop['state']) => {
+    if (prev) edges.push({ id: `${prev}-${to}`, source: prev, target: to, type: 'smoothstep', markerEnd: arrow(s === 'work'), style: line(s === 'work', s === 'wait'), animated: s === 'work' })
+    prev = to
+  }
+  // no board yet: a stop that says the agent is picking parts
+  if (!board) {
+    const pick: Stop = { id: 'idea-parts', title: 'Board and parts', line: 'picking parts...', icon: 'chip', state: 'work', onPick: () => onPick('idea') }
+    nodes.push({ id: pick.id, type: 'step', position: { x: x0, y: 0 }, data: pick, draggable: false })
+    link(pick.id, 'work')
+  }
+  if (board) {
+    const resistors = new Set(d!.parts.filter((p) => p.type === 'wokwi-resistor').map((p) => p.id))
+    const peers = (ref: string) => d!.connections.filter(([a, b]) => a === ref || b === ref).map(([a, b]) => (a === ref ? b : a))
+    // what a part's signal pins reach on the board, straight or through a resistor
+    const reach = (id: string) => {
+      const pins: string[] = []
+      let through: string | undefined
+      for (const [a, b] of d!.connections) {
+        const mine = a.startsWith(`${id}:`) ? a : b.startsWith(`${id}:`) ? b : null
+        if (!mine) continue
+        const other = mine === a ? b : a
+        const [oid, opin] = other.split(':')
+        if (oid === board.id) pins.push(opin)
+        else if (resistors.has(oid)) {
+          through = oid
+          for (const r of peers(`${oid}:${opin === '1' ? '2' : '1'}`)) if (r.startsWith(`${board.id}:`)) pins.push(r.split(':')[1])
+        }
+      }
+      const signal = [...new Set(pins.map((p) => p.replace(/\.\d$/, '')))].filter((p) => !RAILS.test(p))
+      return { signal, through }
+    }
+    const used = new Set<string>()
+    const items = d!.parts
+      .filter((p) => p !== board && !p.hide && !resistors.has(p.id))
+      .map((p) => {
+        const r = reach(p.id)
+        if (r.through) used.add(r.through)
+        return { p, ...r }
+      })
+    // a resistor that is not in front of anything shows up as a part of its own
+    for (const id of resistors) if (!used.has(id)) items.push({ p: d!.parts.find((q) => q.id === id)!, signal: reach(id).signal, through: undefined })
+    const ins = items.filter((i) => INPUTS.includes(i.p.type))
+    const outs = items.filter((i) => !INPUTS.includes(i.p.type))
+    const card = (id: string, kind: NodeData['kind'], x: number, y: number, label: string, icon: IconName, sub?: string): Node => ({
+      id,
+      type: 'card',
+      position: { x, y },
+      data: { kind, label, sub, icon, state: kind === 'board' ? state : 'done', onPick: () => onPick(id) },
+      selected: picked === id,
+      draggable: false,
+    })
+    nodes.push(card(board.id, 'board', x0, -2, cap(KIND[board.type] ?? board.type), 'chip', `${items.length} ${items.length === 1 ? 'part' : 'parts'}`))
+    link(board.id, state === 'work' && !stops.some((s) => s.state !== 'wait') ? 'work' : 'done')
+    // a row of parts centred on the board, room left at the end for the + when wiring by hand
+    const row = (n: number, i: number) => x0 + 100 + (i - (n - 1) / 2 + (hand ? -0.5 : 0)) * 220 - 95
+    const chipsOf = (i: (typeof items)[number]): Chip[] => [
+      ...(i.signal.length ? [{ text: i.signal.map((s) => (/^\d+$/.test(s) ? `D${s}` : s)).join(' · ') }] : []),
+      ...(i.through ? [{ text: ohms(d!.parts.find((q) => q.id === i.through)?.attrs?.value), icon: 'resistor' as IconName }] : []),
+    ]
+    ins.forEach((i, k) => {
+      nodes.push(card(i.p.id, 'part', row(ins.length, k), -170, i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type]))
+      edges.push({ id: `in-${i.p.id}`, source: i.p.id, sourceHandle: 'bottom', target: board.id, targetHandle: 'top', type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'source' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })
+    })
+    outs.forEach((i, k) => {
+      nodes.push(card(i.p.id, 'part', row(outs.length, k), 170, i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type]))
+      edges.push({ id: `out-${i.p.id}`, source: board.id, sourceHandle: 'bottom', target: i.p.id, targetHandle: 'top', type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'target' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })
+    })
+    // building by hand: a + at the end of each row, and the menu of whichever is open
+    if (hand) {
+      for (const side of ['in', 'out'] as Side[]) {
+        const list = side === 'in' ? ins : outs
+        const at = { x: row(list.length + 1, list.length) + 80, y: side === 'in' ? -150 : 182 }
+        const isOpen = hand.menu?.side === side
+        nodes.push({ id: `plus-${side}`, type: 'plus', position: at, data: { open: isOpen, side, onClick: () => hand.onPlus(side) }, draggable: false })
+        const lead = { stroke: isOpen ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' }
+        edges.push(side === 'in' ? { id: 'lead-in', source: 'plus-in', sourceHandle: 'bottom', target: board.id, targetHandle: 'top', type: 'smoothstep', style: lead } : { id: 'lead-out', source: board.id, sourceHandle: 'bottom', target: 'plus-out', targetHandle: 'top', type: 'smoothstep', style: lead })
+        if (isOpen) nodes.push({ id: 'menu', type: 'menu', position: { x: at.x + 44, y: side === 'in' ? at.y - 150 : at.y - 30 }, data: { hand }, draggable: false, zIndex: 10 })
       }
     }
-    const signal = [...new Set(pins.map((p) => p.replace(/\.\d$/, '')))].filter((p) => !RAILS.test(p))
-    return { signal, through }
   }
-  const used = new Set<string>()
-  const parts = d.parts.filter((p) => p !== board && !p.hide && !resistors.has(p.id))
-  const items = parts.map((p) => {
-    const r = reach(p.id)
-    if (r.through) used.add(r.through)
-    return { p, ...r }
+  stops.forEach((st, i) => {
+    nodes.push({ id: st.id, type: 'step', position: { x: x0 + GAP * (i + 1), y: 0 }, data: { ...st, onPick: () => onPick(st.id) }, selected: picked === st.id, draggable: false })
+    link(st.id, st.state)
   })
-  // a resistor that is not in front of anything shows up as a part of its own
-  for (const id of resistors) if (!used.has(id)) items.push({ p: d.parts.find((q) => q.id === id)!, signal: reach(id).signal, through: undefined })
-  const ins = items.filter((i) => INPUTS.includes(i.p.type))
-  const outs = items.filter((i) => !INPUTS.includes(i.p.type))
-  const node = (id: string, kind: NodeData['kind'], x: number, y: number, label: string, icon: IconName, sub?: string): Node => ({
-    id,
-    type: kind === 'source' ? 'source' : 'card',
-    position: { x, y },
-    data: { kind, label, sub, icon, state: kind === 'board' ? state : 'done', onPick: () => onPick(id) },
-    selected: picked === id,
-    draggable: false,
-  })
-  const column = (n: number, i: number) => (i - (n - 1) / 2) * 78
-  const nodes: Node[] = [
-    ...(idea ? [ideaNode(false)] : []),
-    node('usb', 'source', 50, 132, 'USB', 'bolt'),
-    node(board.id, 'board', 0, 0, cap(KIND[board.type] ?? board.type), 'chip', `${items.length} ${items.length === 1 ? 'part' : 'parts'}`),
-    ...ins.map((i, k) => node(i.p.id, 'part', -340, column(ins.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type])),
-    ...outs.map((i, k) => node(i.p.id, 'part', 360, column(outs.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', lines?.[i.p.id] ?? KIND[i.p.type])),
-  ]
-  const chipsOf = (i: (typeof items)[number]): Chip[] => [
-    ...(i.signal.length ? [{ text: i.signal.map((s) => (/^\d+$/.test(s) ? `D${s}` : s)).join(' · ') }] : []),
-    ...(i.through ? [{ text: ohms(d.parts.find((q) => q.id === i.through)?.attrs?.value), icon: 'resistor' as IconName }] : []),
-  ]
-  const line = (hot: boolean) => ({ stroke: hot ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5 })
-  const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent)' : 'var(--icon-2)' })
-  const edges: Edge[] = [
-    ...(idea ? [{ id: 'idea', source: 'idea', target: board.id, targetHandle: 'top', type: 'smoothstep', markerEnd: arrow(false), style: line(false), animated: state === 'work' }] : []),
-    { id: 'usb', source: 'usb', target: board.id, targetHandle: 'bottom', type: 'smoothstep', style: { ...line(false), strokeDasharray: '4 3' } },
-    ...ins.map((i) => ({ id: `in-${i.p.id}`, source: i.p.id, target: board.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'source' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
-    ...outs.map((i) => ({ id: `out-${i.p.id}`, source: board.id, target: i.p.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'target' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
-  ]
-  // building by hand: a + at the end of each side, and the menu of whichever is open
-  if (hand) {
-    const plusAt = (side: Side) => {
-      const list = side === 'in' ? ins : outs
-      const x = side === 'in' ? -300 : 330
-      return list.length ? { x: x + 60, y: column(list.length, list.length - 1) + 64 } : { x: side === 'in' ? -150 : 280, y: 14 }
-    }
-    for (const side of ['in', 'out'] as Side[]) {
-      const at = plusAt(side)
-      const open = hand.menu?.side === side
-      nodes.push({ id: `plus-${side}`, type: 'plus', position: at, data: { open, side, onClick: () => hand.onPlus(side) }, draggable: false })
-      edges.push(
-        side === 'in'
-          ? { id: `lead-${side}`, source: `plus-${side}`, target: board.id, type: 'smoothstep', style: { stroke: open ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' } }
-          : { id: `lead-${side}`, source: board.id, target: `plus-${side}`, type: 'smoothstep', style: { stroke: open ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' } },
-      )
-      if (open) nodes.push({ id: 'menu', type: 'menu', position: side === 'out' ? { x: at.x + 44, y: at.y - 46 } : { x: at.x - 306, y: at.y - 46 }, data: { hand }, draggable: false, zIndex: 10 })
-    }
-  }
   return { nodes, edges }
 }
 
-function Path({ diagram, idea, picked, onPick, state, hand, lines }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand; lines?: Record<string, string> }) {
+function Path({ diagram, idea, picked, onPick, state, hand, lines, stops }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand; lines?: Record<string, string>; stops?: Stop[] }) {
   const flow = useReactFlow()
   // the part that came in last glows for a moment, the way a new connection lights up
   const seen = useRef(new Set<string>())
@@ -380,7 +396,8 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines }: { diagram: 
     }
   }, [diagram])
   const liveKey = lines ? Object.entries(lines).map(([k, v]) => k + v).join('|') : ''
-  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand, lines), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand, liveKey])
+  const stopKey = (stops ?? []).map((s) => s.id + s.state + s.line).join('|')
+  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand, lines, stops), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand, liveKey, stopKey])
   const hasBoard = !!diagram?.parts.some((p) => BOARDS.includes(p.type))
   const edges = laid.edges
   // react flow measures nodes through onNodesChange, so they live in state and keep their sizes across relayouts
@@ -403,7 +420,7 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines }: { diagram: 
       const w = r.width - pad.left - pad.right
       const h = r.height - pad.top - pad.bottom
       // the open request card stays at reading size, a path gets fitted
-      const zoom = Math.min(hasBoard ? 1.25 : 1, w / b.width, h / b.height)
+      const zoom = Math.min(1.1, w / b.width, h / b.height)
       flow.setViewport({ x: pad.left + (w - b.width * zoom) / 2 - b.x * zoom, y: pad.top + (h - b.height * zoom) / 2 - b.y * zoom, zoom }, { duration: document.visibilityState === 'visible' ? 500 : 0 })
     }, 40)
     return () => clearTimeout(t)
@@ -558,6 +575,7 @@ function LivePart({ id, type, live }: { id: string; type: string; live: Live }) 
 
 function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   const { diagram, source, test, runs, compiles, verdict, feed, request } = props
+  const tools = feed.filter((f): f is Extract<FeedItem, { kind: 'tool' }> => f.kind === 'tool')
   if (id === 'guide') return diagram ? <BuildGuide diagram={diagram} /> : null
   if (id === 'idea')
     return (
@@ -573,15 +591,58 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
               </p>
             ))}
         </div>
+        {tools.length > 0 && (
+          <>
+            <Heading right={`${tools.length} steps`}>What it did</Heading>
+            <div className="space-y-px">
+              {tools.map((t, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-[6px] px-1 py-1 text-[11.5px] leading-4 hover:bg-hover">
+                  <Status ok={t.ok} size={14} />
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono text-ink">{t.name}</span>
+                    <span className="block break-words text-dim">{t.note}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </>
     )
-  if (id === 'usb')
+  if (id === 'firmware') {
+    const last = compiles[compiles.length - 1]
+    const num = (s?: string) => s?.split(' ')[0]
     return (
       <>
-        <Cards items={[['Supply', '5 V'], ['From', 'USB'], ['Limit', '500 mA'], ['Ground', 'shared']]} />
-        <p className="mt-4 text-[12px] leading-[18px] text-dim">The board runs off the usb cable. Parts that need 5 V take it from the board, and every part shares its ground.</p>
+        <Cards items={[['Lines', source ? String(source.split('\n').length) : '-'], ['Compiles', String(compiles.length)], ['Flash', live.build?.flash ? `${(live.build.flash / 1024).toFixed(1)} kb` : num(last?.flash) ? `${num(last?.flash)} b` : '-'], ['Ram', num(last?.ram) ? `${num(last?.ram)} b` : '-']]} />
+        <Heading right={live.state === 'running' ? 'running now' : undefined}>sketch.ino</Heading>
+        <pre className="max-h-[60vh] overflow-auto rounded-[9px] bg-input px-3 py-2.5 font-mono text-[11px] leading-[18px] text-ink">{source || 'Not written yet.'}</pre>
       </>
     )
+  }
+  if (id === 'test') {
+    const run = runs[runs.length - 1]
+    return (
+      <>
+        <Cards items={[['Runs', String(runs.length)], ['Result', verdict ? (verdict.ok ? 'proven' : 'not proven') : run ? (run.ok ? 'passing' : 'fixing') : '-']]} />
+        {run && (
+          <>
+            <Heading right={`run ${runs.length}`}>Last run</Heading>
+            <div className="space-y-px">
+              {run.steps.map((st, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-[6px] px-1 py-1 text-[11.5px] leading-4 hover:bg-hover">
+                  <Status ok={!st.startsWith('FAIL')} size={14} />
+                  <span className={`min-w-0 flex-1 break-words font-mono ${st.startsWith('FAIL') ? 'text-bad' : 'text-ink'}`}>{st.replace(/^(pass|FAIL) \d+ /, '')}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <Heading>test.yaml</Heading>
+        <pre className="max-h-[50vh] overflow-auto rounded-[9px] bg-input px-3 py-2.5 font-mono text-[11px] leading-[17px] text-ink">{test || 'Not written yet.'}</pre>
+      </>
+    )
+  }
   const part = diagram?.parts.find((p) => p.id === id)
   if (!part || !diagram) return null
   const wires = diagram.connections.filter(([a, b]) => a.startsWith(`${part.id}:`) || b.startsWith(`${part.id}:`))
@@ -619,27 +680,6 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
         {(live.state === 'off' || runs.length > 0) && <Cards items={[['Flash', num(last?.flash) ? `${num(last?.flash)} b` : '-'], ['Ram', num(last?.ram) ? `${num(last?.ram)} b` : '-'], ['Test runs', String(runs.length)], ['Result', verdict ? (verdict.ok ? 'proven' : 'not proven') : run ? (run.ok ? 'passing' : 'fixing') : '-']]} />}
         <Heading>What you asked</Heading>
         <p className="rounded-[9px] bg-input px-3 py-2.5 text-[12.5px] leading-[19px] text-ink">{request}</p>
-        {run && (
-          <>
-            <Heading right={`run ${runs.length}`}>Test</Heading>
-            <div className="space-y-px">
-              {run.steps.map((st, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-[6px] px-1 py-1 text-[11.5px] leading-4 hover:bg-hover">
-                  <Status ok={!st.startsWith('FAIL')} size={14} />
-                  <span className={`min-w-0 flex-1 break-words font-mono ${st.startsWith('FAIL') ? 'text-bad' : 'text-ink'}`}>{st.replace(/^(pass|FAIL) \d+ /, '')}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        <Heading right={source ? `${source.split('\n').length} lines` : undefined}>Firmware</Heading>
-        <pre className="max-h-[38vh] overflow-auto rounded-[9px] bg-input px-3 py-2.5 font-mono text-[11px] leading-[18px] text-ink">{source || 'Not written yet.'}</pre>
-        {test && (
-          <>
-            <Heading>test.yaml</Heading>
-            <pre className="max-h-[30vh] overflow-auto rounded-[9px] bg-input px-3 py-2.5 font-mono text-[11px] leading-[17px] text-ink">{test}</pre>
-          </>
-        )}
         <Heading>The agent</Heading>
         <div className="space-y-1.5">
           {feed
@@ -902,8 +942,43 @@ export function Onboarding(props: Props) {
   const ideaLines = feed.filter((f) => f.kind === 'say').slice(-3).map((f) => (f as { text: string }).text)
   const idea = shown
     ? { label: shown.title, sub: shown.test ? 'example, with a passing test' : 'example' }
-    : { label: cap(request.split(/[:.]/)[0]), sub: verdict ? (verdict.ok ? 'proven' : 'not proven') : 'the agent is building it', lines: ideaLines, badge: 'Building' }
+    : { label: cap(request.split(/[:.]/)[0]), sub: ideaLines[ideaLines.length - 1] ?? (verdict ? (verdict.ok ? 'proven' : 'not proven') : 'the agent is building it'), lines: ideaLines, badge: 'Building' }
   const pathDiagram = shown ? (shown.diagram ?? null) : diagram
+  // the stops after the board, each saying what is happening there right now
+  const stops: Stop[] = (() => {
+    const running = live.state === 'running' ? `running, ${(live.simMs / 1000).toFixed(0)} s in` : undefined
+    if (shown) {
+      const n = shown.test?.match(/^\s*- /gm)?.length ?? 0
+      return [
+        { id: 'firmware', title: 'Firmware', icon: 'code', state: shown.sketch ? 'done' : 'wait', line: running ?? (shown.sketch ? `${shown.sketch.split('\n').length} lines` : 'none yet') },
+        { id: 'test', title: 'Test', icon: 'flask', state: shown.test ? 'done' : 'wait', line: shown.test ? `${n} steps, all pass` : 'no test for this one' },
+        { id: 'guide', title: 'Build it for real', icon: 'box', state: 'done', line: 'parts list and wiring' },
+      ]
+    }
+    const source = props.source
+    const last = compiles[compiles.length - 1]
+    const run = runs[runs.length - 1]
+    const writing = busy && (lastTool === 'write_sketch' || (!!diagram && !source))
+    const firmware: Stop = !diagram
+      ? { id: 'firmware', title: 'Firmware', icon: 'code', state: 'wait', line: 'after the wiring' }
+      : !source
+        ? { id: 'firmware', title: 'Firmware', icon: 'code', state: busy ? 'work' : 'wait', line: 'writing the code...' }
+        : busy && (writing || lastTool === 'compile' || (last && !last.ok))
+          ? { id: 'firmware', title: 'Firmware', icon: 'code', state: 'work', line: lastTool === 'compile' ? 'compiling...' : last && !last.ok ? 'did not compile, fixing' : `writing, ${source.split('\n').length} lines` }
+          : { id: 'firmware', title: 'Firmware', icon: 'code', state: last && !last.ok ? 'fail' : 'done', line: running ?? `${source.split('\n').length} lines${last?.flash ? `, ${last.flash.split(' ')[0]} b` : ''}` }
+    const failed = run ? run.steps.findIndex((st) => st.startsWith('FAIL')) + 1 : 0
+    const test: Stop = verdict
+      ? { id: 'test', title: 'Test', icon: 'flask', state: run?.ok ? 'done' : 'fail', line: run ? (run.ok ? `${run.steps.length} of ${run.steps.length} pass` : `step ${failed} failed`) : 'never ran' }
+      : run
+        ? { id: 'test', title: 'Test', icon: 'flask', state: 'work', line: run.ok ? `run ${runs.length}, all pass` : lastTool === 'run_test' ? `run ${runs.length}, step ${failed} failed` : `fixing step ${failed}...` }
+        : props.test || lastTool === 'write_test'
+          ? { id: 'test', title: 'Test', icon: 'flask', state: busy ? 'work' : 'wait', line: lastTool === 'write_test' ? 'writing the test...' : 'waiting to run' }
+          : { id: 'test', title: 'Test', icon: 'flask', state: 'wait', line: 'after the firmware' }
+    const result: Stop = verdict
+      ? { id: 'guide', title: verdict.ok ? 'Proven' : 'Not proven', icon: verdict.ok ? 'circle-check' : 'circle-xmark', state: verdict.ok ? 'done' : 'fail', line: verdict.ok ? 'what you need to build it' : 'open it in the editor to fix' }
+      : { id: 'guide', title: 'Proven', icon: 'circle-check', state: 'wait', line: 'once the test passes' }
+    return [firmware, test, result]
+  })()
   const pathState: NodeData['state'] = shown ? (shown.test ? 'done' : 'idle') : boardState
   return (
     <div className="relative flex h-full overflow-hidden bg-canvas">
@@ -919,7 +994,7 @@ export function Onboarding(props: Props) {
       )}
       <div className="min-w-0 flex-1">
         <ReactFlowProvider>
-          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} />
+          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={(id) => setPicked(id === 'guide' && !shown && !verdict?.ok ? 'idea' : id)} state={pathState} lines={liveLines} stops={stops} />
         </ReactFlowProvider>
       </div>
       <aside className={`absolute bottom-0 right-0 top-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel transition-transform duration-300 ease-out ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
@@ -927,8 +1002,8 @@ export function Onboarding(props: Props) {
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">
               <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-medium text-ink">
-                <Icon name={picked === 'guide' ? 'box' : picked === 'usb' ? 'bolt' : picked === 'idea' ? 'magic-wand' : (PART_ICON[(shown?.diagram ?? diagram)?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
-                <span className="truncate">{picked === 'guide' ? 'What you need to build it' : picked === 'usb' ? 'Power' : picked === 'idea' ? 'What you asked' : picked}</span>
+                <Icon name={picked === 'guide' ? 'box' : picked === 'firmware' ? 'code' : picked === 'test' ? 'flask' : picked === 'idea' ? 'magic-wand' : (PART_ICON[(shown?.diagram ?? diagram)?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
+                <span className="truncate">{picked === 'guide' ? 'What you need to build it' : picked === 'firmware' ? 'Firmware' : picked === 'test' ? 'Test' : picked === 'idea' ? 'What you asked' : picked}</span>
               </span>
               <button onClick={() => setPicked(null)} title="close" className="flex h-7 w-7 items-center justify-center rounded-full text-icon-2 hover:bg-hover hover:text-ink">
                 <Icon name="xmark" size={12} />
