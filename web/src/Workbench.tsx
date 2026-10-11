@@ -145,7 +145,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
         setFrame({ x: minX, y: minY, w: maxX - minX, h: maxY - minY })
         const area = box.current!.getBoundingClientRect()
         const top = 92
-        const bottom = 110
+        const bottom = 80
         const scale = Math.min(1.2, (area.width - 80) / (maxX - minX), (area.height - top - bottom) / (maxY - minY))
         const x = (area.width - (maxX - minX) * scale) / 2 - minX * scale
         const y = top + (area.height - top - bottom - (maxY - minY) * scale) / 2 - minY * scale
@@ -374,12 +374,26 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
         })}
       </div>
 
-      <div className={`pill absolute bottom-4 left-4 flex h-8 items-center gap-4 px-3.5 font-mono text-[11px] text-dim ${build ? '' : 'hidden'}`}>
-        {build && <span>sim {(simMs / 1000).toFixed(2)}s</span>}
+      {/* the minimap, a little card in the corner with every part as a block */}
+      {frame.w > 0 && (
+        <div className="pill absolute bottom-3 left-3 overflow-hidden p-1.5" style={{ borderRadius: 12 }}>
+          <svg width={112} height={112 * Math.min(0.7, frame.h / frame.w)} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`} preserveAspectRatio="xMidYMid meet" className="block">
+            <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="var(--frame)" />
+            {Object.entries(rects).map(([id, r]) => (
+              <rect key={id} x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill={id === selected ? 'var(--accent)' : 'var(--icon-2)'} opacity={id === selected ? 0.9 : 0.35} />
+            ))}
+          </svg>
+        </div>
+      )}
+
+      {/* a canvas notification: how far the sim got, what the build cost */}
+      <div className={`pill absolute bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center gap-4 whitespace-nowrap px-4 font-mono text-[11px] text-dim ${build ? '' : 'hidden'}`}>
+        {build && !build.ok ? <span className="text-bad">{status}</span> : <span>sim {(simMs / 1000).toFixed(2)}s</span>}
+        {build?.ok && <span>flash {build.flash} b</span>}
         {ram && build && (
           <span className="flex items-center gap-2" title="globals, heap and stack in the uno's 2048 bytes">
             ram
-            <span className="relative h-1.5 w-32 overflow-hidden rounded-full bg-input">
+            <span className="relative h-1.5 w-28 overflow-hidden rounded-full bg-input">
               <span className="absolute inset-y-0 left-0 bg-[#64748b]" style={{ width: `${((build.ram ?? 0) / 2048) * 100}%` }} />
               <span className="absolute inset-y-0 bg-[#a78bfa]" style={{ left: `${((build.ram ?? 0) / 2048) * 100}%`, width: `${(ram.heapBytes / 2048) * 100}%` }} />
               <span className="absolute inset-y-0 right-0 bg-[#f59e0b]" style={{ width: `${(Math.max(0, 2048 - (build.ram ?? 0) - ram.heapBytes - Math.max(0, ram.leastFree)) / 2048) * 100}%` }} />

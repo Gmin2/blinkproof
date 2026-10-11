@@ -1,33 +1,46 @@
-import { Icon } from './Icon'
-import type { IconName } from './hand'
+import { Icon, type IconName } from './Icon'
 
-// pass, fail or warn as a hand drawn icon, ink in the status colour
 export function Status({ ok, warn, size = 16 }: { ok: boolean; warn?: boolean; size?: number }) {
-  return <Icon name={warn ? 'warn' : ok ? 'pass' : 'fail'} size={size} className={warn ? 'text-warn' : ok ? 'text-ok' : 'text-bad'} />
+  return <Icon name={warn ? 'triangle-warning' : ok ? 'circle-check' : 'circle-xmark'} size={size} className={warn ? 'text-warn' : ok ? 'text-ok' : 'text-bad'} />
 }
 
-// what each agent tool and each test step looks like
 export const TOOL_ICON: Record<string, IconName> = {
-  list_parts: 'examples',
-  write_circuit: 'board',
+  list_parts: 'box',
+  write_circuit: 'frame',
   write_sketch: 'code',
-  write_test: 'test',
-  compile: 'build',
+  write_test: 'flask',
+  compile: 'bolt',
   run_test: 'play',
-  finish: 'logo',
+  finish: 'paper-plane-2',
 }
 
 export const STEP_ICON: Record<string, IconName> = {
-  delay: 'clock',
-  'wait-serial': 'serial',
-  'expect-serial': 'serial',
-  'write-serial': 'serial',
-  'set-control': 'knob',
+  delay: 'stopwatch',
+  'wait-serial': 'terminal',
+  'expect-serial': 'terminal',
+  'write-serial': 'terminal',
+  'set-control': 'sliders',
   'expect-pin': 'wire',
-  'wait-text': 'screen',
-  'expect-text': 'screen',
-  'expect-pixels': 'ring',
+  'wait-text': 'computer',
+  'expect-text': 'computer',
+  'expect-pixels': 'loader',
   'expect-servo': 'servo',
-  'expect-tone': 'buzzer',
-  'expect-led': 'led',
+  'expect-tone': 'volume-up',
+  'expect-led': 'lightbulb-3',
+}
+
+export const PART_ICON: Record<string, IconName> = {
+  'wokwi-arduino-uno': 'frame',
+  'wokwi-arduino-nano': 'frame',
+  'wokwi-pi-pico': 'frame',
+  'wokwi-led': 'lightbulb-3',
+  'wokwi-resistor': 'resistor',
+  'wokwi-pushbutton': 'button',
+  'wokwi-ssd1306': 'computer',
+  'wokwi-potentiometer': 'gauge-3',
+  'wokwi-neopixel': 'sparkle-3',
+  'wokwi-led-ring': 'loader',
+  'wokwi-servo': 'servo',
+  'wokwi-hc-sr04': 'signal-2',
+  'wokwi-buzzer': 'volume-up',
 }
