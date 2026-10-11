@@ -1,6 +1,6 @@
 import '@wokwi/elements'
 import './elements/pico'
-import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Finding, type Report, type StepResult } from '@blinkproof/sim'
+import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Finding, type PartState, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
 import { Speaker } from './lib/speaker'
@@ -16,6 +16,10 @@ export type BenchState = {
   steps: StepResult[]
   report: Report | null
   findings: Finding[]
+  // live, read by the inspector
+  parts: Record<string, PartState>
+  simMs: number
+  zoom: number
 }
 
 type Props = {
@@ -29,6 +33,10 @@ type Props = {
   // drop new parts in and draw new wires, for a build happening live
   reveal?: boolean
   onState?: (s: BenchState) => void
+  // the frame's name above the circuit
+  title?: string
+  selected?: string | null
+  onSelect?: (id: string | null) => void
 }
 
 // diagram types we draw ourselves
@@ -36,11 +44,16 @@ const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram, source, test, testRun = 0, running = true, sound = false, reveal = false, onState }: Props) {
+export function Workbench({ diagram, source, test, testRun = 0, running = true, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const els = useRef<Record<string, Wokwi>>({})
   const [paths, setPaths] = useState<{ key: string; d: string; color: string }[]>([])
   const [fit, setFit] = useState({ x: 40, y: 40, scale: 1 })
+  // the frame around everything, in diagram units
+  const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 })
+  const [rects, setRects] = useState<Record<string, Rect>>({})
+  const [hover, setHover] = useState<string | null>(null)
+  const [live, setLive] = useState<Record<string, PartState>>({})
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
   const [ram, setRam] = useState<{ leastFree: number; heapBytes: number; crashed: boolean } | null>(null)
@@ -88,13 +101,14 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
 
   // wires come from where each part sits plus its pin offsets, so they stay put while parts animate in
   useLayoutEffect(() => {
-    const id = requestAnimationFrame(() => {
+    const measure = () => {
 
       const rects: Record<string, Rect> = {}
       for (const p of diagram.parts) {
         const el = els.current[p.id]
         if (el) rects[p.id] = { x: p.left ?? 0, y: p.top ?? 0, w: el.offsetWidth, h: el.offsetHeight }
       }
+      setRects(rects)
       const out: { key: string; d: string; color: string }[] = []
       const auto: { key: string; color: string; a: Point; b: Point; ra?: Rect; rb?: Rect }[] = []
       for (const c of diagram.connections) {
@@ -125,13 +139,28 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
       const xs = [...Object.values(rects).flatMap((r) => [r.x, r.x + r.w]), ...points.map((p) => p.x)]
       const ys = [...Object.values(rects).flatMap((r) => [r.y, r.y + r.h + 40]), ...points.map((p) => p.y)]
       if (xs.length) {
-        const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+        // the frame hugs the circuit with some room, then the view fits the frame under the toolbar pills
+        const m = 36
+        const [minX, maxX, minY, maxY] = [Math.min(...xs) - m, Math.max(...xs) + m, Math.min(...ys) - m, Math.max(...ys) + m]
+        setFrame({ x: minX, y: minY, w: maxX - minX, h: maxY - minY })
         const area = box.current!.getBoundingClientRect()
-        const scale = Math.min(1.25, (area.width - 80) / Math.max(1, maxX - minX), (area.height - 100) / Math.max(1, maxY - minY))
-        setFit({ x: 40 - minX * scale, y: 40 - minY * scale, scale })
+        const top = 92
+        const bottom = 110
+        const scale = Math.min(1.2, (area.width - 80) / (maxX - minX), (area.height - top - bottom) / (maxY - minY))
+        const x = (area.width - (maxX - minX) * scale) / 2 - minX * scale
+        const y = top + (area.height - top - bottom - (maxY - minY) * scale) / 2 - minY * scale
+        setFit({ x, y, scale })
       }
-    })
-    return () => cancelAnimationFrame(id)
+    }
+    // parts size themselves after they upgrade, and some only once they render: measure now, soon, and on resize
+    const id = requestAnimationFrame(measure)
+    const later = setTimeout(measure, 350)
+    addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(id)
+      clearTimeout(later)
+      removeEventListener('resize', measure)
+    }
   }, [diagram])
 
   useEffect(() => {
@@ -231,7 +260,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
         }
       }
       setSerial(bench.board.serial)
-      setSimMs(bench.board.ms)
+      setSimMs(Math.floor(bench.board.ms / 100) * 100)
+      setLive(bench.parts)
       const mem = bench.board.memory()
       setRam(mem ? { ...mem, crashed: bench.board.collidedAtMs !== undefined } : null)
       raf = requestAnimationFrame(tick)
@@ -258,15 +288,26 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
             : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)
 
   useEffect(() => {
-    onState?.({ status, build, serial, steps, report, findings })
-  }, [status, build, serial, steps, report, findings])
+    onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale })
+  }, [status, build, serial, steps, report, findings, simMs, fit.scale])
 
   const partDelay = (id: string) => fresh.parts.indexOf(id) * 0.15
   const wireDelay = (key: string) => fresh.parts.length * 0.15 + 0.3 + fresh.wires.indexOf(key) * 0.08
 
   return (
-    <div ref={box} className="dots relative h-full w-full overflow-hidden">
+    <div ref={box} className="dots relative h-full w-full overflow-hidden" onPointerDown={(e) => e.target === e.currentTarget && onSelect?.(null)}>
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`, transition: 'transform .5s ease' }}>
+        {frame.w > 0 && (
+          <>
+            <div
+              className="absolute select-none whitespace-nowrap text-[var(--frame-label)]"
+              style={{ left: frame.x, top: frame.y - 20 / fit.scale, fontSize: 11 / fit.scale, lineHeight: 1 }}
+            >
+              {title ?? 'circuit'}
+            </div>
+            <div className="absolute bg-frame" style={{ left: frame.x, top: frame.y, width: frame.w, height: frame.h }} onPointerDown={() => onSelect?.(null)} />
+          </>
+        )}
         {diagram.parts.map((p) => {
           const Tag = (TAGS[p.type] ?? p.type) as any
           const isNew = reveal && fresh.parts.includes(p.id)
@@ -275,6 +316,9 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
               key={p.id}
               className={`part ${isNew ? 'drop' : ''}`}
               style={{ left: p.left ?? 0, top: p.top ?? 0, display: p.hide ? 'none' : undefined, animationDelay: isNew ? `${partDelay(p.id)}s` : undefined }}
+              onPointerDown={() => onSelect?.(p.id)}
+              onPointerEnter={() => setHover(p.id)}
+              onPointerLeave={() => setHover((h) => (h === p.id ? null : h))}
             >
               <Tag ref={(el: Wokwi | null) => el && (els.current[p.id] = el)} {...p.attrs} />
             </div>
@@ -292,18 +336,32 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
             )
           })}
         </svg>
+        {[hover, selected].map((id, k) => {
+          const r = id ? rects[id] : undefined
+          if (!r || (k === 0 && id === selected)) return null
+          const s = 7 / fit.scale
+          const line = 1 / fit.scale
+          return (
+            <div key={k} className="pointer-events-none absolute" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${line}px solid var(--accent)` }}>
+              {k === 1 &&
+                [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => (
+                  <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
+                ))}
+            </div>
+          )
+        })}
         {Object.entries(sonars).map(([id, cm]) => {
           const p = diagram.parts.find((q) => q.id === id)
           if (!p) return null
           return (
-            <label key={id} className="absolute flex items-center gap-2 rounded-md bg-panel/90 px-2 py-1 font-mono text-[11px] text-dim" style={{ left: p.left ?? 0, top: (p.top ?? 0) + 95 }}>
+            <label key={id} className="pill absolute flex items-center gap-2 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: p.left ?? 0, top: (p.top ?? 0) + 95 }}>
               distance
               <input
                 type="range"
                 min={2}
                 max={400}
                 value={cm}
-                className="w-32 accent-[#7cf29a]"
+                className="w-32 accent-[var(--accent)]"
                 onChange={(e) => {
                   const v = Number(e.target.value)
                   setSonars((s) => ({ ...s, [id]: v }))
@@ -316,17 +374,17 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
         })}
       </div>
 
-      <div className="absolute bottom-3 left-4 flex items-center gap-4 font-mono text-[11px] text-dim">
+      <div className={`pill absolute bottom-4 left-4 flex h-8 items-center gap-4 px-3.5 font-mono text-[11px] text-dim ${build ? '' : 'hidden'}`}>
         {build && <span>sim {(simMs / 1000).toFixed(2)}s</span>}
         {ram && build && (
           <span className="flex items-center gap-2" title="globals, heap and stack in the uno's 2048 bytes">
             ram
-            <span className="relative h-2 w-40 overflow-hidden rounded-full bg-line">
+            <span className="relative h-1.5 w-32 overflow-hidden rounded-full bg-input">
               <span className="absolute inset-y-0 left-0 bg-[#64748b]" style={{ width: `${((build.ram ?? 0) / 2048) * 100}%` }} />
               <span className="absolute inset-y-0 bg-[#a78bfa]" style={{ left: `${((build.ram ?? 0) / 2048) * 100}%`, width: `${(ram.heapBytes / 2048) * 100}%` }} />
               <span className="absolute inset-y-0 right-0 bg-[#f59e0b]" style={{ width: `${(Math.max(0, 2048 - (build.ram ?? 0) - ram.heapBytes - Math.max(0, ram.leastFree)) / 2048) * 100}%` }} />
             </span>
-            <span className={ram.crashed || ram.leastFree < 64 ? 'text-[#f87171]' : 'text-ink'}>{ram.crashed ? 'stack hit the heap' : `${ram.leastFree} b free`}</span>
+            <span className={ram.crashed || ram.leastFree < 64 ? 'text-bad' : 'text-ink'}>{ram.crashed ? 'stack hit the heap' : `${ram.leastFree} b free`}</span>
           </span>
         )}
       </div>
