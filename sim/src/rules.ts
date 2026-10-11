@@ -21,6 +21,7 @@ const DRAW: Record<string, (attrs: Record<string, string>) => number> = {
   'wokwi-ssd1306': () => 20,
   'wokwi-photoresistor-sensor': () => 5,
   'wokwi-dht22': () => 2,
+  'wokwi-pir-motion-sensor': () => 1,
 }
 // pins each part needs wired to work at all
 const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = {
@@ -33,6 +34,7 @@ const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = 
   // AO or DO, whichever the sketch reads, checked on its own below
   'wokwi-photoresistor-sensor': { power: [['VCC', 'GND']], signals: [] },
   'wokwi-dht22': { power: [['VCC', 'GND']], signals: ['SDA'] },
+  'wokwi-pir-motion-sensor': { power: [['VCC', 'GND']], signals: ['OUT'] },
 }
 
 // what the sketch says, read crudely: constants, pinMode, analogWrite, Servo, tone, i2c addresses

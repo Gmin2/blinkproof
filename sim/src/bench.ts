@@ -23,6 +23,8 @@ export type PartState =
   | { type: 'wokwi-hc-sr04'; sensor: HCSR04 | null; distance: number }
   | { type: 'wokwi-buzzer'; buzzer: Buzzer | null }
   // volts is what AO puts out, dark is DO
+  // moving is what the person in front of it does, out is what OUT says, which lags behind by the hold time
+  | { type: 'wokwi-pir-motion-sensor'; moving: boolean; out: boolean; powered: boolean; triggers: number }
   | { type: 'wokwi-dht22'; sensor: DHT22 | null; temperature: number; humidity: number }
   | { type: 'wokwi-photoresistor-sensor'; lux: number; volts: number; dark: boolean; powered: boolean }
   | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' | 'wokwi-pi-pico' }
@@ -68,6 +70,7 @@ export class Bench {
         case 'wokwi-buzzer': this.buzzer(id); break
         case 'wokwi-photoresistor-sensor': this.light(id); break
         case 'wokwi-dht22': this.dht(id); break
+        case 'wokwi-pir-motion-sensor': this.pir(id); break
         default: this.parts[id] = { type: p.type }
       }
     }
@@ -238,6 +241,33 @@ export class Bench {
     this.parts[id] = { type: 'wokwi-dht22', sensor, temperature, humidity }
   }
 
+  // an hc-sr501: OUT goes high while something moves and holds high for delayTime seconds after it stops
+  private pir(id: string) {
+    const c = this.circuit
+    const state = { type: 'wokwi-pir-motion-sensor' as const, moving: false, out: false, powered: this.powered(id, 'VCC', 'GND', 4.5), triggers: 0 }
+    this.parts[id] = state
+    const pin = c.signal(`${id}:OUT`)
+    const hold = Number(c.attr(id, 'delayTime') ?? 5) * 1000
+    let until = 0
+    let was = false
+    const out = (high: boolean) => {
+      state.out = high
+      if (pin && isDigital(pin)) this.board.drive(pin, high)
+    }
+    if (state.powered) out(false)
+    this.updates.push(() => {
+      if (!state.powered) return
+      if (state.moving && !was) state.triggers++
+      if (state.moving) out(true)
+      if (was && !state.moving) {
+        until = this.board.ms + hold
+        const end = this.board.cycles + (hold / 1000) * this.board.hz
+        this.board.at(end, () => !state.moving && this.board.ms >= until - 1 && out(false))
+      }
+      was = state.moving
+    })
+  }
+
   // a person turning a knob, pressing a button, or moving the car closer
   control(id: string, name: string, value: number) {
     const part = this.parts[id]
@@ -247,7 +277,8 @@ export class Bench {
     else if (part.type === 'wokwi-hc-sr04' && name === 'distance') {
       part.distance = value
       if (part.sensor) part.sensor.distance = value
-    } else if (part.type === 'wokwi-dht22' && (name === 'temperature' || name === 'humidity')) {
+    } else if (part.type === 'wokwi-pir-motion-sensor' && name === 'motion') part.moving = !!value
+    else if (part.type === 'wokwi-dht22' && (name === 'temperature' || name === 'humidity')) {
       const v = name === 'temperature' ? Math.min(80, Math.max(-40, value)) : Math.min(100, Math.max(0, value))
       part[name] = v
       if (part.sensor) part.sensor[name] = v
@@ -270,6 +301,7 @@ export class Bench {
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
       }
       if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
+      if (p.type === 'wokwi-pir-motion-sensor') out.push(`${id}: ${!p.powered ? 'not powered, it needs 5V' : `${p.moving ? 'something moving' : 'nothing moving'}, OUT ${p.out ? 'high' : 'low'}, ${p.triggers} triggers`}`)
       if (p.type === 'wokwi-dht22') out.push(`${id}: ${!p.sensor ? 'not powered or SDA not on a digital pin' : `${p.temperature} C, ${p.humidity}% humidity, read ${p.sensor.reads} times${p.sensor.short ? `, ${p.sensor.short} starts too short` : ''}`}`)
       if (p.type === 'wokwi-photoresistor-sensor') out.push(`${id}: ${!p.powered ? 'not powered' : `${p.lux} lux, AO ${p.volts.toFixed(2)} V, DO ${p.dark ? 'high (dark)' : 'low (light)'}`}`)
       if (p.type === 'wokwi-pushbutton') out.push(`${id}: ${p.pressed ? 'pressed' : 'released'}, ${p.presses} presses`)

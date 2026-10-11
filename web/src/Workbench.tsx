@@ -108,6 +108,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
   const [report, setReport] = useState<Report | null>(null)
   const [sonars, setSonars] = useState<Record<string, number>>({})
   const [lights, setLights] = useState<Record<string, number>>({})
+  const [pirs, setPirs] = useState<string[]>([])
   const [climates, setClimates] = useState<Record<string, { temperature: number; humidity: number }>>({})
   const benchRef = useRef<Bench | null>(null)
   const runningRef = useRef(running)
@@ -294,6 +295,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     }
     setSonars(distances)
     setLights(luxes)
+    setPirs(Object.entries(bench.parts).filter(([, q]) => q.type === 'wokwi-pir-motion-sensor').map(([id]) => id))
     setClimates(climate)
     setSerial('')
     setLines([])
@@ -675,6 +677,16 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
                   <span key={`${x}${y}`} className="absolute rounded-[1px] bg-accent" style={{ width: s, height: s, left: `calc(${x * 100}% - ${s / 2}px)`, top: `calc(${y * 100}% - ${s / 2}px)` }} />
                 ))}
             </div>
+          )
+        })}
+        {pirs.map((id) => {
+          const p = diagram.parts.find((q) => q.id === id)
+          if (!p) return null
+          const move = (on: boolean) => benchRef.current?.control(id, 'motion', on ? 1 : 0)
+          return (
+            <button key={id} onPointerDown={(e) => (e.stopPropagation(), move(true))} onPointerUp={() => move(false)} onPointerLeave={() => move(false)} className="pill absolute whitespace-nowrap px-3 py-1 font-mono text-[11px] text-dim active:bg-accent active:text-on-accent" style={{ left: at(p).x - 10, top: at(p).y + 100 }}>
+              hold to move
+            </button>
           )
         })}
         {Object.entries(climates).map(([id, v]) => {
