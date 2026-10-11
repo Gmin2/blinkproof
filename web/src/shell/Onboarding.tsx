@@ -39,7 +39,7 @@ type Props = {
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
-const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04', 'wokwi-photoresistor-sensor', 'wokwi-dht22', 'wokwi-pir-motion-sensor']
+const INPUTS = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-hc-sr04', 'wokwi-photoresistor-sensor', 'wokwi-dht22', 'wokwi-pir-motion-sensor', 'wokwi-slide-switch']
 const RAILS = /^(GND|5V|3\.3V|3V3|VIN|VCC|VBUS|VSYS|V\+|VDD|VSS|IOREF|AREF)/
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const ohms = (v?: string) => {
@@ -137,6 +137,7 @@ type Hand = { menu: Menu | null; board: string; options: (type: keyof typeof PAR
 const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
   in: [
     ['wokwi-pushbutton', 'Button', 'Read a press'],
+    ['wokwi-slide-switch', 'Slide switch', 'On or off, stays put'],
     ['wokwi-potentiometer', 'Knob', 'A dial read with analogRead'],
     ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Distance from 2 to 400 cm'],
     ['wokwi-photoresistor-sensor', 'Light sensor', 'How bright the room is'],
@@ -147,6 +148,8 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
     ['wokwi-led', 'LED', 'Light from a pin, resistor included'],
     ['wokwi-buzzer', 'Buzzer', 'Beeps and tunes'],
     ['wokwi-led-ring', 'LED ring', '16 colour pixels on one pin'],
+    ['wokwi-rgb-led', 'RGB LED', 'Mix any colour'],
+    ['wokwi-7segment', '7 segment digit', 'Shows one number'],
     ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels'],
     ['wokwi-lcd1602', 'LCD 16x2', 'Two rows of text'],
     ['wokwi-servo', 'Servo', 'Turns to an angle'],
@@ -611,6 +614,13 @@ function Control({ type, id, live, value }: { type: string; id: string; live: Li
         Dark
         <input type="range" min={0} max={100} defaultValue={Math.round(20 * Math.log10(value ?? 500))} onChange={(e) => live.control(id, 'lux', Math.round(10 ** (Number(e.target.value) / 20) * 10) / 10)} className="min-w-0 flex-1 accent-[var(--accent)]" />
         Bright
+      </label>
+    )
+  if (type === 'wokwi-slide-switch')
+    return (
+      <label className="flex items-center gap-3 rounded-[9px] border border-sep px-3 py-2.5 text-[12px] text-dim">
+        <input type="checkbox" defaultChecked={!!value} onChange={(e) => live.control(id, 'value', e.target.checked ? 1 : 0)} className="accent-[var(--accent)]" />
+        Flip it on
       </label>
     )
   if (type === 'wokwi-pir-motion-sensor')

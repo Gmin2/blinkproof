@@ -26,6 +26,17 @@ describe('connect a part by hand', () => {
     expect(errors(d)).toEqual([])
   })
 
+  it('every newer part wires itself with no errors, on an uno and on a pico', () => {
+    const types = ['wokwi-photoresistor-sensor', 'wokwi-dht22', 'wokwi-pir-motion-sensor', 'wokwi-lcd1602', 'wokwi-rgb-led', 'wokwi-slide-switch'] as const
+    for (const board of ['blink', 'pico-plant']) {
+      let d = load(board)
+      for (const t of types) d = add(d, t).d
+      expect(errors(d)).toEqual([])
+    }
+    // seven pins of its own, so on a board of its own
+    expect(errors(add(load('blink'), 'wokwi-7segment').d)).toEqual([])
+  })
+
   it('a button, a knob, a servo, a buzzer and a ring all fit on one uno without clashing', () => {
     let d = load('blink')
     for (const t of ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-servo', 'wokwi-buzzer', 'wokwi-led-ring'] as const) d = add(d, t).d

@@ -283,6 +283,56 @@ export const CASES: Case[] = [
 - wait-text: { part-id: $lcd, contains: "8.2", timeout: 6s }
 - expect-text: { part-id: $lcd, not-contains: "23.5" }`),
   },
+  {
+    id: 'switch-led',
+    board: 'uno',
+    request: 'on an arduino uno, a slide switch turns an led on and off, and the sketch prints ON or OFF to serial every time the switch moves',
+    trap: 'a switch stays put, the sketch has to notice the change and not print every loop',
+    hidden: test('follows the lever', `
+- set-control: { part-id: $switch, control: value, value: 0 }
+- delay: 500ms
+- expect-led: { part-id: $led, lit: false }
+- set-control: { part-id: $switch, control: value, value: 1 }
+- wait-led: { part-id: $led, lit: true, timeout: 1s }
+- wait-serial: ON
+- set-control: { part-id: $switch, control: value, value: 0 }
+- wait-led: { part-id: $led, lit: false, timeout: 1s }
+- wait-serial: OFF`),
+  },
+  {
+    id: 'mood-lamp',
+    board: 'uno',
+    request: 'a mood lamp on an arduino uno: an rgb led that is green, and each press of a button moves it on to the next colour, green then blue then red and back to green',
+    trap: 'three channels each need a resistor and a pwm pin, and the button needs debouncing or it skips colours',
+    hidden: test('steps through the colours', `
+- wait-color: { part-id: $rgb, color: green, timeout: 1s }
+- set-control: { part-id: $button, control: pressed, value: 1 }
+- delay: 100ms
+- set-control: { part-id: $button, control: pressed, value: 0 }
+- wait-color: { part-id: $rgb, color: blue, timeout: 1s }
+- delay: 200ms
+- set-control: { part-id: $button, control: pressed, value: 1 }
+- delay: 100ms
+- set-control: { part-id: $button, control: pressed, value: 0 }
+- wait-color: { part-id: $rgb, color: red, timeout: 1s }`),
+  },
+  {
+    id: 'press-digit',
+    board: 'uno',
+    request: 'a counter on an arduino uno: a 7 segment digit starts at 0 and goes up by one on every button press, after 9 it goes back to 0',
+    trap: 'seven segment pins and their bit patterns, and one press must count once',
+    hidden: test('counts presses', `
+- wait-digit: { part-id: $digit, shows: '0', timeout: 1s }
+- set-control: { part-id: $button, control: pressed, value: 1 }
+- delay: 100ms
+- set-control: { part-id: $button, control: pressed, value: 0 }
+- wait-digit: { part-id: $digit, shows: '1', timeout: 1s }
+- delay: 200ms
+- set-control: { part-id: $button, control: pressed, value: 1 }
+- delay: 100ms
+- set-control: { part-id: $button, control: pressed, value: 0 }
+- wait-digit: { part-id: $digit, shows: '2', timeout: 1s }`),
+  },
 ]
 
 const KINDS: Record<string, string> = {
@@ -299,6 +349,9 @@ const KINDS: Record<string, string> = {
   dht: 'wokwi-dht22',
   pir: 'wokwi-pir-motion-sensor',
   lcd: 'wokwi-lcd1602',
+  switch: 'wokwi-slide-switch',
+  rgb: 'wokwi-rgb-led',
+  digit: 'wokwi-7segment',
 }
 
 // $led, $led.2, $led:red -> the id of that part in the agent's circuit

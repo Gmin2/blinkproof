@@ -18,6 +18,11 @@ export type PartState =
   | { type: 'wokwi-led'; lit: boolean; brightness: number }
   | { type: 'wokwi-ssd1306'; oled: SSD1306 | null }
   | { type: 'wokwi-lcd1602'; lcd: LCD1602 | null }
+  // each channel 0 to 1, the way the eye would see it
+  | { type: 'wokwi-rgb-led'; r: number; g: number; b: number }
+  | { type: 'wokwi-slide-switch'; on: boolean }
+  // A to G then DP, 0 to 1 each
+  | { type: 'wokwi-7segment'; segments: number[] }
   | { type: 'wokwi-potentiometer'; position: number }
   | { type: 'wokwi-pushbutton'; pressed: boolean; presses: number }
   | { type: 'wokwi-neopixel' | 'wokwi-led-ring'; strip: WS2812 | null }
@@ -30,6 +35,15 @@ export type PartState =
   | { type: 'wokwi-dht22'; sensor: DHT22 | null; temperature: number; humidity: number }
   | { type: 'wokwi-photoresistor-sensor'; lux: number; volts: number; dark: boolean; powered: boolean }
   | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' | 'wokwi-pi-pico' }
+
+// the segments lit, read back as the character they make: A B C D E F G, then the dot
+const DIGITS: Record<string, string> = { '1111110': '0', '0110000': '1', '1101101': '2', '1111001': '3', '0110011': '4', '1011011': '5', '1011111': '6', '1110000': '7', '1111111': '8', '1111011': '9', '1110111': 'A', '0011111': 'b', '1001110': 'C', '0111101': 'd', '1001111': 'E', '1000111': 'F', '0000001': '-', '0000000': ' ' }
+export function showsDigit(segments: number[]) {
+  const key = segments.slice(0, 7).map((v) => (v > 0.1 ? '1' : '0')).join('')
+  const ch = DIGITS[key]
+  const dot = segments[7] > 0.1 ? '.' : ''
+  return ch === ' ' && !dot ? 'blank' : ch !== undefined ? `shows "${ch.trim()}${dot}"` : `segments ${key.split('').map((v, i) => (v === '1' ? 'ABCDEFG'[i] : '')).join('')}${dot}`
+}
 
 const isDigital = (pin: string) => /^(D\d+|GP\d+)$/.test(pin)
 const isAnalog = (pin: string) => /^(A\d|GP2[678])$/.test(pin)
@@ -64,6 +78,9 @@ export class Bench {
         case 'wokwi-led': this.led(id); break
         case 'wokwi-ssd1306': this.oled(id); break
         case 'wokwi-lcd1602': this.lcd(id); break
+        case 'wokwi-rgb-led': this.rgb(id); break
+        case 'wokwi-slide-switch': this.slide(id); break
+        case 'wokwi-7segment': this.segments(id); break
         case 'wokwi-potentiometer': this.pot(id); break
         case 'wokwi-pushbutton': this.button(id); break
         case 'wokwi-neopixel': this.strip(id, p.type, 'VDD', 'VSS', 1); break
@@ -128,6 +145,67 @@ export class Bench {
     const address = Number(c.attr(id, 'i2cAddress') ?? '0x3c')
     const oled = powered && sda && scl ? (this.board.i2c.add(new SSD1306(address)) as SSD1306) : null
     this.parts[id] = { type: 'wokwi-ssd1306', oled }
+  }
+
+  // one light behind a shared pin: with the common pin on ground a high pin lights it, with it on a rail
+  // a low one does. measured as a duty cycle so pwm dims it. no pin and no way to light it reads 0
+  private channel(ref: string, common: string, anode: boolean) {
+    const c = this.circuit
+    const returns = anode ? !!c.supply(common, true) : c.onGround(common, true)
+    const pin = returns ? c.signal(ref, true) : undefined
+    const duty = pin ? new Duty(this.board, pin) : undefined
+    const window = this.board.hz / 50
+    return () => {
+      if (!returns) return 0
+      if (!duty) return anode ? (c.onGround(ref, true) ? 1 : 0) : c.supply(ref, true) ? 1 : 0
+      const d = duty.over(this.board.cycles, window)
+      return Math.round((anode ? 1 - d : d) * 100) / 100
+    }
+  }
+
+  private rgb(id: string) {
+    const anode = this.circuit.attr(id, 'common') === 'anode'
+    const state = { type: 'wokwi-rgb-led' as const, r: 0, g: 0, b: 0 }
+    this.parts[id] = state
+    const [r, g, b] = ['R', 'G', 'B'].map((x) => this.channel(`${id}:${x}`, `${id}:COM`, anode))
+    this.updates.push(() => {
+      state.r = r()
+      state.g = g()
+      state.b = b()
+    })
+  }
+
+  private segments(id: string) {
+    const anode = this.circuit.attr(id, 'common') === 'anode'
+    const state = { type: 'wokwi-7segment' as const, segments: [0, 0, 0, 0, 0, 0, 0, 0] }
+    this.parts[id] = state
+    const lights = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'DP'].map((x) => this.channel(`${id}:${x}`, `${id}:COM.1`, anode))
+    this.updates.push(() => {
+      state.segments = lights.map((l) => l())
+    })
+  }
+
+  // pin 2 is the middle, it meets pin 1 or pin 3 depending on where the lever is
+  private slide(id: string) {
+    const c = this.circuit
+    const state = { type: 'wokwi-slide-switch' as const, on: c.attr(id, 'value') === '1' }
+    this.parts[id] = state
+    const pin = c.signal(`${id}:2`)
+    if (!pin) return
+    const end = (ref: string) => (c.supply(ref) ? true : c.onGround(ref) ? false : undefined)
+    const [off, on] = [end(`${id}:1`), end(`${id}:3`)]
+    const pull = c.supply(`${id}:2`, true) ? true : c.onGround(`${id}:2`, true) ? false : undefined
+    let driven: boolean | undefined
+    this.updates.push(() => {
+      const mode = this.board.state(pin)
+      if (mode === PinState.High || mode === PinState.Low) return
+      const resting = pull ?? (mode === PinState.InputPullUp ? true : this.random() < 0.5)
+      const level = (state.on ? on : off) ?? resting
+      if (level !== driven) {
+        driven = level
+        this.board.drive(pin, level)
+      }
+    })
   }
 
   private lcd(id: string) {
@@ -289,7 +367,8 @@ export class Bench {
     else if (part.type === 'wokwi-hc-sr04' && name === 'distance') {
       part.distance = value
       if (part.sensor) part.sensor.distance = value
-    } else if (part.type === 'wokwi-pir-motion-sensor' && name === 'motion') part.moving = !!value
+    } else if (part.type === 'wokwi-slide-switch' && name === 'value') part.on = !!value
+    else if (part.type === 'wokwi-pir-motion-sensor' && name === 'motion') part.moving = !!value
     else if (part.type === 'wokwi-dht22' && (name === 'temperature' || name === 'humidity')) {
       const v = name === 'temperature' ? Math.min(80, Math.max(-40, value)) : Math.min(100, Math.max(0, value))
       part[name] = v
@@ -312,6 +391,9 @@ export class Bench {
         const text = p.oled?.text()
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
       }
+      if (p.type === 'wokwi-rgb-led') out.push(`${id}: ${p.r + p.g + p.b < 0.06 ? 'dark' : `red ${Math.round(p.r * 100)}%, green ${Math.round(p.g * 100)}%, blue ${Math.round(p.b * 100)}%`}`)
+      if (p.type === 'wokwi-slide-switch') out.push(`${id}: ${p.on ? 'on (2 to 3)' : 'off (2 to 1)'}`)
+      if (p.type === 'wokwi-7segment') out.push(`${id}: ${showsDigit(p.segments)}`)
       if (p.type === 'wokwi-lcd1602') out.push(`${id}: ${!p.lcd ? 'not on the i2c bus (check SDA on A4, SCL on A5, VCC on 5V)' : !p.lcd.on ? 'display off' : `${JSON.stringify(p.lcd.rows().map((r) => r.trimEnd()))}${p.lcd.backlight ? '' : ', backlight off'}`}`)
       if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
       if (p.type === 'wokwi-pir-motion-sensor') out.push(`${id}: ${!p.powered ? 'not powered, it needs 5V' : `${p.moving ? 'something moving' : 'nothing moving'}, OUT ${p.out ? 'high' : 'low'}, ${p.triggers} triggers`}`)

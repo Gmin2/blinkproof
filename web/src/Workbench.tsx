@@ -240,6 +240,8 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         if (type === 'wokwi-led') el.value = false
         if (type === 'wokwi-led-ring') el.reset?.()
         if (type === 'wokwi-lcd1602') Object.assign(el, { characters: new Uint8Array(32).fill(32), backlight: false, cursor: false, blink: false })
+        if (type === 'wokwi-rgb-led') Object.assign(el, { ledRed: 0, ledGreen: 0, ledBlue: 0 })
+        if (type === 'wokwi-7segment') el.values = [0, 0, 0, 0, 0, 0, 0, 0]
         if (type === 'wokwi-ssd1306' && el.imageData) {
           const px = (el.imageData as ImageData).data
           for (let i = 0; i < px.length; i++) px[i] = i % 4 === 3 ? 255 : 0
@@ -275,6 +277,12 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         const onInput = () => bench.control(id, 'position', Number(el.value ?? 0) / 1023)
         el.addEventListener('input', onInput)
         cleanups.push(() => el.removeEventListener('input', onInput))
+      }
+      if (part.type === 'wokwi-slide-switch') {
+        el.value = part.on ? 1 : 0
+        const flip = () => bench.control(id, 'value', Number(el.value ?? 0))
+        el.addEventListener('input', flip)
+        cleanups.push(() => el.removeEventListener('input', flip))
       }
       if (part.type === 'wokwi-pushbutton') {
         const down = () => bench.control(id, 'pressed', 1)
@@ -370,6 +378,9 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           if (part.type === 'wokwi-neopixel') Object.assign(el, { r: first[0] / 255, g: first[1] / 255, b: first[2] / 255 })
           else part.strip.pixels.forEach(([r, g, b], i) => el.setPixel(i, { r: r / 255, g: g / 255, b: b / 255 }))
         }
+        if (part.type === 'wokwi-rgb-led') Object.assign(el, { ledRed: part.r, ledGreen: part.g, ledBlue: part.b })
+        if (part.type === 'wokwi-7segment') el.values = part.segments
+        if (part.type === 'wokwi-slide-switch' && playing) el.value = part.on ? 1 : 0
         if (part.type === 'wokwi-lcd1602') {
           const lcd = part.lcd
           el.backlight = !!lcd?.backlight
@@ -448,7 +459,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
 
   // dragging a part: it moves once the pointer has gone 4 px, so a click is still a click
   const drag = useRef<{ id: string; sx: number; sy: number; ox: number; oy: number; base: Diagram; on: boolean; last?: Diagram } | null>(null)
-  const INTERACTIVE = ['wokwi-pushbutton', 'wokwi-potentiometer']
+  const INTERACTIVE = ['wokwi-pushbutton', 'wokwi-potentiometer', 'wokwi-slide-switch']
 
   const startDrag = (e: React.PointerEvent, p: Diagram['parts'][number]) => {
     onSelect?.(p.id)

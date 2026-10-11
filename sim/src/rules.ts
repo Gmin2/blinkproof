@@ -146,6 +146,22 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
       }
     }
 
+    // lights behind a common pin each want a resistor, on the channel or on the common pin
+    if (p.type === 'wokwi-rgb-led' || p.type === 'wokwi-7segment') {
+      const com = p.type === 'wokwi-rgb-led' ? `${id}:COM` : `${id}:COM.1`
+      const anode = attrs.common === 'anode'
+      const direct = anode ? c.supply(com) : c.onGround(com)
+      const through = anode ? c.supply(com, true) : c.onGround(com, true)
+      if (!through) add('unwired', 'error', [id], `${com} goes nowhere: it is common ${anode ? 'anode, wire it to 5V' : 'cathode, wire it to GND'}`)
+      const names = p.type === 'wokwi-rgb-led' ? ['R', 'G', 'B'] : ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+      const bare = names.filter((x) => c.signal(`${id}:${x}`))
+      if (direct && bare.length) add('led-no-resistor', 'error', [id], `${bare.map((x) => `${id}:${x}`).join(', ')} ${bare.length > 1 ? 'go' : 'goes'} straight to a pin with ${com} straight to ${anode ? '5V' : 'GND'}, nothing limits the current. put a 220 ohm resistor on each, or one on ${com}`)
+      const lit = names.filter((x) => c.signal(`${id}:${x}`, true))
+      if (through && !lit.length) add('unwired', 'error', [id], `none of ${id}'s ${p.type === 'wokwi-rgb-led' ? 'colours' : 'segments'} reach a pin`)
+    }
+
+    if (p.type === 'wokwi-slide-switch' && !c.signal(`${id}:2`)) add('unwired', 'error', [id], `${id}:2 is the middle pin, wire it to a ${board} pin and the ends to GND and 5V`)
+
     if (p.type === 'wokwi-lcd1602') {
       const sda = c.signal(`${id}:SDA`)
       const scl = c.signal(`${id}:SCL`)

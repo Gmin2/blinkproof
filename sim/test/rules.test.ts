@@ -130,3 +130,17 @@ describe('light sensor rules', () => {
     expect(errors(circuit([ldr], [['ldr1:AO', 'uno:A0']]))).toContain('no-power')
   })
 })
+
+describe('lights behind a common pin', () => {
+  it('wants a resistor somewhere on an rgb led', () => {
+    const c = circuit([{ id: 'rgb1', type: 'wokwi-rgb-led' }], [['rgb1:R', 'uno:9'], ['rgb1:COM', 'uno:GND.1']])
+    expect(errors(c)).toContain('led-no-resistor')
+  })
+  it('takes one resistor on the common pin of a digit', () => {
+    const c = circuit([{ id: 'seg1', type: 'wokwi-7segment' }, { id: 'r1', type: 'wokwi-resistor', attrs: { value: '220' } }], [['seg1:A', 'uno:2'], ['seg1:COM.1', 'r1:1'], ['r1:2', 'uno:GND.1']])
+    expect(errors(c)).toEqual([])
+  })
+  it('says when the common pin goes nowhere', () => {
+    expect(errors(circuit([{ id: 'seg1', type: 'wokwi-7segment' }], [['seg1:A', 'uno:2']]))).toContain('unwired')
+  })
+})

@@ -1,4 +1,4 @@
-import { colorName, type Bench, type PartState } from '@blinkproof/sim'
+import { colorName, showsDigit, type Bench, type PartState } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
 import type { Build } from './compile'
 import type { BenchState } from '../Workbench'
@@ -29,6 +29,17 @@ export function read(p: PartState): Reading | undefined {
     case 'wokwi-ssd1306': {
       const text = p.oled?.text().replace(/\s+/g, ' ').trim() ?? ''
       return { cards: [['Screen', !p.oled ? 'not on the bus' : p.oled.on ? 'on' : 'off'], ['Frames', String(p.oled?.frames ?? 0)]], line: text ? `shows "${text.slice(0, 40)}"` : 'blank' }
+    }
+    case 'wokwi-rgb-led': {
+      const pct = (v: number) => `${Math.round(v * 100)}%`
+      const name = colorName([p.r * 255, p.g * 255, p.b * 255])
+      return { cards: [['Red', pct(p.r)], ['Green', pct(p.g)], ['Blue', pct(p.b)], ['Colour', name]], value: Math.round(Math.max(p.r, p.g, p.b) * 100), unit: '%', max: 100, line: name === 'off' ? 'dark' : name }
+    }
+    case 'wokwi-slide-switch':
+      return { cards: [['Lever', p.on ? 'on' : 'off'], ['Joins', p.on ? '2 to 3' : '2 to 1']], value: p.on ? 1 : 0, max: 1, line: p.on ? 'on' : 'off' }
+    case 'wokwi-7segment': {
+      const shows = showsDigit(p.segments)
+      return { cards: [['Shows', shows.replace(/^shows /, '')], ['Segments lit', String(p.segments.filter((v) => v > 0.1).length)]], line: shows }
     }
     case 'wokwi-lcd1602': {
       const rows = p.lcd?.rows().map((r) => r.trimEnd()) ?? []

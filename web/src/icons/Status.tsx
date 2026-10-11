@@ -47,4 +47,7 @@ export const PART_ICON: Record<string, IconName> = {
   'wokwi-dht22': 'cloud',
   'wokwi-pir-motion-sensor': 'eye-open',
   'wokwi-lcd1602': 'layout-bottom',
+  'wokwi-rgb-led': 'sparkle-3',
+  'wokwi-slide-switch': 'toggle-3',
+  'wokwi-7segment': 'grid',
 }
