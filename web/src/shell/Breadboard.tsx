@@ -623,7 +623,7 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
               const rows = rowsOf(p, s.adds)
               const lead = s.adds.length === 0 || s.n === 1 ? (s.n === 1 ? s.do.slice(0, 1) : s.do) : []
               return (
-                <li key={s.n} ref={open ? current : undefined} className={`rounded-[12px] border transition-colors ${open ? 'border-line bg-accent/40 shadow-[0_1px_2px_rgba(0,0,0,.04)]' : 'border-transparent hover:bg-hover'}`}>
+                <li key={s.n} ref={open ? current : undefined} className={`rounded-[12px] border transition-colors ${open ? 'border-line bg-accent/5 shadow-[0_1px_2px_rgba(0,0,0,.04)]' : 'border-transparent hover:bg-hover'}`}>
                   <div className="flex items-start gap-2.5 px-2.5 py-2">
                     <button onClick={() => tick(s.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className={`mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-semibold transition-colors ${isDone ? 'border-ok bg-ok text-white' : open ? 'border-accent-line text-ink' : 'border-line text-dim'}`}>
                       {isDone ? <Icon name="check" size={11} /> : s.n}
@@ -787,7 +787,7 @@ export function BreadboardGuide({ diagram }: { diagram: Diagram }) {
         </button>
         <div className="flex flex-1 gap-1">
           {p.steps.map((x, i) => (
-            <button key={i} onClick={() => setStep(i)} title={x.title} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? 'bg-accent/400' : i === step ? 'bg-accent hover:bg-accent-hover' : 'bg-input'}`} />
+            <button key={i} onClick={() => setStep(i)} title={x.title} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? 'bg-accent/50' : i === step ? 'bg-accent hover:bg-accent-hover' : 'bg-input'}`} />
           ))}
         </div>
         <button onClick={() => setStep(Math.min(last, step + 1))} disabled={step === last} title="the next step" className="flex h-8 items-center gap-1 rounded-[8px] bg-accent hover:bg-accent-hover px-3 text-[12px] font-semibold text-on-accent disabled:opacity-40">

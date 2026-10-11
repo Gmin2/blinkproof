@@ -568,7 +568,7 @@ export default function App() {
             <div role="tablist" aria-label="view" className="pill pointer-events-auto relative mx-3 grid shrink-0 grid-cols-2 p-[3px]">
               <span
                 aria-hidden="true"
-                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-input shadow-[inset_0_0_0_1px_var(--divider)] transition-transform duration-300 ease-out"
+                className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[8px] bg-accent transition-transform duration-300 ease-out"
                 style={{ transform: `translateX(${mode === 'build' ? 100 : 0}%)` }}
               />
               {(
@@ -579,7 +579,7 @@ export default function App() {
               ).map(([v, label, icon, hint]) => {
                 const on = (mode === 'build') === (v === 'breadboard')
                 return (
-                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
+                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-on-accent' : 'text-dim hover:text-ink'}`}>
                     <Icon name={icon} size={13} />
                     {label}
                   </button>
