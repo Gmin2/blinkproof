@@ -71,14 +71,14 @@ export function steps(d: Diagram) {
 }
 
 // the parts to get and the wires to make, for building the proven gadget for real
-export function BuildGuide({ diagram }: { diagram: Diagram }) {
+export function BuildGuide({ diagram, only }: { diagram: Diagram; only?: 'parts' | 'wiring' }) {
   const lines = bom(diagram)
   const groups = steps(diagram)
   // numbered straight through every part, from 1
   const start = groups.map((_, i) => groups.slice(0, i).reduce((a, g) => a + g.lines.length, 0))
   return (
     <div className="space-y-5">
-      <div>
+      {only !== 'wiring' && <div>
         <div className="mb-2 flex items-center justify-between text-[12px]">
           <span className="font-semibold text-ink">Parts</span>
           <span className="text-dim">{lines.reduce((a, l) => a + (l.type === 'wire' ? 0 : l.count), 0)} pieces</span>
@@ -95,8 +95,8 @@ export function BuildGuide({ diagram }: { diagram: Diagram }) {
             </div>
           ))}
         </div>
-      </div>
-      <div>
+      </div>}
+      {only !== 'parts' && <div>
         <div className="mb-2 text-[12px] font-semibold text-ink">Wiring, step by step</div>
         <div className="space-y-3">
           {groups.map((g, gi) => (
@@ -117,7 +117,7 @@ export function BuildGuide({ diagram }: { diagram: Diagram }) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }
