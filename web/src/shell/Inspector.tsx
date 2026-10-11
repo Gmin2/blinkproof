@@ -3,13 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from '../icons/Icon'
 import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
+import { BreadboardGuide } from './Breadboard'
 import { PartFacts } from './Facts'
 import { ModelMenu } from './ModelMenu'
 import { Grip, useWidth } from './Resize'
 import { HeaderButton, KIND } from './Sidebar'
 import type { FeedItem, Verdict } from './useBuild'
 
-export type Mode = 'design' | 'code' | 'serial' | 'test' | 'agent'
+export type Mode = 'design' | 'code' | 'serial' | 'test' | 'agent' | 'build'
 
 const TABS: { mode: Mode; label: string; icon: IconName }[] = [
   { mode: 'design', label: 'Design', icon: 'frame' },
@@ -17,6 +18,7 @@ const TABS: { mode: Mode; label: string; icon: IconName }[] = [
   { mode: 'serial', label: 'Serial', icon: 'terminal' },
   { mode: 'test', label: 'Test', icon: 'flask' },
   { mode: 'agent', label: 'Agent', icon: 'prototype' },
+  { mode: 'build', label: 'Build', icon: 'wire' },
 ]
 
 // the colours a part comes in, and what to paint the dot
@@ -171,14 +173,16 @@ export function Inspector({
   // code wants more room, so it keeps a width of its own
   const [width, setWidth] = useWidth('inspector', 300, 260, 560)
   const [codeWidth, setCodeWidth] = useWidth('inspector-code', 440, 320, 900)
+  const [buildWidth, setBuildWidth] = useWidth('inspector-build', 560, 420, 900)
+  const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 560] : [width, setWidth, 300]
   const [dragging, setDragging] = useState(false)
   const index = TABS.findIndex((t) => t.mode === mode)
   const pins = part ? ((PARTS[part.type as keyof typeof PARTS]?.pins as string[] | undefined) ?? []) : []
   const peers = (pin: string) => (circuit && part ? circuit.peers(`${part.id}:${pin}`).filter((r) => !r.startsWith(`${part.id}:`)) : [])
 
   return (
-    <aside className={`relative flex shrink-0 flex-col border-l border-line bg-panel ${dragging ? '' : 'transition-[width] duration-300 ease-out'}`} style={{ width: mode === 'code' ? codeWidth : width }}>
-      <Grip side="left" width={mode === 'code' ? codeWidth : width} onWidth={mode === 'code' ? setCodeWidth : setWidth} onReset={() => (mode === 'code' ? setCodeWidth(440) : setWidth(300))} onDrag={setDragging} />
+    <aside className={`relative flex shrink-0 flex-col border-l border-line bg-panel ${dragging ? '' : 'transition-[width] duration-300 ease-out'}`} style={{ width: w }}>
+      <Grip side="left" width={w} onWidth={setW} onReset={() => setW(reset)} onDrag={setDragging} />
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-2.5">
         <div className="flex-1" />
         {/* who builds it */}
@@ -193,11 +197,11 @@ export function Inspector({
 
       {/* the tabs: the chip slides to the one picked, and the panels slide along with it */}
       <div className="px-2.5 pb-2">
-        <div className="relative grid grid-cols-5 rounded-[9px] bg-input p-0.5">
+        <div className="relative grid grid-cols-6 rounded-[9px] bg-input p-0.5">
           <span
             className="absolute inset-y-0.5 left-0.5 rounded-[7px] bg-panel shadow-[0_1px_2px_rgba(0,0,0,.08),0_0_0_0.5px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
             style={{
-              width: 'calc((100% - 4px) / 5)',
+              width: 'calc((100% - 4px) / 6)',
               transform: `translateX(${index * 100}%)`,
             }}
           />
@@ -208,7 +212,7 @@ export function Inspector({
               title={t.label}
               className={`relative z-10 flex h-7 items-center justify-center gap-1 text-[11px] font-medium transition-colors ${mode === t.mode ? 'text-ink' : 'text-dim hover:text-ink'}`}
             >
-              <Icon name={t.icon} size={13} />
+              {w >= 380 && <Icon name={t.icon} size={13} />}
               <span>{t.label}</span>
             </button>
           ))}
@@ -494,6 +498,16 @@ export function Inspector({
               )}
               <div ref={feedEnd} />
             </>
+          </div>
+          <div className="h-full w-full shrink-0 overflow-auto px-4 pb-6 pt-3" aria-hidden={mode !== 'build'}>
+            {diagram ? (
+              <>
+                <div className="mb-3 flex h-6 items-center text-[12px] font-semibold text-ink">Build it on a breadboard</div>
+                <BreadboardGuide key={JSON.stringify(diagram.connections)} diagram={diagram} />
+              </>
+            ) : (
+              <p className="text-[12px] text-dim">Open or make a circuit first, then this shows how to build it for real.</p>
+            )}
           </div>
         </div>
       </div>
