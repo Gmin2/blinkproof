@@ -1,0 +1,39 @@
+/* generated from brand/tokens.json */
+:root {
+  --bp-glow: #A6F24A;
+  --bp-glow-soft: #D9F9B0;
+  --bp-glow-dim: #6E9A3A;
+  --bp-ink: #141414;
+  --bp-ink2: #262626;
+  --bp-paper: #F6F6F4;
+  --bp-lamp-off: #3A3A36;
+  --bp-ui-canvas: #F6F6F6;
+  --bp-ui-panel: #FFFFFF;
+  --bp-ui-text: #141414;
+  --bp-ui-dim: #7F7F7F;
+  --bp-ui-line: #E6E6E6;
+  --bp-ui-accent: #555DFF;
+  --bp-ui-ok: #1FA863;
+  --bp-ui-bad: #E5484D;
+  --bp-ui-warn: #E58A00;
+  --bp-radius-sm: 6px;
+  --bp-radius-md: 8px;
+  --bp-radius-lg: 12px;
+  --bp-radius-pill: 999px;
+  --bp-font: 'Geist', system-ui, sans-serif;
+  --bp-mono: 'Geist Mono', ui-monospace, monospace;
+  --bp-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bp-blink: 1000ms;
+}
+
+:root[data-theme='dark'] {
+  --bp-ui-canvas: #1A1A1A;
+  --bp-ui-panel: #1E1E1E;
+  --bp-ui-text: #E8E8E8;
+  --bp-ui-dim: #8C8C8C;
+  --bp-ui-line: #2C2C2C;
+  --bp-ui-accent: #5E66FF;
+  --bp-ui-ok: #3CCF82;
+  --bp-ui-bad: #FF6B6F;
+  --bp-ui-warn: #FFAB3D;
+}
