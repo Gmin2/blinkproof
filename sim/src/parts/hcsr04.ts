@@ -31,7 +31,8 @@ export class HCSR04 {
     const width = e.cycles - this.rise
     this.rise = -1
     if (this.busy) return
-    if (width < us(10)) {
+    // the datasheet asks for 10 us, real modules start on less. a pico's delayMicroseconds(10) comes out at 9.97
+    if (width < us(8)) {
       this.short++
       return
     }
