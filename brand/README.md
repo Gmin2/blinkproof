@@ -1,6 +1,6 @@
 # blinkproof brand
 
-the press kit and the code that makes it. everything in `kit/` is built from four sources: `src/mark.mjs` (the led), `src/logo.mjs` (the outlined wordmark), `src/pictos.mjs` (the outline parts) and `tokens.json`. change a source, run `pnpm -C brand build`, every asset regenerates. open `kit/index.html` to see it all.
+the press kit and the code that makes it. everything in `kit/` is built from these sources: `src/mark.mjs` (the led), `src/favicon.mjs` (the tile, with the 16px drawn by hand), `src/logo.mjs` (the outlined wordmark), `src/pictos.mjs` (the outline parts) and `tokens.json`. change a source, run `pnpm -C brand build`, every asset regenerates. open `kit/index.html` to see it all.
 
 ## the look
 
@@ -22,7 +22,7 @@ quiet and warm. a paper ground, ink type, and thin stone lines that cut the page
 logo/     mark, wordmark and lockup in ink, paper, white and stone, two png checks
 pictos/   ten outline parts as svg and a sheet
 tokens/   tokens.json, tokens.css, theme.ts
-app/      icon 1024 and 512, apple touch 180, favicon 16 32 48 and an svg that follows the theme
+app/      icon 1024 and 512, apple touch 180, favicon 16 (by hand) 32 48, svg and ico. a paper led on an ink tile, so it reads on light and dark tabs
 og/       grid cards (home, a release, docs, pico support) and code cards (blink.ino, test.yaml)
 social/   avatar 400, x header 1500x500
 ```
