@@ -4,6 +4,7 @@ import { Bench, Circuit, PARTS, checkRules, parseScenario, play, type Diagram, t
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
 import { Speaker } from './lib/speaker'
+import { Icon } from './icons/Icon'
 import { untangle } from './lib/layout'
 import { routeAll, type Rect } from './lib/router'
 import { rounded, route, split, type Point } from './lib/wires'
@@ -53,6 +54,8 @@ type Props = {
   // said when someone tries to move a part that cannot move right now
   onHint?: (text: string) => void
   onDiagram?: (d: Diagram) => void
+  // the + beside the board was pressed, at this spot on screen
+  onConnect?: (x: number, y: number) => void
   // a wire picked on the canvas, by its key
   selectedWire?: string | null
   onSelectWire?: (key: string | null) => void
@@ -65,16 +68,21 @@ const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 export const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram: given, editable = false, onDiagram, onHint, fixed = false, selectedWire = null, onSelectWire, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
+export function Workbench({ diagram: given, editable = false, onDiagram, onHint, onConnect, fixed = false, selectedWire = null, onSelectWire, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
   // a part being dragged: the diagram with it moved, drawn until the pointer lets go
   const [moving, setMoving] = useState<Diagram | null>(null)
   const diagram = moving ?? given
   const fitted = useRef(false)
+  // the fit as of the last render, read by measure without making it rerun
+  const fitRef = useRef({ x: 40, y: 40, scale: 1 })
   const forceFit = useRef(false)
   const els = useRef<Record<string, Wokwi>>({})
   const [paths, setPaths] = useState<{ key: string; d: string; color: string }[]>([])
   const [fit, setFit] = useState({ x: 40, y: 40, scale: 1 })
+  useEffect(() => {
+    fitRef.current = fit
+  }, [fit])
   // the frame around everything, in diagram units
   const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 })
   const [rects, setRects] = useState<Record<string, Rect>>({})
@@ -179,8 +187,11 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         const m = 36
         const [minX, maxX, minY, maxY] = [Math.min(...xs) - m, Math.max(...xs) + m, Math.min(...ys) - m, Math.max(...ys) + m]
         setFrame({ x: minX, y: minY, w: maxX - minX, h: maxY - minY })
-        // someone arranging parts keeps their view, a new or agent built circuit gets fitted
-        if (fixed && fitted.current && !forceFit.current) return
+        // someone arranging parts keeps their view, unless a part they added landed out of sight
+        const area0 = box.current!.getBoundingClientRect()
+        const view = fitRef.current
+        const offscreen = Object.values(rects).some((r) => r.x * view.scale + view.x < 0 || (r.x + r.w) * view.scale + view.x > area0.width || r.y * view.scale + view.y < 60 || (r.y + r.h) * view.scale + view.y > area0.height - 40)
+        if (fixed && fitted.current && !forceFit.current && !offscreen) return
         fitted.current = true
         forceFit.current = false
         const area = box.current!.getBoundingClientRect()
@@ -560,6 +571,35 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             )
           })}
         </svg>
+        {editable &&
+          onConnect &&
+          (() => {
+            const b = diagram.parts.find((p) => 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}))
+            const r = b && rects[b.id]
+            if (!b || !r) return null
+            const x = at(b).x + r.w
+            const y = at(b).y + r.h / 2
+            const k = 1 / fit.scale
+            return (
+              <>
+                <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
+                  <path d={`M${x} ${y} H${x + 34 * k}`} stroke="var(--accent)" strokeWidth={1.5 * k} strokeDasharray={`${3 * k} ${3 * k}`} />
+                </svg>
+                <button
+                  title="connect a part to the board"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    onConnect(rect.right + 8, rect.top)
+                  }}
+                  className="absolute z-10 flex items-center justify-center rounded-[6px] bg-accent text-on-accent shadow-sm transition-transform hover:scale-110"
+                  style={{ left: x + 34 * k, top: y - 11 * k, width: 22 * k, height: 22 * k }}
+                >
+                  <Icon name="plus" size={14 * k} />
+                </button>
+              </>
+            )
+          })()}
         {drawing && (
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
             <path d={`M${drawing.a.x} ${drawing.a.y} L${drawing.b.x} ${drawing.b.y}`} stroke="var(--accent)" strokeWidth={2 / fit.scale} strokeDasharray={`${6 / fit.scale} ${4 / fit.scale}`} fill="none" strokeLinecap="round" />

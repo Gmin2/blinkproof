@@ -1,4 +1,4 @@
-import { PARTS, type Diagram } from '@blinkproof/sim'
+import { PARTS, connect, type Diagram } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
@@ -12,26 +12,24 @@ import { Workbench, type BenchState } from './Workbench'
 
 type Theme = 'light' | 'dark'
 
-// what a part gets when you add it by hand, and the start of its id
-const DEFAULTS: Record<string, Record<string, string>> = {
-  'wokwi-led': { color: 'red' },
-  'wokwi-resistor': { value: '220' },
-  'wokwi-pushbutton': { color: 'green' },
-  'wokwi-led-ring': { pixels: '16' },
-  'wokwi-hc-sr04': { distance: '200' },
-}
-const PREFIX: Record<string, string> = {
-  'wokwi-led': 'led',
-  'wokwi-resistor': 'r',
-  'wokwi-pushbutton': 'btn',
-  'wokwi-ssd1306': 'oled',
-  'wokwi-potentiometer': 'pot',
-  'wokwi-neopixel': 'pixel',
-  'wokwi-led-ring': 'ring',
-  'wokwi-servo': 'servo',
-  'wokwi-hc-sr04': 'sonar',
-  'wokwi-buzzer': 'bz',
-}
+// what the + beside the board offers, in groups: light and sound, input, display and motion
+const CONNECT: [keyof typeof PARTS, string, string][][] = [
+  [
+    ['wokwi-led', 'LED', 'Light it from a pin, resistor included'],
+    ['wokwi-buzzer', 'Buzzer', 'Beeps and tunes with tone()'],
+    ['wokwi-led-ring', 'LED ring', '16 colour pixels on one pin'],
+  ],
+  [
+    ['wokwi-pushbutton', 'Button', 'Read a press with INPUT_PULLUP'],
+    ['wokwi-potentiometer', 'Knob', 'A dial you read with analogRead'],
+    ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Measure distance, 2 to 400 cm'],
+  ],
+  [
+    ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels over i2c'],
+    ['wokwi-servo', 'Servo', 'Turn to an angle from 0 to 180'],
+  ],
+]
+
 type Float = 'prompt' | 'parts' | null
 
 function useTheme() {
@@ -98,6 +96,8 @@ export default function App() {
   const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
+  // the menu the + beside the board opens, where it opens
+  const [connectMenu, setConnectMenu] = useState<{ x: number; y: number } | null>(null)
   const [bench, setBench] = useState<BenchState | null>(null)
   const [testRun, setTestRun] = useState(0)
   // the sim, like wokwi: running, paused, or stopped with the power off
@@ -244,17 +244,20 @@ export default function App() {
     }
   }
 
-  // whatever is edited goes to this browser's drafts, a build without edits has none
+  // whatever is edited goes to this browser's drafts, a build without edits has none.
+  // only after a real change: opening a build must never write, or the empty first render would wipe its draft
+  const dirty = useRef(false)
   useEffect(() => {
-    if (!docId) return
+    if (!docId || !dirty.current) return
+    dirty.current = false
     drafts.set(docId, { sketch: sketchEdited ? draft : undefined, diagram: circuit })
     setDraftIds(drafts.ids())
   }, [draft, circuit])
 
-  const editCode = (text: string) => setDraft(text)
+  const editCode = (text: string) => ((dirty.current = true), setDraft(text))
 
   // a finished change to the circuit: one step of undo
-  const editCircuit = (d: Diagram | undefined) => setEdits((e) => ({ past: [...e.past.slice(-49), e.present], present: d, future: [] }))
+  const editCircuit = (d: Diagram | undefined) => ((dirty.current = true), setEdits((e) => ({ past: [...e.past.slice(-49), e.present], present: d, future: [] })))
 
   // the diagram with what is on screen, so taking a wire out does not move anything
   const removeWire = (key: string) => {
@@ -263,18 +266,19 @@ export default function App() {
     setSelectedWire(null)
   }
 
-  // a new part: sensible defaults, a readable id, set just right of the circuit, picked so it can be wired at once
+  // a new part arrives wired: free pins on the board, its resistor or divider, the toast says where it went
   const addPart = (type: keyof typeof PARTS) => {
     if (!diagram) return setToast('Open a build first, then add parts to it')
-    if ('board' in (PARTS[type as keyof typeof PARTS] ?? {})) return setToast('A circuit has one board')
-    const prefix = PREFIX[type] ?? type.replace('wokwi-', '')
-    let n = 1
-    while (diagram.parts.some((p) => p.id === `${prefix}${n}`)) n++
-    const id = `${prefix}${n}`
-    const right = Math.max(...diagram.parts.map((p) => (p.left ?? 0) + ('board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) ? 300 : 120)))
+    const right = Math.max(...diagram.parts.map((p) => (p.left ?? 0) + ('board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) ? 300 : 140)))
     const board = diagram.parts.find((p) => 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}))
-    editCircuit({ ...diagram, parts: [...diagram.parts, { type, id, left: Math.round(right / 5) * 5 + 40, top: board?.top ?? 0, attrs: { ...DEFAULTS[type] } }] })
-    select(id)
+    const added = connect(diagram, type, { left: Math.round(right / 5) * 5 + 40, top: board?.top ?? 0 })
+    if (added.error) return setToast(added.error)
+    editCircuit({ ...diagram, parts: [...diagram.parts, ...added.parts], connections: [...diagram.connections, ...added.connections] })
+    const main = added.parts.find((p) => p.type === type)!
+    const where = Object.values(added.pins)
+    setToast(where.length ? `${main.id} is on ${where.map((p) => (/^\d+$/.test(p) ? `pin ${p}` : p)).join(' and ')}` : `Added ${main.id}`)
+    setConnectMenu(null)
+    select(main.id)
     setMode('design')
   }
 
@@ -297,11 +301,12 @@ export default function App() {
     editCircuit({ ...diagram, connections: diagram.connections.map((c) => (`${c[0]}|${c[1]}` === key ? [c[0], c[1], color, c[3]] : c)) })
   }
 
-  const undo = () => setEdits((e) => (e.past.length ? { past: e.past.slice(0, -1), present: e.past[e.past.length - 1], future: [e.present, ...e.future] } : e))
+  const undo = () => ((dirty.current = true), setEdits((e) => (e.past.length ? { past: e.past.slice(0, -1), present: e.past[e.past.length - 1], future: [e.present, ...e.future] } : e)))
 
-  const redo = () => setEdits((e) => (e.future.length ? { past: [...e.past, e.present], present: e.future[0], future: e.future.slice(1) } : e))
+  const redo = () => ((dirty.current = true), setEdits((e) => (e.future.length ? { past: [...e.past, e.present], present: e.future[0], future: e.future.slice(1) } : e)))
 
   const revert = () => {
+    dirty.current = true
     setDraft(undefined)
     setApplied(undefined)
     setEdits({ past: [], future: [] })
@@ -346,7 +351,7 @@ export default function App() {
           removePart(selected)
         }
       }
-      if (!typing && e.key === 'Escape') setSelectedWire(null)
+      if (!typing && e.key === 'Escape') (setSelectedWire(null), setConnectMenu(null))
       if (!typing && mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -431,6 +436,7 @@ export default function App() {
             onHint={setToast}
             fixed={!!circuit || (!live && !!doc?.forkOf)}
             selectedWire={selectedWire}
+            onConnect={(x, y) => setConnectMenu((m) => (m ? null : { x, y }))}
             onSelectWire={(k) => (setSelectedWire(k), k && setMode('design'))}
             sound={sound}
             reveal={live}
@@ -575,6 +581,31 @@ export default function App() {
             <button onClick={saveFork} disabled={saving} title="save as a new build with its own link, cmd s" className="h-7 rounded-full bg-accent px-3 font-semibold text-on-accent disabled:opacity-40">
               {saving ? 'Saving...' : 'Save as New Build'}
             </button>
+          </div>
+        )}
+
+        {connectMenu && diagram && (
+          <div className="fixed inset-0 z-40" onPointerDown={() => setConnectMenu(null)} onKeyDown={(e) => e.key === 'Escape' && setConnectMenu(null)}>
+            <div className="absolute w-[264px]" style={{ left: Math.min(connectMenu.x, innerWidth - 280), top: Math.max(8, Math.min(connectMenu.y - 30, innerHeight - 440)) }} onPointerDown={(e) => e.stopPropagation()}>
+              <div className="ml-2 inline-flex h-7 items-center rounded-t-[8px] border border-b-0 border-line bg-panel px-2.5 text-[11px] font-medium text-dim">Connect to {diagram.parts.find((p) => 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}))?.id ?? 'the board'}</div>
+              <div className="float overflow-hidden p-1">
+                {CONNECT.map((group, gi) => (
+                  <div key={gi} className={gi ? 'mt-1 border-t border-sep pt-1' : ''}>
+                    {group.map(([type, name, line]) => (
+                      <button key={type} onClick={() => addPart(type)} className="flex w-full items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left hover:bg-hover">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-input text-icon">
+                          <Icon name={PART_ICON[type] ?? 'box'} size={15} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[12px] font-medium text-ink">{name}</span>
+                          <span className="block truncate text-[11px] text-dim">{line}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
