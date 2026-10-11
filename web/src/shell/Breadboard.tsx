@@ -1,5 +1,5 @@
 import { FACTS, holeName, proto, type Diagram, type End, type Hole, type Placed, type Proto } from '@blinkproof/sim'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
 import { KIND } from './Sidebar'
@@ -513,7 +513,7 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
           {(['steps', 'shopping'] as const).map((l) => (
             <button key={l} onClick={() => setList(l)} className={`relative z-10 flex h-7 items-center justify-center gap-1 text-[11px] font-medium ${list === l ? 'text-ink' : 'text-dim hover:text-ink'}`}>
               <Icon name={l === 'steps' ? 'unordered-list' : 'box'} size={13} />
-              {l === 'steps' ? 'Steps' : 'Shopping list'}
+              {l === 'steps' ? 'Build it' : 'Shopping list'}
             </button>
           ))}
         </div>
@@ -529,7 +529,8 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
                   const isDone = ticks.has(x.n)
                   const open = i === step
                   return (
-                    <div key={x.n} className={`flex h-7 items-center gap-2 rounded-[7px] pl-1 pr-2 text-[12px] ${open ? 'chip' : 'hover:bg-hover'}`}>
+                    <Fragment key={x.n}>
+                    <div className={`flex h-7 items-center gap-2 rounded-[7px] pl-1 pr-2 text-[12px] ${open ? 'chip' : 'hover:bg-hover'}`}>
                       <button onClick={() => tick(x.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className="flex h-5 w-5 shrink-0 items-center justify-center">
                         {isDone ? <Icon name="circle-check" size={15} className="text-ok" /> : <span className={`flex h-[15px] w-[15px] items-center justify-center rounded-full border font-mono text-[9px] ${open ? 'border-ink text-ink' : 'border-icon-2 text-dim'}`}>{x.n}</span>}
                       </button>
@@ -538,54 +539,60 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
                       </button>
                       <span className="shrink-0 text-[11px] text-dim">{summary(rowsOf(p, x.adds))}</span>
                     </div>
+                    {open && (
+                      <div className="relative mb-2 mt-1.5 pl-[30px] pr-0.5">
+                        <span className="absolute bottom-1 left-[13px] top-0 w-px bg-tree" />
+
+                    {lead.length > 0 && (
+                      <div className="mb-2.5 space-y-1">
+                        {lead.map((l, i) => (
+                          <p key={i} className="text-[12px] leading-[18px] text-dim">
+                            {l}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {parts.map((r) => (
+                      <div key={r.id} className="mb-2.5">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-dim">
+                          <Icon name={PART_ICON[r.type] ?? 'box'} size={13} className="text-icon-2" />
+                          {r.straddle ? 'press' : 'push'} {r.id} in{r.straddle ? ' across the gap' : ''}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {r.legs.map((l, i) => (
+                            <Line key={i} left={l.pin} right={l.hole} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {others.length > 0 && (
+                      <div className="space-y-1.5">
+                        {others.map((r) =>
+                          r.kind === 'resistor' ? (
+                            <div key={r.id} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                              <Resistor bands={r.bands} />
+                              <span className="font-mono text-ink">{r.value}</span>
+                              <span className="ml-auto font-mono text-dim">
+                                {r.from} → {r.to}
+                              </span>
+                            </div>
+                          ) : r.kind === 'beside' ? (
+                            <Line key={r.id} left={r.id} right="beside the board" />
+                          ) : (
+                            <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} />
+                          ),
+                        )}
+                      </div>
+                    )}
+                  
+                      </div>
+                    )}
+                  </Fragment>
                   )
                 })}
               </div>
             </Section>
-            <Sep />
-            <Section title={`${step + 1}. ${s.title}`}>
-              {lead.length > 0 && (
-                <div className="mb-2.5 space-y-1">
-                  {lead.map((l, i) => (
-                    <p key={i} className="text-[12px] leading-[18px] text-dim">
-                      {l}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {parts.map((r) => (
-                <div key={r.id} className="mb-2.5">
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-dim">
-                    <Icon name={PART_ICON[r.type] ?? 'box'} size={13} className="text-icon-2" />
-                    {r.straddle ? 'press' : 'push'} {r.id} in{r.straddle ? ' across the gap' : ''}
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {r.legs.map((l, i) => (
-                      <Line key={i} left={l.pin} right={l.hole} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {others.length > 0 && (
-                <div className="space-y-1.5">
-                  {others.map((r) =>
-                    r.kind === 'resistor' ? (
-                      <div key={r.id} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
-                        <Resistor bands={r.bands} />
-                        <span className="font-mono text-ink">{r.value}</span>
-                        <span className="ml-auto font-mono text-dim">
-                          {r.from} → {r.to}
-                        </span>
-                      </div>
-                    ) : r.kind === 'beside' ? (
-                      <Line key={r.id} left={r.id} right="beside the board" />
-                    ) : (
-                      <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} />
-                    ),
-                  )}
-                </div>
-              )}
-            </Section>
+
             {p.beside.length > 0 && (
               <>
                 <Sep />
