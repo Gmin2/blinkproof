@@ -21,7 +21,11 @@ export type Saved = {
 }
 
 export const api = {
-  list: (kind: Saved['kind']) => fetch(`/agent/builds?kind=${kind}`).then((r) => (r.ok ? (r.json() as Promise<Saved[]>) : [])),
+  list: (kind: Saved['kind']) =>
+    fetch(`/agent/builds?kind=${kind}`).then((r) => {
+      if (!r.ok) throw new Error(`builds ${r.status}`)
+      return r.json() as Promise<Saved[]>
+    }),
   get: (id: string) => fetch(`/agent/builds/${encodeURIComponent(id)}`).then((r) => (r.ok ? (r.json() as Promise<Saved>) : undefined)),
   fork: async (id: string, body: { sketch: string; diagram?: Diagram; test?: string; title?: string }) => {
     const r = await fetch(`/agent/builds/${encodeURIComponent(id)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -48,15 +52,20 @@ export function useLibrary() {
   const [builds, setBuilds] = useState<Saved[]>([])
   const [examples, setExamples] = useState<Saved[]>([])
   const [offline, setOffline] = useState(false)
+  // a first request can fail while the server or the store wakes up, so try again a few times before calling it offline
   const refresh = useCallback(async () => {
-    try {
-      const [b, e] = await Promise.all([api.list('build'), api.list('example')])
-      setBuilds(b)
-      setExamples(e)
-      setOffline(false)
-    } catch {
-      setOffline(true)
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const [b, e] = await Promise.all([api.list('build'), api.list('example')])
+        setBuilds(b)
+        setExamples(e)
+        setOffline(false)
+        return
+      } catch {
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+      }
     }
+    setOffline(true)
   }, [])
   useEffect(() => {
     refresh()
