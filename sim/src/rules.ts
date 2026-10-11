@@ -155,7 +155,9 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
       if (!through) add('unwired', 'error', [id], `${com} goes nowhere: it is common ${anode ? 'anode, wire it to 5V' : 'cathode, wire it to GND'}`)
       const names = p.type === 'wokwi-rgb-led' ? ['R', 'G', 'B'] : ['A', 'B', 'C', 'D', 'E', 'F', 'G']
       const bare = names.filter((x) => c.signal(`${id}:${x}`))
-      if (direct && bare.length) add('led-no-resistor', 'error', [id], `${bare.map((x) => `${id}:${x}`).join(', ')} ${bare.length > 1 ? 'go' : 'goes'} straight to a pin with ${com} straight to ${anode ? '5V' : 'GND'}, nothing limits the current. put a 220 ohm resistor on each, or one on ${com}`)
+      // the digit's COM.1 and COM.2 are one pin inside: a resistor on one does nothing if the other goes straight to the rail
+      const both = p.type === 'wokwi-7segment' && [`${id}:COM.1`, `${id}:COM.2`].filter((r) => c.peers(r).some((q) => !q.startsWith(`${id}:`))).length > 1
+      if (direct && bare.length) add('led-no-resistor', 'error', [id], `${bare.map((x) => `${id}:${x}`).join(', ')} ${bare.length > 1 ? 'go' : 'goes'} straight to a pin with ${com} straight to ${anode ? '5V' : 'GND'}, nothing limits the current. put a 220 ohm resistor on each, or one on ${com}${both ? `. COM.1 and COM.2 are the same pin inside the digit, so a resistor on one is bypassed by the wire on the other: wire only COM.1, through the resistor, and leave COM.2 unconnected` : ''}`)
       const lit = names.filter((x) => c.signal(`${id}:${x}`, true))
       if (through && !lit.length) add('unwired', 'error', [id], `none of ${id}'s ${p.type === 'wokwi-rgb-led' ? 'colours' : 'segments'} reach a pin`)
     }

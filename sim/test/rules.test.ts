@@ -144,3 +144,14 @@ describe('lights behind a common pin', () => {
     expect(errors(circuit([{ id: 'seg1', type: 'wokwi-7segment' }], [['seg1:A', 'uno:2']]))).toContain('unwired')
   })
 })
+
+describe('a digit with both common pins wired', () => {
+  it('explains that the second common pin bypasses the resistor', () => {
+    const c = circuit(
+      [{ id: 'seg1', type: 'wokwi-7segment' }, { id: 'r1', type: 'wokwi-resistor', attrs: { value: '220' } }],
+      [['seg1:A', 'uno:2'], ['seg1:COM.1', 'r1:1'], ['r1:2', 'uno:GND.1'], ['seg1:COM.2', 'uno:GND.2']],
+    )
+    const f = rules(c).find((x) => x.rule === 'led-no-resistor')!
+    expect(f.message).toContain('leave COM.2 unconnected')
+  })
+})
