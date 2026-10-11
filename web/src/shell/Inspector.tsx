@@ -18,7 +18,6 @@ const TABS: { mode: Mode; label: string; icon: IconName }[] = [
   { mode: 'serial', label: 'Serial', icon: 'terminal' },
   { mode: 'test', label: 'Test', icon: 'flask' },
   { mode: 'agent', label: 'Agent', icon: 'prototype' },
-  { mode: 'build', label: 'Build', icon: 'wire' },
 ]
 
 // the colours a part comes in, and what to paint the dot
@@ -179,7 +178,8 @@ export function Inspector({
   const [buildWidth, setBuildWidth] = useWidth('inspector-build', 340, 280, 640)
   const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 340] : [width, setWidth, 300]
   const [dragging, setDragging] = useState(false)
-  const index = TABS.findIndex((t) => t.mode === mode)
+  // the build drawer sits after the five tabs, shown while the breadboard has the stage
+  const index = mode === 'build' ? TABS.length : TABS.findIndex((t) => t.mode === mode)
   const pins = part ? ((PARTS[part.type as keyof typeof PARTS]?.pins as string[] | undefined) ?? []) : []
   const peers = (pin: string) => (circuit && part ? circuit.peers(`${part.id}:${pin}`).filter((r) => !r.startsWith(`${part.id}:`)) : [])
 
@@ -200,11 +200,11 @@ export function Inspector({
 
       {/* the tabs: the chip slides to the one picked, and the panels slide along with it */}
       <div className="px-2.5 pb-2">
-        <div className="relative grid grid-cols-6 rounded-[9px] bg-input p-0.5">
+        <div className={`relative grid grid-cols-5 rounded-[9px] bg-input p-0.5 ${mode === 'build' ? 'hidden' : ''}`}>
           <span
             className="absolute inset-y-0.5 left-0.5 rounded-[7px] bg-panel shadow-[0_1px_2px_rgba(0,0,0,.08),0_0_0_0.5px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
             style={{
-              width: 'calc((100% - 4px) / 6)',
+              width: 'calc((100% - 4px) / 5)',
               transform: `translateX(${index * 100}%)`,
             }}
           />
@@ -215,7 +215,7 @@ export function Inspector({
               title={t.label}
               className={`relative z-10 flex h-7 items-center justify-center gap-1 text-[11px] font-medium transition-colors ${mode === t.mode ? 'text-ink' : 'text-dim hover:text-ink'}`}
             >
-              {w >= 380 && <Icon name={t.icon} size={13} />}
+              <Icon name={t.icon} size={13} />
               <span>{t.label}</span>
             </button>
           ))}

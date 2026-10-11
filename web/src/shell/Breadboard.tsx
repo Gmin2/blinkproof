@@ -26,11 +26,11 @@ function netName(p: Proto, color: string, why: string) {
   return why
 }
 
-type DrawProps = { p: Proto; diagram: Diagram; look: Look; upTo: number; focus?: number; picked?: string | null; onPick?: (id: string | null) => void; callouts?: boolean }
+type DrawProps = { p: Proto; diagram: Diagram; look: Look; upTo: number; focus?: number; picked?: string | null; onPick?: (id: string | null) => void; callouts?: boolean; fill?: boolean }
 
 // the breadboard seen from above with the board beside it, drawn to the hole. two looks of one drawing:
 // real, in the colours of the bench, and blueprint, see through with numbered callouts
-export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callouts = false }: DrawProps) {
+export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callouts = false, fill = false }: DrawProps) {
   const blue = look === 'blueprint'
   const shown = new Set(p.steps.slice(0, upTo + 1).flatMap((s) => s.adds))
   const hot = new Set(focus === undefined ? [] : (p.steps[focus]?.adds ?? []))
@@ -93,7 +93,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
   const holeFill = blue ? '#b7c3e3' : '#c9c1b0'
   const label = { fontFamily: 'Geist Mono, monospace' }
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="the circuit on a breadboard" onClick={() => onPick?.(null)}>
+    <svg viewBox={`0 0 ${W} ${H}`} className={fill ? 'block h-full w-full' : 'block h-auto w-full'} preserveAspectRatio="xMidYMid meet" role="img" aria-label="the circuit on a breadboard" onClick={() => onPick?.(null)}>
       {/* the board, its used pins down the edge */}
       <g>
         <rect x={0} y={top} width={BW} height={bbH} rx={8} fill={blue ? 'rgba(44,79,158,.07)' : '#0f5c8a'} stroke={blue ? INK : 'none'} strokeWidth={1.2} />
@@ -385,7 +385,7 @@ export type Guide = ReturnType<typeof useGuide>
 
 // the main area while building: the drawing big, its look switch, the notice about what sits beside, the legend
 export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Diagram; title: string }) {
-  const { p, look, setLook, step, picked, setPicked } = guide
+  const { p, step, picked, setPicked } = guide
   const [zoom, setZoom] = useState(1)
   const box = useRef<HTMLDivElement>(null)
   if (!p) return <div className="flex h-full items-center justify-center text-[13px] text-dim">There is no board in this circuit yet, add one to build it.</div>
@@ -396,13 +396,6 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
         <span className="text-[13px] font-semibold text-ink">{title}</span>
         <span className="text-[12px] text-dim">on a {p.cols > 30 ? 'full' : 'half'} size breadboard</span>
         <div className="flex-1" />
-        <div role="tablist" aria-label="look" className="flex rounded-[9px] bg-input p-0.5">
-          {(['blueprint', 'real'] as const).map((l) => (
-            <button key={l} role="tab" aria-selected={look === l} onClick={() => setLook(l)} className={`h-7 rounded-[7px] px-3 text-[12px] font-medium capitalize ${look === l ? 'bg-panel text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)]' : 'text-dim hover:text-ink'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
       </div>
       {p.beside.length > 0 && (
         <div className="mx-5 mb-2 flex items-start gap-2 rounded-[10px] border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] leading-[18px] text-ink">
@@ -412,9 +405,9 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
           </span>
         </div>
       )}
-      <div ref={box} className="min-h-0 flex-1 overflow-auto px-5" style={{ background: look === 'blueprint' ? 'linear-gradient(#e9edf7,#e9edf7)' : undefined }}>
-        <div className="mx-auto py-4" style={{ width: `${Math.round(zoom * 100)}%`, maxWidth: zoom === 1 ? 1100 : undefined }}>
-          <Drawing p={p} diagram={diagram} look={look} upTo={picked ? guide.last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} callouts={look === 'blueprint'} />
+      <div ref={box} className="min-h-0 flex-1 overflow-auto px-5">
+        <div className="mx-auto h-full py-4" style={{ width: `${Math.round(zoom * 100)}%`, height: `${Math.round(zoom * 100)}%` }}>
+          <Drawing p={p} diagram={diagram} look="real" upTo={picked ? guide.last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} callouts fill />
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-sep px-5 py-2 text-[11.5px] text-dim">

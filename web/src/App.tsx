@@ -553,9 +553,9 @@ export default function App() {
               <Tool icon="plus" label="new build" onClick={openNew} />
             </div>
             <div className="pill flex items-center">
-              <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram} active={sim !== 'stop'} />
-              <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop'} />
-              <Tool icon="rotate" label="restart the simulation" onClick={runEdited} disabled={!diagram} />
+              <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram || mode === 'build'} active={sim !== 'stop' && mode !== 'build'} />
+              <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop' || mode === 'build'} />
+              <Tool icon="rotate" label="restart the simulation" onClick={runEdited} disabled={!diagram || mode === 'build'} />
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
@@ -563,11 +563,29 @@ export default function App() {
               <Tool icon={sound ? 'volume-up' : 'volume'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} active={sound} />
             </div>
           </div>
+          {/* the views of one gadget, the way a pcb editor has pcb, schematic and 3d: the circuit running, or built on a breadboard */}
+          {diagram && (
+            <div role="tablist" aria-label="view" className="pill pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-0.5 p-1">
+              {(
+                [
+                  ['circuit', 'Circuit'],
+                  ['breadboard', 'Breadboard'],
+                ] as const
+              ).map(([v, label]) => {
+                const on = (mode === 'build') === (v === 'breadboard')
+                return (
+                  <button key={v} role="tab" aria-selected={on} onClick={() => setMode(v === 'breadboard' ? 'build' : 'design')} className={`h-7 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'bg-accent text-on-accent' : 'text-dim hover:text-ink'}`}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
               <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
             </div>
-            <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`relative ${mode === 'build' ? 'hidden' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <button onClick={() => setZoomMenu((o) => !o)} className="pill flex h-9 items-center gap-3 pl-3.5 pr-2.5 text-[13px] font-medium text-ink">
                 {bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '100%'}
                 <Icon name="chevron-down" size={12} className="text-icon" />
