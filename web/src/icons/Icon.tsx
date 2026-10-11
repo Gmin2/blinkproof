@@ -4,6 +4,8 @@ import { NUCLEO } from './nucleo'
 const OWN = {
   frame: '<path d="M5 2.5v13M13 2.5v13M2.5 5h13M2.5 13h13" />',
   play: '<path d="M5.5 3.6v10.8a.8.8 0 0 0 1.2.7l8.6-5.4a.8.8 0 0 0 0-1.4L6.7 2.9a.8.8 0 0 0-1.2.7Z" />',
+  'square-stop': '<rect x="4" y="4" width="10" height="10" rx="2" />',
+  rotate: '<path d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" />',
   pause: '<rect x="4.5" y="3" width="3" height="12" rx="1" /><rect x="10.5" y="3" width="3" height="12" rx="1" />',
   prototype: '<circle cx="4" cy="14" r="1.75" /><path d="M5.5 12.5c1-4 3-6 6-6.5" /><path d="M10.5 3.5 13.5 6l-2.7 2.8" />',
   flask: '<path d="M7 2.5h4M7.5 2.5v4.2L3.4 13.6a1.3 1.3 0 0 0 1.1 1.9h9a1.3 1.3 0 0 0 1.1-1.9L10.5 6.7V2.5" /><path d="M5.2 10.5h7.6" />',
