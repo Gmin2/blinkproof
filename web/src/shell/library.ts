@@ -9,19 +9,31 @@ export type Saved = {
   title: string
   request?: string
   model?: string
-  status: 'building' | 'proven' | 'failed'
+  status: 'building' | 'proven' | 'failed' | 'edited'
   diagram?: Diagram
   sketch?: string
   test?: string
   turns?: number
   tokens?: number
   traceId?: string
+  forkOf?: { id: string; title: string }
   createdAt: string
 }
 
 export const api = {
   list: (kind: Saved['kind']) => fetch(`/agent/builds?kind=${kind}`).then((r) => (r.ok ? (r.json() as Promise<Saved[]>) : [])),
   get: (id: string) => fetch(`/agent/builds/${encodeURIComponent(id)}`).then((r) => (r.ok ? (r.json() as Promise<Saved>) : undefined)),
+  fork: async (id: string, body: { sketch: string; diagram?: Diagram; test?: string; title?: string }) => {
+    const r = await fetch(`/agent/builds/${encodeURIComponent(id)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const json = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(json.error ?? `could not save (${r.status})`)
+    return json as Saved
+  },
+  rename: async (id: string, title: string) => {
+    const r = await fetch(`/agent/builds/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'could not rename')
+    return r.json() as Promise<Saved>
+  },
   events: (id: string) => fetch(`/agent/builds/${encodeURIComponent(id)}/events`).then((r) => (r.ok ? (r.json() as Promise<AgentEvent[]>) : [])),
 }
 
@@ -43,7 +55,9 @@ export function useLibrary() {
   useEffect(() => {
     refresh()
   }, [refresh])
-  return { builds, examples, offline, refresh }
+  // the list comes from an index that catches up a moment after a write, so show changes straight away
+  const upsert = useCallback((b: Saved) => setBuilds((list) => (list.some((x) => x.id === b.id) ? list.map((x) => (x.id === b.id ? { ...x, ...b } : x)) : [b, ...list])), [])
+  return { builds, examples, offline, refresh, upsert }
 }
 
 // two pages: / for a new build, /b/:id for anything stored
@@ -68,4 +82,30 @@ export function useRoute() {
     setRoute(r)
   }, [])
   return [route, go] as const
+}
+
+// unsaved edits, one per build, kept in this browser so a reload or a detour does not lose them
+const KEY = 'blinkproof:draft:'
+
+export const drafts = {
+  get(id: string) {
+    try {
+      return localStorage.getItem(KEY + id) ?? undefined
+    } catch {
+      return undefined
+    }
+  },
+  set(id: string, text: string | undefined) {
+    try {
+      if (text === undefined) localStorage.removeItem(KEY + id)
+      else localStorage.setItem(KEY + id, text)
+    } catch {}
+  },
+  ids() {
+    try {
+      return new Set(Object.keys(localStorage).filter((k) => k.startsWith(KEY)).map((k) => k.slice(KEY.length)))
+    } catch {
+      return new Set<string>()
+    }
+  },
 }

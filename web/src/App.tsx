@@ -4,7 +4,7 @@ import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
 import { Inspector, type Mode } from './shell/Inspector'
-import { api, useLibrary, useRoute, type Saved } from './shell/library'
+import { api, drafts, useLibrary, useRoute, type Saved } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
@@ -83,6 +83,8 @@ export default function App() {
   // your edits to the sketch: the draft you type, and what you last pressed run on
   const [draft, setDraft] = useState<string>()
   const [applied, setApplied] = useState<string>()
+  const [draftIds, setDraftIds] = useState(() => drafts.ids())
+  const [saving, setSaving] = useState(false)
   const [serialLine, setSerialLine] = useState('')
   const serialIn = useRef<((text: string) => void) | null>(null)
   const [sound, setSound] = useState(false)
@@ -99,11 +101,15 @@ export default function App() {
   )
   const live = route.kind === 'new' || build.savedId === route.id
 
+  const docId = route.kind === 'doc' ? route.id : undefined
+
+  // an edit left on this build last time comes back, in the editor and on the board
   useEffect(() => {
-    setDraft(undefined)
-    setApplied(undefined)
+    const saved = docId ? drafts.get(docId) : undefined
+    setDraft(saved)
+    setApplied(saved)
     setSim('run')
-  }, [route.kind === 'doc' ? route.id : 'new'])
+  }, [docId])
 
   useEffect(() => {
     if (route.kind !== 'doc' || build.savedId === route.id) return
@@ -139,7 +145,8 @@ export default function App() {
   const code = draft ?? (live ? build.code : doc?.sketch) ?? ''
   const edited = draft !== undefined && draft !== original
   const request = live ? build.request : (doc?.request ?? '')
-  const title = live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
+  const listed = lib.builds.find((b) => b.id === docId)?.title
+  const title = live && listed ? listed : live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
 
 
   const openNew = () => {
@@ -197,6 +204,61 @@ export default function App() {
 
   const toggle = (f: Float) => setFloat((cur) => (cur === f ? null : f))
 
+  const rename = async (id: string, title: string) => {
+    try {
+      const b = await api.rename(id, title)
+      if (doc?.id === id) setDoc({ ...doc, title })
+      lib.upsert(b)
+    } catch (e) {
+      setToast((e as Error).message)
+    }
+  }
+
+  const editCode = (text: string) => {
+    setDraft(text)
+    if (!docId) return
+    drafts.set(docId, text === original ? undefined : text)
+    setDraftIds(drafts.ids())
+  }
+
+  const revert = () => {
+    setDraft(undefined)
+    setApplied(undefined)
+    if (docId) drafts.set(docId, undefined)
+    setDraftIds(drafts.ids())
+    setRestart((n) => n + 1)
+  }
+
+  // the edit becomes its own build with its own link, the one it came from stays as it was
+  const saveFork = async () => {
+    if (!docId || !edited || draft === undefined || saving) return
+    setSaving(true)
+    try {
+      const fork = await api.fork(docId, { sketch: draft, diagram: diagram ?? undefined, test })
+      drafts.set(docId, undefined)
+      setDraftIds(drafts.ids())
+      go({ kind: 'doc', id: fork.id })
+      lib.upsert(fork)
+      setToast('Saved as a new build')
+    } catch (e) {
+      setToast((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        if (edited) saveFork()
+        else setToast('Nothing changed to save')
+      }
+    }
+    addEventListener('keydown', key)
+    return () => removeEventListener('keydown', key)
+  })
+
   // run the sketch as it is in the editor: compile it if it changed, boot the board fresh
   const runEdited = () => {
     if (draft !== undefined) setApplied(draft)
@@ -212,7 +274,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar route={route} onOpen={open} onNew={openNew} builds={lib.builds} examples={lib.examples} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {diagram ? (
@@ -268,7 +330,7 @@ export default function App() {
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
-              <Tool icon="refresh-2" label="replay how the agent built it" onClick={replay} disabled={route.kind !== 'doc' || build.busy || lib.examples.some((e) => e.id === route.id)} />
+              <Tool icon="refresh-2" label="replay how the agent built it" onClick={replay} disabled={route.kind !== 'doc' || build.busy || lib.examples.some((e) => e.id === route.id) || (!live && !!doc?.forkOf)} />
               <Tool icon={sound ? 'volume-up' : 'volume'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} active={sound} />
             </div>
           </div>
@@ -311,9 +373,14 @@ export default function App() {
             right={
               <>
                 {edited && (
-                  <button onClick={() => (setDraft(undefined), setApplied(undefined), setRestart((n) => n + 1))} className="text-[11px] font-normal text-dim hover:text-ink">
-                    Revert
-                  </button>
+                  <>
+                    <button onClick={revert} className="text-[11px] font-normal text-dim hover:text-ink">
+                      Revert
+                    </button>
+                    <button onClick={saveFork} disabled={saving} title="save your edit as a new build with its own link, cmd s" className="h-6 rounded-[7px] bg-input px-2 text-[11px] font-semibold text-ink disabled:opacity-40">
+                      {saving ? 'Saving...' : 'Save as New Build'}
+                    </button>
+                  </>
                 )}
                 <button onClick={runEdited} disabled={build.busy && live} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
                   <Icon name="play" size={11} />
@@ -322,7 +389,7 @@ export default function App() {
               </>
             }
           >
-            <CodeEditor value={code} onChange={setDraft} onRun={runEdited} readOnly={build.busy && live} />
+            <CodeEditor value={code} onChange={editCode} onRun={runEdited} readOnly={build.busy && live} />
             {bench?.build && !bench.build.ok && (
               <div className="border-t border-sep px-3 py-2 font-mono text-[10.5px] leading-4 text-bad">
                 {bench.build.diagnostics.slice(0, 3).map((d, i) => (
@@ -416,6 +483,8 @@ export default function App() {
         model={model}
         models={models}
         onModel={setModel}
+        forkOf={live ? undefined : doc?.forkOf}
+        onOpen={open}
         canShare={route.kind === 'doc'}
         onShare={share}
         onDownload={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}

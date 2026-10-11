@@ -11,13 +11,16 @@ export type Build = {
   title: string
   request?: string
   model?: string
-  status: 'building' | 'proven' | 'failed'
+  // edited: someone changed it by hand, it has not been proven since
+  status: 'building' | 'proven' | 'failed' | 'edited'
   diagram?: unknown
   sketch?: string
   test?: string
   turns?: number
   tokens?: number
   traceId?: string
+  // the build this one was saved from
+  forkOf?: { id: string; title: string }
   createdAt: string
   updatedAt: string
 }
