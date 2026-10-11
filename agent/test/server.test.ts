@@ -62,6 +62,17 @@ describe('server', () => {
     expect((await patch(b.id, '   ')).status).toBe(400)
   })
 
+  it('makes a blank build on the board you pick, and refuses anything else', async () => {
+    const post = (board: string) => fetch(`${base}/builds`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ board }) })
+    const res = await post('pico')
+    expect(res.status).toBe(201)
+    const b = await res.json()
+    expect(b).toMatchObject({ kind: 'build', title: 'Blank Pico', status: 'edited' })
+    expect(b.diagram.parts).toEqual([{ type: 'wokwi-pi-pico', id: 'pico', left: 0, top: 0 }])
+    expect(b.sketch).toContain('Serial.begin(115200)')
+    expect((await post('esp32')).status).toBe(400)
+  })
+
   it('says 404 for an id it does not have, 400 for an empty request', async () => {
     expect((await fetch(`${base}/builds/nope`)).status).toBe(404)
     expect((await fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(400)

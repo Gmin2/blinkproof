@@ -29,6 +29,12 @@ export const api = {
     if (!r.ok) throw new Error(json.error ?? `could not save (${r.status})`)
     return json as Saved
   },
+  blank: async (board: string) => {
+    const r = await fetch('/agent/builds', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ board }) })
+    const json = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(json.error ?? 'could not start a blank build')
+    return json as Saved
+  },
   rename: async (id: string, title: string) => {
     const r = await fetch(`/agent/builds/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) })
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'could not rename')

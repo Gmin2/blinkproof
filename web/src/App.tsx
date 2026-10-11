@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
+import { Start } from './shell/Start'
 import { Serial } from './shell/Serial'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, drafts, useLibrary, useRoute, type Draft, type Saved } from './shell/library'
@@ -92,7 +93,7 @@ export default function App() {
   const [doc, setDoc] = useState<Saved | null>()
   const [toast, setToast] = useState('')
   const [mode, setMode] = useState<Mode>('design')
-  const [float, setFloat] = useState<Float>('prompt')
+  const [float, setFloat] = useState<Float>(null)
   const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
@@ -184,7 +185,7 @@ export default function App() {
     setSelected(null)
     setTestRun(0)
     setBench(null)
-    setFloat('prompt')
+    setFloat(null)
   }
 
   const open = (id: string) => {
@@ -199,6 +200,18 @@ export default function App() {
     if (!events.length) return setToast('Nothing to replay for this one')
     setFloat(null)
     build.replay(route.id, events)
+  }
+
+  // a board and an empty sketch, stored straight away so it has a link
+  const blank = async (board: 'uno' | 'nano' | 'pico') => {
+    try {
+      const b = await api.blank(board)
+      lib.upsert(b)
+      go({ kind: 'doc', id: b.id })
+      setMode('code')
+    } catch (e) {
+      setToast((e as Error).message)
+    }
   }
 
   const share = async () => {
@@ -446,8 +459,11 @@ export default function App() {
             onSelect={select}
           />
         ) : (
-          // an empty frame waiting for the agent
-          <div className="flex h-full items-center justify-center pb-[230px]">
+          route.kind === 'new' ? (
+            <Start examples={lib.examples} busy={build.busy} prompt={prompt} onPrompt={setPrompt} onDescribe={start} onOpen={open} onBlank={blank} />
+          ) : (
+          // a stored build with nothing to draw yet
+          <div className="flex h-full items-center justify-center pb-[120px]">
             <div className="relative">
               <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}</span>
               <div className="flex h-[260px] w-[440px] items-center justify-center bg-frame px-16 text-center text-[12px] leading-[18px] text-dim">
@@ -463,12 +479,13 @@ export default function App() {
               </div>
             </div>
           </div>
+          )
         )}
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-between px-2.5">
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
-              <Tool label="describe a gadget" onClick={() => (route.kind !== 'new' ? openNew() : toggle('prompt'))} active={float === 'prompt'}>
+              <Tool label="describe a gadget" onClick={openNew} active={route.kind === 'new'}>
                 <Logo size={20} />
               </Tool>
               <Tool icon="plus" label="new build" onClick={openNew} />
@@ -537,34 +554,6 @@ export default function App() {
           </Panel>
         )}
 
-        {float === 'prompt' && route.kind === 'new' && (
-          <Panel title="Describe a Gadget" onClose={() => setFloat(null)} className="bottom-3 left-1/2 w-[min(560px,calc(100%-40px))] -translate-x-1/2">
-            <div className="px-3 pb-3">
-              <textarea
-                autoFocus
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && start()}
-                rows={3}
-                placeholder="a gadget, in plain words"
-                className="w-full resize-none rounded-[7px] bg-input px-2.5 py-2 text-[12px] leading-[18px] text-ink outline-none placeholder:text-dim"
-              />
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {IDEAS.map((idea) => (
-                  <button key={idea} onClick={() => setPrompt(idea)} className={`h-6 rounded-[7px] px-2 text-[11px] ${prompt === idea ? 'bg-accent text-on-accent' : 'bg-input text-dim hover:text-ink'}`}>
-                    {idea.split(':')[0].replace(/^./, (c) => c.toUpperCase())}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-sep pt-3">
-                <span className="text-[11px] text-dim">⌘ Return to build</span>
-                <button onClick={start} disabled={build.busy} className="h-7 rounded-[7px] bg-accent px-3.5 text-[12px] font-semibold text-on-accent disabled:opacity-50">
-                  {build.busy ? 'Building...' : 'Build It'}
-                </button>
-              </div>
-            </div>
-          </Panel>
-        )}
         {edited && route.kind === 'doc' && (
           <div className="pill absolute left-1/2 top-[58px] z-20 flex h-9 -translate-x-1/2 items-center gap-1 pl-3.5 pr-1 text-[12px]" onPointerDown={(e) => e.stopPropagation()}>
             <Icon name="pen-3" size={13} className="text-icon-2" />
