@@ -1,17 +1,15 @@
-import { useEffect, useState } from 'react'
-import heroDark from './art/hero-dark.svg'
-import heroLight from './art/hero-light.svg'
-import loopDark from './art/loop-dark.svg'
-import loopLight from './art/loop-light.svg'
-import { Icon } from './icons/Icon'
-import type { IconName } from './icons/hand'
+import { PARTS } from '@blinkproof/sim'
+import { useEffect, useRef, useState } from 'react'
+import { Icon, Logo, type IconName } from './icons/Icon'
+import { PART_ICON } from './icons/Status'
 import { EXAMPLES } from './shell/examples'
-import { Inspector, type Tab } from './shell/Inspector'
-import { Sidebar, type Page } from './shell/Sidebar'
+import { Inspector, type Mode } from './shell/Inspector'
+import { KIND, Sidebar, type Page } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
 
 type Theme = 'light' | 'dark'
+type Float = 'prompt' | 'code' | 'serial' | 'parts' | null
 
 function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -27,27 +25,50 @@ function useTheme() {
       localStorage.setItem('blinkproof:theme', theme)
     } catch {}
   }, [theme])
-  return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))] as const
+  return [theme, setTheme] as const
 }
 
-// an icon button in a floating pill, sketch's toolbar
-function Tool({ icon, label, onClick, active, disabled }: { icon: IconName; label: string; onClick: () => void; active?: boolean; disabled?: boolean }) {
+// an icon button inside a toolbar pill
+function Tool({ icon, label, onClick, active, disabled, children }: { icon?: IconName; label: string; onClick: () => void; active?: boolean; disabled?: boolean; children?: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      className={`flex h-9 w-9 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover disabled:opacity-35 ${active ? 'bg-accent-soft text-accent' : ''}`}
-    >
-      <Icon name={icon} size={20} />
+    <button onClick={onClick} disabled={disabled} title={label} className={`flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-35 ${active ? 'text-accent' : 'text-icon'}`}>
+      {children ?? (icon && <Icon name={icon} size={19} />)}
     </button>
   )
 }
 
+// a detached panel floating over the canvas, like sketch's color or prototyping panels
+function Panel({ title, onClose, children, className = '', right }: { title: string; onClose: () => void; children: React.ReactNode; className?: string; right?: React.ReactNode }) {
+  return (
+    <div className={`float absolute flex flex-col overflow-hidden ${className}`}>
+      <div className="flex h-10 shrink-0 items-center justify-between pl-4 pr-2.5 text-[12px] font-semibold text-ink">
+        {title}
+        <span className="flex items-center gap-2">
+          {right}
+          <button title="close" onClick={onClose} className="flex h-5 w-5 items-center justify-center rounded-full bg-input text-icon-2 hover:text-ink">
+            <Icon name="xmark" size={10} />
+          </button>
+        </span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function download(name: string, text: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 export default function App() {
-  const [theme, toggleTheme] = useTheme()
+  const [theme, setTheme] = useTheme()
   const [page, setPage] = useState<Page>({ kind: 'build' })
-  const [tab, setTab] = useState<Tab>('design')
+  const [mode, setMode] = useState<Mode>('design')
+  const [float, setFloat] = useState<Float>('prompt')
+  const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [bench, setBench] = useState<BenchState | null>(null)
   const [testRun, setTestRun] = useState(0)
@@ -56,9 +77,10 @@ export default function App() {
   const [prompt, setPrompt] = useState(IDEAS[1])
   const [model, setModel] = useState('claude-haiku')
   const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
+  const codeEnd = useRef<HTMLDivElement>(null)
   const build = useBuild(
     () => setTestRun((n) => n + 1),
-    (t) => setTab(t),
+    (t) => (t === 'code' ? setFloat('code') : setMode(t)),
   )
 
   useEffect(() => {
@@ -73,13 +95,18 @@ export default function App() {
   const source = example ? example.source : build.source
   const test = example ? example.test : build.test
   const code = example ? example.source : build.code
-  const title = example ? example.title : build.request ? build.request.split(/[:,.]/)[0] : 'new build'
+  const title = example ? example.title.charAt(0).toUpperCase() + example.title.slice(1) : build.request ? build.request.split(/[:,.]/)[0].replace(/^./, (c) => c.toUpperCase()) : 'New Build'
+
+  useEffect(() => {
+    codeEnd.current?.scrollIntoView({ block: 'end' })
+  }, [code])
 
   const open = (p: Page) => {
     setPage(p)
     setSelected(null)
     setTestRun(0)
     setBench(null)
+    setFloat(p.kind === 'build' && !build.diagram ? 'prompt' : null)
   }
 
   const onState = (s: BenchState) => {
@@ -89,14 +116,26 @@ export default function App() {
 
   const select = (id: string | null) => {
     setSelected(id)
-    if (id) setTab('design')
+    if (id) setMode('design')
   }
+
+  const runTest = () => {
+    setTestRun((n) => n + 1)
+    setMode('test')
+  }
+
+  const start = () => {
+    build.start(prompt, model)
+    setFloat(null)
+  }
+
+  const toggle = (f: Float) => setFloat((cur) => (cur === f ? null : f))
 
   return (
     <div className="flex h-full">
-      <Sidebar page={page} onPage={open} diagram={diagram} selected={selected} onSelect={select} canReplay={build.canReplay} onReplay={build.replay} busy={build.busy} />
+      <Sidebar page={page} onPage={open} diagram={diagram} title={title} selected={selected} onSelect={select} canReplay={build.canReplay} onReplay={build.replay} busy={build.busy} onParts={() => toggle('parts')} />
 
-      <main className="relative min-w-0 flex-1 bg-canvas">
+      <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {diagram ? (
           <Workbench
             key={page.kind === 'example' ? page.name : 'build'}
@@ -113,88 +152,146 @@ export default function App() {
             onSelect={select}
           />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-4 overflow-hidden px-10 pb-40 pt-16">
-            <img src={theme === 'dark' ? heroDark : heroLight} alt="" className="min-h-0 w-full max-w-[460px] select-none" draggable={false} />
-            <p className="max-w-md text-center text-[13px] leading-5 text-dim">
-              {build.busy ? 'the agent is picking parts...' : 'describe a gadget in plain words. the agent wires it, writes the firmware, and has to pass a test before it hands it over'}
-            </p>
-            <img src={theme === 'dark' ? loopDark : loopLight} alt="how it works: describe it, it builds, it tests, it fixes, proven" className="w-full max-w-[720px] select-none" draggable={false} />
-          </div>
-        )}
-
-        {/* toolbar pills over the canvas, like sketch */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
-          <div className="pointer-events-auto flex gap-2">
-            <div className="pill flex items-center gap-0.5 p-0.5">
-              <Tool icon="build" label="new build" onClick={() => open({ kind: 'build' })} active={page.kind === 'build'} />
-              <Tool icon="examples" label="open the parking sensor" onClick={() => open({ kind: 'example', name: 'parking' })} active={page.kind === 'example'} />
-            </div>
-            <div className="pill flex items-center gap-0.5 p-0.5">
-              <Tool icon={running ? 'pause' : 'play'} label={running ? 'pause' : 'run'} onClick={() => setRunning((r) => !r)} disabled={!diagram} />
-              <Tool icon="test" label="run the test" onClick={() => (setTestRun((n) => n + 1), setTab('test'))} disabled={!test || build.busy} />
-              <Tool icon="replay" label="replay the last build" onClick={() => (open({ kind: 'build' }), build.replay())} disabled={!build.canReplay || build.busy} />
-            </div>
-          </div>
-          <div className="pointer-events-auto flex gap-2">
-            <div className="pill flex h-10 items-center px-4 font-mono text-[12px] font-medium text-ink">{bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '100%'}</div>
-            <div className="pill flex items-center gap-0.5 p-0.5">
-              <Tool icon={sound ? 'sound-on' : 'sound-off'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} />
-              <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={toggleTheme} />
-            </div>
-          </div>
-        </div>
-
-        {/* the prompt, a floating bar at the bottom of the canvas */}
-        {page.kind === 'build' && (
-          <div className="absolute inset-x-0 bottom-4 flex justify-center px-6">
-            <div className="pill w-full max-w-[640px] p-2" style={{ borderRadius: 16 }}>
-              {!build.diagram && !build.busy && (
-                <div className="flex flex-wrap gap-1.5 px-1 pb-2">
-                  {IDEAS.map((idea) => (
-                    <button key={idea} onClick={() => setPrompt(idea)} className="rounded-full bg-input px-2.5 py-1 text-[11px] text-dim hover:text-ink">
-                      {idea.split(':')[0]}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && build.start(prompt, model)}
-                  rows={2}
-                  placeholder="describe a gadget"
-                  className="min-h-[40px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-5 text-ink outline-none placeholder:text-dim"
-                />
-                <select value={model} onChange={(e) => setModel(e.target.value)} className="h-8 rounded-[8px] bg-input px-2 text-[11px] text-dim outline-none">
-                  {['litellm', 'anthropic', 'openai'].map((p) => {
-                    const group = models.filter((m) => m.provider === p)
-                    return group.length ? (
-                      <optgroup key={p} label={p === 'litellm' ? 'neatHack credits' : p}>
-                        {group.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null
-                  })}
-                </select>
-                <button
-                  onClick={() => build.start(prompt, model)}
-                  disabled={build.busy}
-                  className="flex h-8 items-center gap-1.5 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-white disabled:opacity-50"
-                >
-                  <Icon name="build" size={16} blob={false} />
-                  {build.busy ? 'building' : 'build it'}
-                </button>
+          // an empty frame waiting for the agent, the way a new sketch document opens
+          <div className="flex h-full items-center justify-center pb-[230px]">
+            <div className="relative">
+              <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}</span>
+              <div className="flex h-[260px] w-[440px] items-center justify-center bg-frame px-16 text-center text-[12px] leading-[18px] text-dim">
+                {build.busy ? 'The agent is picking parts...' : 'Describe a gadget. The agent wires it, writes the firmware, and has to pass a test before it hands it over.'}
               </div>
             </div>
           </div>
         )}
+
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-between px-2.5">
+          <div className="pointer-events-auto flex gap-[9px]">
+            <div className="pill flex items-center">
+              <Tool label="describe a gadget" onClick={() => (page.kind !== 'build' && open({ kind: 'build' }), toggle('prompt'))} active={float === 'prompt'}>
+                <Logo size={20} />
+              </Tool>
+              <Tool icon="plus" label="new build" onClick={() => (open({ kind: 'build' }), setFloat('prompt'))} />
+            </div>
+            <div className="pill flex items-center">
+              <Tool icon={running ? 'pause' : 'play'} label={running ? 'pause' : 'run'} onClick={() => setRunning((r) => !r)} disabled={!diagram} />
+            </div>
+            <div className="pill flex items-center">
+              <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
+              <Tool icon="refresh-2" label="replay the last build" onClick={() => (open({ kind: 'build' }), setFloat(null), build.replay())} disabled={!build.canReplay || build.busy} />
+              <Tool icon={sound ? 'volume-up' : 'volume'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} active={sound} />
+            </div>
+          </div>
+          <div className="pointer-events-auto flex gap-[9px]">
+            <div className="pill flex items-center">
+              <Tool icon="code" label="sketch.ino" onClick={() => toggle('code')} active={float === 'code'} disabled={!code} />
+              <Tool icon="terminal" label="serial monitor" onClick={() => toggle('serial')} active={float === 'serial'} disabled={!diagram} />
+            </div>
+            <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
+              <button onClick={() => setZoomMenu((o) => !o)} className="pill flex h-9 items-center gap-3 pl-3.5 pr-2.5 text-[13px] font-medium text-ink">
+                {bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '100%'}
+                <Icon name="chevron-down" size={12} className="text-icon" />
+              </button>
+              {zoomMenu && (
+                <div className="menu absolute right-0 top-11 z-20 w-48 p-1.5 text-[12px]">
+                  <div className="px-2 pb-1 pt-0.5 text-[11px] font-semibold text-dim">Appearance</div>
+                  {(['light', 'dark'] as Theme[]).map((t) => (
+                    <button key={t} onClick={() => (setTheme(t), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-white">
+                      <Icon name={t === 'light' ? 'sun' : 'moon'} size={14} />
+                      <span className="flex-1">{t === 'light' ? 'Light' : 'Dark'}</span>
+                      {theme === t && <Icon name="check" size={12} />}
+                    </button>
+                  ))}
+                  <div className="mx-2 my-1 border-t border-sep" />
+                  <button onClick={() => (dispatchEvent(new Event('resize')), setZoomMenu(false))} className="flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left text-ink hover:bg-accent hover:text-white">
+                    <Icon name="full-screen-2" size={14} />
+                    Zoom to Fit
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {float === 'code' && (
+          <Panel title="sketch.ino" onClose={() => setFloat(null)} className="right-2.5 top-[56px] bottom-20 w-[380px]" right={<span className="font-mono text-[11px] font-normal text-dim">{code.split('\n').length} lines</span>}>
+            <pre className="min-h-0 flex-1 overflow-auto px-3 pb-3 font-mono text-[11px] leading-[18px] text-ink">
+              {code.split('\n').map((line, i) => (
+                <div key={i} className="flex gap-3">
+                  <span className="w-5 shrink-0 select-none text-right text-dim/60">{i + 1}</span>
+                  <span className="whitespace-pre">{line}</span>
+                </div>
+              ))}
+              <div ref={codeEnd} />
+            </pre>
+          </Panel>
+        )}
+
+        {float === 'serial' && (
+          <Panel title="Serial Monitor" onClose={() => setFloat(null)} className="right-2.5 top-[56px] h-[280px] w-[340px]" right={<span className="font-mono text-[11px] font-normal text-dim">9600 baud</span>}>
+            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-4 pb-3 font-mono text-[11px] leading-[18px] text-ink">{bench?.serial || <span className="text-dim">Nothing printed yet</span>}</pre>
+          </Panel>
+        )}
+
+        {float === 'parts' && (
+          <Panel title="Parts" onClose={() => setFloat(null)} className="left-2.5 top-[56px] w-[260px]" right={<span className="text-[11px] font-normal text-dim">{Object.keys(PARTS).length}</span>}>
+            <div className="max-h-[420px] space-y-px overflow-auto px-1.5 pb-1.5">
+              {Object.keys(PARTS).map((t) => (
+                <div key={t} className="flex h-[26px] items-center gap-2 rounded-[6px] px-2 text-[12px] text-ink hover:bg-hover">
+                  <Icon name={PART_ICON[t] ?? 'box'} size={16} className="text-icon-2" />
+                  <span className="flex-1">{KIND[t] ? KIND[t].charAt(0).toUpperCase() + KIND[t].slice(1) : t}</span>
+                  <span className="font-mono text-[10px] text-dim">{t.replace('wokwi-', '')}</span>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
+
+        {float === 'prompt' && page.kind === 'build' && (
+          <Panel title="Describe a Gadget" onClose={() => setFloat(null)} className="bottom-3 left-1/2 w-[min(560px,calc(100%-40px))] -translate-x-1/2">
+            <div className="px-3 pb-3">
+              <textarea
+                autoFocus
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && start()}
+                rows={3}
+                placeholder="a gadget, in plain words"
+                className="w-full resize-none rounded-[7px] bg-input px-2.5 py-2 text-[12px] leading-[18px] text-ink outline-none placeholder:text-dim"
+              />
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {IDEAS.map((idea) => (
+                  <button key={idea} onClick={() => setPrompt(idea)} className={`h-6 rounded-[7px] px-2 text-[11px] ${prompt === idea ? 'bg-accent text-white' : 'bg-input text-dim hover:text-ink'}`}>
+                    {idea.split(':')[0].replace(/^./, (c) => c.toUpperCase())}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-sep pt-3">
+                <span className="text-[11px] text-dim">⌘ Return to build</span>
+                <button onClick={start} disabled={build.busy} className="h-7 rounded-[7px] bg-accent px-3.5 text-[12px] font-semibold text-white disabled:opacity-50">
+                  {build.busy ? 'Building...' : 'Build It'}
+                </button>
+              </div>
+            </div>
+          </Panel>
+        )}
       </main>
 
-      <Inspector tab={tab} onTab={setTab} diagram={diagram} selected={selected} bench={bench} feed={build.feed} verdict={build.verdict} request={build.request} code={code} test={test} testRun={testRun} />
+      <Inspector
+        mode={mode}
+        onMode={setMode}
+        diagram={diagram}
+        selected={selected}
+        bench={bench}
+        feed={build.feed}
+        verdict={build.verdict}
+        request={build.request}
+        test={test}
+        testRun={testRun}
+        onRunTest={runTest}
+        model={model}
+        models={models}
+        onModel={setModel}
+        onShare={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}
+      />
     </div>
   )
 }
