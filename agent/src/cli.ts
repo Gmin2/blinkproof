@@ -45,7 +45,9 @@ async function main() {
   if (ws.diagram) writeFileSync(join(out, 'diagram.json'), JSON.stringify(ws.diagram, null, 2))
   if (ws.sketch) writeFileSync(join(out, 'sketch.ino'), ws.sketch)
   if (ws.test) writeFileSync(join(out, 'test.yaml'), ws.test)
-  writeFileSync(join(out, 'result.json'), JSON.stringify({ request, passed: result.passed, turns: result.turns, tokens: result.tokens, tools: result.tools, report: ws.report }, null, 2))
+  writeFileSync(join(out, 'result.json'), JSON.stringify({ request, passed: result.passed, turns: result.turns, tokens: result.tokens, contextBytes: result.contextBytes, peakContext: result.peakContext, tools: result.tools, report: ws.report }, null, 2))
+  console.log(`context: ${result.contextBytes} bytes sent over ${result.turns} turns, peak ${result.peakContext}`)
+  console.log(`trace: ${result.traceId}`)
   console.log(`saved to ${out}`)
 }
 

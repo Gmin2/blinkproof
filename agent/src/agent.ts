@@ -32,6 +32,43 @@ export type Options = {
   sessionId?: string
   onEvent?: (e: Event) => void
   tags?: string[]
+  // swap superseded tool arguments and results for stubs before each call
+  compact?: boolean
+}
+
+// tools whose arguments replace the last call's: only the newest copy needs to stay in the history
+const REPLACES = new Set(['write_circuit', 'write_sketch', 'write_test'])
+
+// the history the model sees: every older circuit, sketch and test, and every older run report,
+// becomes a one line stub. the newest of each stays whole, so nothing the model needs is lost
+export function compacted(messages: OpenAI.ChatCompletionMessageParam[]) {
+  const latest = new Map<string, string>()
+  const toolOf = new Map<string, string>()
+  for (const m of messages) {
+    if (m.role !== 'assistant' || !m.tool_calls) continue
+    for (const c of m.tool_calls) {
+      if (c.type !== 'function') continue
+      toolOf.set(c.id, c.function.name)
+      if (REPLACES.has(c.function.name) || c.function.name === 'run_test') latest.set(c.function.name, c.id)
+    }
+  }
+  return messages.map((m) => {
+    if (m.role === 'assistant' && m.tool_calls) {
+      return {
+        ...m,
+        tool_calls: m.tool_calls.map((c) =>
+          c.type === 'function' && REPLACES.has(c.function.name) && latest.get(c.function.name) !== c.id
+            ? { ...c, function: { ...c.function, arguments: JSON.stringify({ superseded: 'an older version, the newest call below has the current one' }) } }
+            : c,
+        ),
+      }
+    }
+    if (m.role === 'tool' && toolOf.get(m.tool_call_id) === 'run_test' && latest.get('run_test') !== m.tool_call_id) {
+      const r = JSON.parse(String(m.content))
+      return { ...m, content: JSON.stringify({ ok: r.ok, failed_step: r.failed_step, note: 'an older run, the newest run_test below has the current report' }) }
+    }
+    return m
+  })
 }
 
 export async function build(request: string, opts: Options = {}) {
@@ -42,21 +79,26 @@ export async function build(request: string, opts: Options = {}) {
   const client = wrapOpenAI(clientFor(provider))
   const ws: Workspace = {}
   const counts: Record<string, number> = {}
+  const compact = opts.compact ?? process.env.BP_COMPACT !== '0'
+  // what each call sends, in bytes of json: the cost the history puts on tokens and traces
+  let contextBytes = 0
+  let peakContext = 0
 
   const tool = (name: string) =>
     span({ kind: name === 'finish' ? 'GUARDRAIL' : 'TOOL', name, toolName: name }, async (args: any) => callTool(ws, name, args))
 
-  return trace(
+  const result = await trace(
     {
       name: 'build',
       kind: 'AGENT',
       sessionId: opts.sessionId,
       promptTemplate: SYSTEM,
       version: PROMPT_VERSION,
-      tags: ['blinkproof', PROMPT_VERSION, ...(opts.tags ?? [])],
-      metadata: { request, model, provider },
+      tags: ['blinkproof', PROMPT_VERSION, ...(compact ? ['compact'] : []), ...(opts.tags ?? [])],
+      metadata: { request, model, provider, compact },
     },
-    async () => {
+    async (root: any) => {
+      const traceId: string | undefined = root?.spanContext?.().traceId
       emit({ type: 'start', request, model, version: PROMPT_VERSION })
       const messages: OpenAI.ChatCompletionMessageParam[] = [
         { role: 'system', content: SYSTEM.compile({}) as string },
@@ -67,11 +109,15 @@ export async function build(request: string, opts: Options = {}) {
       let turns = 0
 
       for (; turns < maxTurns && !summary; turns++) {
+        const history = compact ? compacted(messages) : messages
+        const size = JSON.stringify(history).length
+        contextBytes += size
+        peakContext = Math.max(peakContext, size)
         const res = await client.chat.completions.create({
           model,
           // openai's newer models take max_completion_tokens and refuse max_tokens
           ...(provider === 'openai' ? { max_completion_tokens: 8000 } : { max_tokens: 8000 }),
-          messages,
+          messages: history,
           tools: TOOLS.map((t) => ({ type: 'function' as const, function: t as any })),
         })
         tokens += res.usage?.total_tokens ?? 0
@@ -102,11 +148,13 @@ export async function build(request: string, opts: Options = {}) {
 
       const passed = !!summary
       const verdict = await trace(
-        { name: 'verdict', kind: 'EVALUATOR', metadata: { passed, turns, tokens, runs: counts.run_test ?? 0, compiles: counts.compile ?? 0 } },
-        async () => ({ passed, turns, tokens, tools: counts, failed_step: ws.report?.failed?.index }),
+        { name: 'verdict', kind: 'EVALUATOR', metadata: { passed, turns, tokens, runs: counts.run_test ?? 0, compiles: counts.compile ?? 0, contextBytes, peakContext } },
+        async () => ({ passed, turns, tokens, contextBytes, peakContext, tools: counts, failed_step: ws.report?.failed?.index }),
       )
       emit({ type: 'done', ok: passed, turns, summary, reason: passed ? undefined : `stopped after ${turns} turns`, tokens })
-      return { ...verdict, workspace: ws, summary }
+      // the trace keeps the verdict, not the workspace: a pico build carries a uf2 of hundreds of kb
+      return { ...verdict, summary, traceId }
     },
   )
+  return { ...result, workspace: ws }
 }
