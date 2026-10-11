@@ -139,10 +139,12 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setRequest('')
   }
 
-  async function start(text: string, model: string) {
+  // circuit: one wired by hand, the agent keeps it and writes the code and the test for it
+  async function start(text: string, model: string, circuit?: Diagram) {
     if (busy || !text.trim()) return
     reset()
     setRequest(text)
+    if (circuit) setDiagram(circuit)
     setBusy(true)
     onTab('agent')
     const queue: AgentEvent[] = []
@@ -157,7 +159,7 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
       }
     })()
     try {
-      const res = await fetch('/agent/build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: text, model }) })
+      const res = await fetch('/agent/build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: text, model, ...(circuit && { circuit }) }) })
       if (!res.ok || !res.body) throw new Error(res.status === 409 ? 'a build is already running' : 'agent server not running, start it with pnpm -C agent serve')
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       let buf = ''
