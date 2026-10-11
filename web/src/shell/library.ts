@@ -87,18 +87,23 @@ export function useRoute() {
 // unsaved edits, one per build, kept in this browser so a reload or a detour does not lose them
 const KEY = 'blinkproof:draft:'
 
+export type Draft = { sketch?: string; diagram?: Diagram }
+
 export const drafts = {
-  get(id: string) {
+  get(id: string): Draft {
     try {
-      return localStorage.getItem(KEY + id) ?? undefined
+      const raw = localStorage.getItem(KEY + id)
+      if (!raw) return {}
+      // the first drafts were the sketch alone
+      return raw.startsWith('{') ? JSON.parse(raw) : { sketch: raw }
     } catch {
-      return undefined
+      return {}
     }
   },
-  set(id: string, text: string | undefined) {
+  set(id: string, d: Draft) {
     try {
-      if (text === undefined) localStorage.removeItem(KEY + id)
-      else localStorage.setItem(KEY + id, text)
+      if (d.sketch === undefined && d.diagram === undefined) localStorage.removeItem(KEY + id)
+      else localStorage.setItem(KEY + id, JSON.stringify(d))
     } catch {}
   },
   ids() {
