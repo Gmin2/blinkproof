@@ -880,6 +880,26 @@ export function Onboarding(props: Props) {
   const { live, onState, bench } = useSampler(simOn, `${shown?.id ?? savedId}|${simSource}`)
   const simDiagram = shown ? (shown.diagram ?? null) : diagram
   const sim = useMemo<Sim | undefined>(() => (simOn && simDiagram && simSource ? { diagram: simDiagram, source: simSource, title: shown?.title ?? cap(request.split(/[:.]/)[0]), onState, bench } : undefined), [simOn, simDiagram, simSource])
+  // a little while with the gadget running, then on into the editor with it open. touching anything means
+  // you are trying it out, so the countdown goes away and does not come back for this build
+  const WAIT = 15
+  const [left, setLeft] = useState<number | null>(null)
+  const stayed = useRef<string | null>(null)
+  const target = shown?.id ?? savedId
+  useEffect(() => {
+    if (!simOn || !target || stayed.current === target) return setLeft(null)
+    setLeft(WAIT)
+    const t = setInterval(() => setLeft((n) => (n === null ? null : n - 1)), 1000)
+    return () => clearInterval(t)
+  }, [simOn, target])
+  useEffect(() => {
+    if (left === 0 && target) onEditor(target)
+  }, [left])
+  const stay = () => {
+    if (left === null) return
+    stayed.current = target ?? null
+    setLeft(null)
+  }
   const liveLines = Object.fromEntries(Object.entries(live.readings).map(([id, r]) => [id, r.line]))
   const started = busy || !!request
   const input = useRef<HTMLInputElement>(null)
@@ -1134,8 +1154,28 @@ export function Onboarding(props: Props) {
   })()
   const pathState: NodeData['state'] = shown ? (shown.test ? 'done' : 'idle') : boardState
   return (
-    <div className="relative flex h-full overflow-hidden bg-canvas">
+    <div className="relative flex h-full overflow-hidden bg-canvas" onPointerDownCapture={(e) => !(e.target as HTMLElement).closest('[data-countdown]') && stay()}>
       {top}
+      {left !== null && left > 0 && (
+        <div data-countdown className="rise absolute inset-x-0 bottom-6 z-40 flex justify-center px-6">
+          <div className="float flex items-center gap-3 overflow-hidden py-1.5 pl-3.5 pr-1.5">
+            <svg width="22" height="22" viewBox="0 0 22 22" className="-rotate-90 text-accent">
+              <circle cx="11" cy="11" r="9" fill="none" stroke="var(--sep)" strokeWidth="2" />
+              <circle cx="11" cy="11" r="9" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={2 * Math.PI * 9} strokeDashoffset={2 * Math.PI * 9 * (left / WAIT)} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s linear' }} />
+            </svg>
+            <span className="text-[12.5px] text-ink">
+              Opening it in the editor in <span className="font-mono">{left}s</span>
+            </span>
+            <button onClick={stay} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink">
+              Stay here
+            </button>
+            <button onClick={() => target && onEditor(target)} className="flex h-8 items-center gap-1 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-on-accent">
+              Go now
+              <Icon name="chevron-right" size={11} />
+            </button>
+          </div>
+        </div>
+      )}
       {!shown && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center">
           <button onClick={() => verdict?.ok && setPicked('parts')} className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full border bg-panel px-3.5 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)] ${verdict ? (verdict.ok ? 'border-ok/40' : 'border-bad/40') : 'border-line'}`}>
