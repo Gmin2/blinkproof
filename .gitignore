@@ -1,6 +1,7 @@
 node_modules
 dist
 build
+!brand/build
 tmp/
 .env
 .env.*
