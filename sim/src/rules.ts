@@ -22,6 +22,8 @@ const DRAW: Record<string, (attrs: Record<string, string>) => number> = {
   'wokwi-photoresistor-sensor': () => 5,
   'wokwi-dht22': () => 2,
   'wokwi-pir-motion-sensor': () => 1,
+  // mostly the backlight
+  'wokwi-lcd1602': () => 30,
 }
 // pins each part needs wired to work at all
 const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = {
@@ -35,6 +37,7 @@ const NEEDS: Record<string, { power: [string, string][]; signals: string[] }> = 
   'wokwi-photoresistor-sensor': { power: [['VCC', 'GND']], signals: [] },
   'wokwi-dht22': { power: [['VCC', 'GND']], signals: ['SDA'] },
   'wokwi-pir-motion-sensor': { power: [['VCC', 'GND']], signals: ['OUT'] },
+  'wokwi-lcd1602': { power: [['VCC', 'GND']], signals: ['SDA', 'SCL'] },
 }
 
 // what the sketch says, read crudely: constants, pinMode, analogWrite, Servo, tone, i2c addresses
@@ -140,6 +143,16 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
           if (!pullDown) add('floating-button', 'warning', [id], `${id} pulls ${pin} up to 5V but nothing pulls it down when released. add a 10k resistor from ${pin} to GND, or wire the button to GND and use INPUT_PULLUP`)
         } else add('unwired', 'error', [id], `the other side of ${id} goes nowhere, wire it to GND`)
         if (pin === 'D13' && code.modes.get(pin) === 'INPUT_PULLUP') add('pin13-input', 'warning', [id], 'D13 has the onboard led on it, its pull-up only reaches about 1.7 V. use another pin for the button')
+      }
+    }
+
+    if (p.type === 'wokwi-lcd1602') {
+      const sda = c.signal(`${id}:SDA`)
+      const scl = c.signal(`${id}:SCL`)
+      if ((sda && sda !== SDA) || (scl && scl !== SCL)) add('i2c-pins', 'error', [id], `Wire on the ${boardName} is ${SDA} and ${SCL}: ${id}:SDA to ${SDA} and ${id}:SCL to ${SCL}. now SDA is on ${sda ?? 'nothing'}, SCL on ${scl ?? 'nothing'}`)
+      const address = Number(attrs.i2cAddress ?? '0x27')
+      for (const m of (sketch ?? '').matchAll(/LiquidCrystal_I2C\s+\w+\s*\(\s*(0x[0-9a-fA-F]+)/g)) {
+        if (Number(m[1]) !== address) add('i2c-address', 'error', [id], `the sketch talks to ${m[1]}, ${id} answers at 0x${address.toString(16)}. use LiquidCrystal_I2C lcd(0x${address.toString(16)}, 16, 2)`)
       }
     }
 

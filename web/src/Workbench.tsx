@@ -239,6 +239,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         const type = diagram.parts.find((p) => p.id === id)?.type
         if (type === 'wokwi-led') el.value = false
         if (type === 'wokwi-led-ring') el.reset?.()
+        if (type === 'wokwi-lcd1602') Object.assign(el, { characters: new Uint8Array(32).fill(32), backlight: false, cursor: false, blink: false })
         if (type === 'wokwi-ssd1306' && el.imageData) {
           const px = (el.imageData as ImageData).data
           for (let i = 0; i < px.length; i++) px[i] = i % 4 === 3 ? 255 : 0
@@ -292,6 +293,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         el.redraw()
       }
       if (part.type === 'wokwi-led-ring') el.reset?.()
+      if (part.type === 'wokwi-lcd1602') Object.assign(el, { characters: new Uint8Array(32).fill(32), backlight: false, cursor: false, blink: false })
     }
     setSonars(distances)
     setLights(luxes)
@@ -367,6 +369,15 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
           const [first] = part.strip.pixels
           if (part.type === 'wokwi-neopixel') Object.assign(el, { r: first[0] / 255, g: first[1] / 255, b: first[2] / 255 })
           else part.strip.pixels.forEach(([r, g, b], i) => el.setPixel(i, { r: r / 255, g: g / 255, b: b / 255 }))
+        }
+        if (part.type === 'wokwi-lcd1602') {
+          const lcd = part.lcd
+          el.backlight = !!lcd?.backlight
+          if (lcd && lcd.frames !== frames.get(id)) {
+            frames.set(id, lcd.frames)
+            el.characters = lcd.on ? lcd.characters() : new Uint8Array(32).fill(32)
+          }
+          if (lcd) Object.assign(el, { cursor: lcd.on && lcd.cursor, blink: lcd.on && lcd.blink, cursorX: lcd.cursorAt.x, cursorY: lcd.cursorAt.y })
         }
         if (part.type === 'wokwi-ssd1306' && part.oled && part.oled.frames !== frames.get(id)) {
           frames.set(id, part.oled.frames)

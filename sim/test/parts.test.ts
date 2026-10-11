@@ -257,3 +257,37 @@ void loop() { Serial.println(digitalRead(3)); delay(100); }`
     expect(last(b)).toBe('0')
   })
 })
+
+describe('lcd 16x2 on i2c', () => {
+  const lcd = { id: 'lcd1', type: 'wokwi-lcd1602', attrs: { pins: 'i2c' } }
+  const wires = [['lcd1:VCC', 'uno:5V'], ['lcd1:GND', 'uno:GND.1'], ['lcd1:SDA', 'uno:A4'], ['lcd1:SCL', 'uno:A5']]
+  const sketch = `#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+int n = 0;
+void setup() { lcd.init(); lcd.backlight(); lcd.print("Hello"); }
+void loop() { lcd.setCursor(0, 1); lcd.print("count "); lcd.print(n++); delay(200); }`
+  const screen = (b: Bench) => get<'wokwi-lcd1602'>(b, 'lcd1').lcd!
+
+  it('shows what LiquidCrystal_I2C prints, on both rows', async () => {
+    const b = bench([lcd], wires, await build(sketch))
+    b.run(1600)
+    const s = screen(b)
+    expect(s.backlight).toBe(true)
+    expect(s.on).toBe(true)
+    expect(s.rows()[0].trimEnd()).toBe('Hello')
+    expect(s.rows()[1]).toMatch(/^count \d+ *$/)
+  })
+
+  it('goes dark when the backlight is turned off', async () => {
+    const b = bench([lcd], wires, await build(sketch.replace('lcd.backlight();', 'lcd.noBacklight();')))
+    b.run(1300)
+    expect(screen(b).backlight).toBe(false)
+    expect(screen(b).rows()[0].trimEnd()).toBe('Hello')
+  })
+
+  it('is not on the bus with SDA and SCL swapped', async () => {
+    const swapped = [...wires.slice(0, 2), ['lcd1:SDA', 'uno:A5'], ['lcd1:SCL', 'uno:A4']]
+    const b = bench([lcd], swapped, await build(sketch))
+    expect(get<'wokwi-lcd1602'>(b, 'lcd1').lcd).toBeNull()
+  })
+})

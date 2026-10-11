@@ -39,4 +39,6 @@ export const PARTS = {
   'wokwi-photoresistor-sensor': { pins: ['VCC', 'GND', 'DO', 'AO'] },
   'wokwi-dht22': { pins: ['VCC', 'SDA', 'NC', 'GND'] },
   'wokwi-pir-motion-sensor': { pins: ['VCC', 'OUT', 'GND'] },
+  // the i2c backpack version, drawn with pins="i2c"
+  'wokwi-lcd1602': { pins: ['GND', 'VCC', 'SDA', 'SCL'] },
 } satisfies Record<string, { pins: string[]; same?: string[][]; board?: boolean }>

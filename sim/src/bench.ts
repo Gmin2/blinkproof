@@ -4,6 +4,7 @@ import { Buzzer } from './parts/buzzer'
 import { DHT22 } from './parts/dht22'
 import { Duty } from './parts/duty'
 import { HCSR04 } from './parts/hcsr04'
+import { LCD1602 } from './parts/lcd1602'
 import { Servo } from './parts/servo'
 import { SSD1306 } from './parts/ssd1306'
 import { WS2812 } from './parts/ws2812'
@@ -16,6 +17,7 @@ import { Uno, type Symbols } from './uno'
 export type PartState =
   | { type: 'wokwi-led'; lit: boolean; brightness: number }
   | { type: 'wokwi-ssd1306'; oled: SSD1306 | null }
+  | { type: 'wokwi-lcd1602'; lcd: LCD1602 | null }
   | { type: 'wokwi-potentiometer'; position: number }
   | { type: 'wokwi-pushbutton'; pressed: boolean; presses: number }
   | { type: 'wokwi-neopixel' | 'wokwi-led-ring'; strip: WS2812 | null }
@@ -61,6 +63,7 @@ export class Bench {
       switch (p.type) {
         case 'wokwi-led': this.led(id); break
         case 'wokwi-ssd1306': this.oled(id); break
+        case 'wokwi-lcd1602': this.lcd(id); break
         case 'wokwi-potentiometer': this.pot(id); break
         case 'wokwi-pushbutton': this.button(id); break
         case 'wokwi-neopixel': this.strip(id, p.type, 'VDD', 'VSS', 1); break
@@ -125,6 +128,15 @@ export class Bench {
     const address = Number(c.attr(id, 'i2cAddress') ?? '0x3c')
     const oled = powered && sda && scl ? (this.board.i2c.add(new SSD1306(address)) as SSD1306) : null
     this.parts[id] = { type: 'wokwi-ssd1306', oled }
+  }
+
+  private lcd(id: string) {
+    const c = this.circuit
+    const sda = c.signal(`${id}:SDA`) === (this.pico ? 'GP4' : 'A4')
+    const scl = c.signal(`${id}:SCL`) === (this.pico ? 'GP5' : 'A5')
+    const address = Number(c.attr(id, 'i2cAddress') ?? '0x27')
+    const lcd = this.powered(id, 'VCC', 'GND', 4.5) && sda && scl ? (this.board.i2c.add(new LCD1602(address)) as LCD1602) : null
+    this.parts[id] = { type: 'wokwi-lcd1602', lcd }
   }
 
   private pot(id: string) {
@@ -300,6 +312,7 @@ export class Bench {
         const text = p.oled?.text()
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
       }
+      if (p.type === 'wokwi-lcd1602') out.push(`${id}: ${!p.lcd ? 'not on the i2c bus (check SDA on A4, SCL on A5, VCC on 5V)' : !p.lcd.on ? 'display off' : `${JSON.stringify(p.lcd.rows().map((r) => r.trimEnd()))}${p.lcd.backlight ? '' : ', backlight off'}`}`)
       if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
       if (p.type === 'wokwi-pir-motion-sensor') out.push(`${id}: ${!p.powered ? 'not powered, it needs 5V' : `${p.moving ? 'something moving' : 'nothing moving'}, OUT ${p.out ? 'high' : 'low'}, ${p.triggers} triggers`}`)
       if (p.type === 'wokwi-dht22') out.push(`${id}: ${!p.sensor ? 'not powered or SDA not on a digital pin' : `${p.temperature} C, ${p.humidity}% humidity, read ${p.sensor.reads} times${p.sensor.short ? `, ${p.sensor.short} starts too short` : ''}`}`)

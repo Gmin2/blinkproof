@@ -269,6 +269,20 @@ export const CASES: Case[] = [
 - set-control: { part-id: $pir, control: motion, value: 0 }
 - wait-led: { part-id: $led, lit: false, timeout: 20s }`),
   },
+  {
+    id: 'lcd-thermometer',
+    board: 'uno',
+    request: 'a desk thermometer on an arduino uno: a dht22 reads the room and a 16x2 i2c lcd shows the temperature in C on the first row and the humidity on the second',
+    trap: 'two libraries, the lcd needs a second to start, the dht only every two seconds, and old digits linger unless the row is cleared or padded',
+    hidden: test('shows what the sensor reads', `
+- set-control: { part-id: $dht, control: temperature, value: 23.5 }
+- set-control: { part-id: $dht, control: humidity, value: 61 }
+- wait-text: { part-id: $lcd, contains: "23.5", timeout: 8s }
+- wait-text: { part-id: $lcd, contains: "61", timeout: 4s }
+- set-control: { part-id: $dht, control: temperature, value: 8.2 }
+- wait-text: { part-id: $lcd, contains: "8.2", timeout: 6s }
+- expect-text: { part-id: $lcd, not-contains: "23.5" }`),
+  },
 ]
 
 const KINDS: Record<string, string> = {
@@ -284,6 +298,7 @@ const KINDS: Record<string, string> = {
   light: 'wokwi-photoresistor-sensor',
   dht: 'wokwi-dht22',
   pir: 'wokwi-pir-motion-sensor',
+  lcd: 'wokwi-lcd1602',
 }
 
 // $led, $led.2, $led:red -> the id of that part in the agent's circuit

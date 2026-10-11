@@ -148,6 +148,7 @@ const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
     ['wokwi-buzzer', 'Buzzer', 'Beeps and tunes'],
     ['wokwi-led-ring', 'LED ring', '16 colour pixels on one pin'],
     ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels'],
+    ['wokwi-lcd1602', 'LCD 16x2', 'Two rows of text'],
     ['wokwi-servo', 'Servo', 'Turns to an angle'],
   ],
 }
