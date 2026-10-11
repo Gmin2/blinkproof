@@ -4,6 +4,7 @@ import { Icon, Logo, type IconName } from "../icons/Icon";
 import { PART_ICON } from "../icons/Status";
 import type { Route, Saved, useMe } from "./library";
 import { Account } from "./Account";
+import { Grip, useWidth } from "./Resize";
 
 export const KIND: Record<string, string> = {
   "wokwi-arduino-uno": "arduino uno",
@@ -177,6 +178,7 @@ export function Sidebar({
   onParts,
 }: Props) {
   const [query, setQuery] = useState("");
+  const [width, setWidth] = useWidth("sidebar", 240, 200, 420);
   const [docsOpen, setDocsOpen] = useState(true);
   const [examplesOpen, setExamplesOpen] = useState(true);
   const [wiresOpen, setWiresOpen] = useState(false);
@@ -203,7 +205,8 @@ export function Sidebar({
   const example = examples.find((e) => e.id === openId);
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
+    <aside className="relative flex shrink-0 flex-col border-r border-line bg-panel" style={{ width }}>
+      <Grip side="right" width={width} onWidth={setWidth} onReset={() => setWidth(240)} />
       <div className="flex h-[52px] shrink-0 items-center justify-between pl-[18px] pr-[10px]">
         <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-ink">
           <Logo size={18} />

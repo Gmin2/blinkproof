@@ -1,8 +1,10 @@
 import { Circuit, PARTS, type Diagram, type PartState } from '@blinkproof/sim'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from '../icons/Icon'
 import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
+import { ModelMenu } from './ModelMenu'
+import { Grip, useWidth } from './Resize'
 import { HeaderButton, KIND } from './Sidebar'
 import type { FeedItem, Verdict } from './useBuild'
 
@@ -165,34 +167,21 @@ export function Inspector({
   const errors = findings.filter((f) => f.severity === 'error').length
   const warnings = findings.filter((f) => f.severity === 'warning').length
   const state = live(part && bench?.parts[part.id])
-  const current = models.find((m) => m.id === model)
+  // code wants more room, so it keeps a width of its own
+  const [width, setWidth] = useWidth('inspector', 300, 260, 560)
+  const [codeWidth, setCodeWidth] = useWidth('inspector-code', 440, 320, 900)
+  const [dragging, setDragging] = useState(false)
   const index = TABS.findIndex((t) => t.mode === mode)
   const pins = part ? ((PARTS[part.type as keyof typeof PARTS]?.pins as string[] | undefined) ?? []) : []
   const peers = (pin: string) => (circuit && part ? circuit.peers(`${part.id}:${pin}`).filter((r) => !r.startsWith(`${part.id}:`)) : [])
 
   return (
-    <aside className={`flex shrink-0 flex-col border-l border-line bg-panel transition-[width] duration-300 ease-out ${mode === 'code' ? 'w-[440px]' : 'w-[300px]'}`}>
+    <aside className={`relative flex shrink-0 flex-col border-l border-line bg-panel ${dragging ? '' : 'transition-[width] duration-300 ease-out'}`} style={{ width: mode === 'code' ? codeWidth : width }}>
+      <Grip side="left" width={mode === 'code' ? codeWidth : width} onWidth={mode === 'code' ? setCodeWidth : setWidth} onReset={() => (mode === 'code' ? setCodeWidth(440) : setWidth(300))} onDrag={setDragging} />
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-2.5">
         <div className="flex-1" />
         {/* who builds it */}
-        <label className="relative flex h-9 items-center gap-1.5 text-[12px] font-medium text-ink" title="model">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-on-accent">{(current?.label ?? model).charAt(0).toUpperCase()}</span>
-          <span className="max-w-[78px] truncate">{(current?.label ?? model).split(' ').slice(-2).join(' ')}</span>
-          <select value={model} onChange={(e) => onModel(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0">
-            {['litellm', 'anthropic', 'openai'].map((p) => {
-              const group = models.filter((m) => m.provider === p)
-              return group.length ? (
-                <optgroup key={p} label={p === 'litellm' ? 'neatHack credits' : p}>
-                  {group.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null
-            })}
-          </select>
-        </label>
+        <ModelMenu model={model} models={models} onModel={onModel} />
         <button title="download the circuit, sketch and test" onClick={onDownload} disabled={!diagram} className="pill flex h-9 w-9 items-center justify-center text-icon disabled:opacity-40">
           <Icon name="export" size={18} />
         </button>
