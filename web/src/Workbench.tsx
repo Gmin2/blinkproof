@@ -61,6 +61,10 @@ type Props = {
   onSelectWire?: (key: string | null) => void
   // the parts sit where the diagram says, no tidying and no refitting while someone arranges them
   fixed?: boolean
+  // drawn small inside something else: no minimap, no status pill, a tighter fit
+  compact?: boolean
+  // the running bench, for whoever wants to read or poke the same sim
+  benchOut?: { current: Bench | null }
 }
 
 // diagram types we draw ourselves
@@ -68,7 +72,7 @@ const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 export const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram: given, editable = false, onDiagram, onHint, onConnect, fixed = false, selectedWire = null, onSelectWire, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
+export function Workbench({ diagram: given, editable = false, onDiagram, onHint, onConnect, fixed = false, selectedWire = null, onSelectWire, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect, compact = false, benchOut }: Props) {
   const box = useRef<HTMLDivElement>(null)
   // a part being dragged: the diagram with it moved, drawn until the pointer lets go
   const [moving, setMoving] = useState<Diagram | null>(null)
@@ -188,16 +192,16 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         const [minX, maxX, minY, maxY] = [Math.min(...xs) - m, Math.max(...xs) + m, Math.min(...ys) - m, Math.max(...ys) + m]
         setFrame({ x: minX, y: minY, w: maxX - minX, h: maxY - minY })
         // someone arranging parts keeps their view, unless a part they added landed out of sight
-        const area0 = box.current!.getBoundingClientRect()
+        const area0 = { width: box.current!.offsetWidth, height: box.current!.offsetHeight }
         const view = fitRef.current
         const offscreen = Object.values(rects).some((r) => r.x * view.scale + view.x < 0 || (r.x + r.w) * view.scale + view.x > area0.width || r.y * view.scale + view.y < 60 || (r.y + r.h) * view.scale + view.y > area0.height - 40)
         if (fixed && fitted.current && !forceFit.current && !offscreen) return
         fitted.current = true
         forceFit.current = false
-        const area = box.current!.getBoundingClientRect()
-        const top = 92
-        const bottom = 80
-        const scale = Math.min(1.2, (area.width - 80) / (maxX - minX), (area.height - top - bottom) / (maxY - minY))
+        const area = { width: box.current!.offsetWidth, height: box.current!.offsetHeight }
+        const top = compact ? 30 : 92
+        const bottom = compact ? 16 : 80
+        const scale = Math.min(1.2, (area.width - (compact ? 24 : 80)) / (maxX - minX), (area.height - top - bottom) / (maxY - minY))
         const x = (area.width - (maxX - minX) * scale) / 2 - minX * scale
         const y = top + (area.height - top - bottom - (maxY - minY) * scale) / 2 - minY * scale
         setFit({ x, y, scale })
@@ -238,6 +242,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     if (!firmware || !parsed.circuit) return
     const bench = new Bench(parsed.circuit, firmware, build?.symbols)
     benchRef.current = bench
+    if (benchOut) benchOut.current = bench
     // a test plays on a fresh bench at twice real time, so people can watch it
     const scenario = testRun && test ? parseScenario(test).scenario : undefined
     const playing = scenario ? play(bench, scenario) : null
@@ -380,6 +385,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
       cancelAnimationFrame(raf)
       speaker.current.stop()
       benchRef.current = null
+      if (benchOut) benchOut.current = null
       if (serialIn) serialIn.current = null
       for (const c of cleanups) c()
     }
@@ -670,7 +676,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
       </div>
 
       {/* the minimap, a little card in the corner with every part as a block */}
-      {frame.w > 0 && (
+      {frame.w > 0 && !compact && (
         <div className="pill absolute bottom-3 left-3 overflow-hidden p-1.5" style={{ borderRadius: 12 }}>
           <svg width={112} height={112 * Math.min(0.7, frame.h / frame.w)} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`} preserveAspectRatio="xMidYMid meet" className="block">
             <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="var(--frame)" />
@@ -682,7 +688,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
       )}
 
       {/* a canvas notification: how far the sim got, what the build cost */}
-      <div className={`pill absolute bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center gap-4 whitespace-nowrap px-4 font-mono text-[11px] text-dim ${build ? '' : 'hidden'}`}>
+      <div className={`pill absolute bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center gap-4 whitespace-nowrap px-4 font-mono text-[11px] text-dim ${build && !compact ? '' : 'hidden'}`}>
         {build && !build.ok ? (
           <span className="text-bad">{status}</span>
         ) : (
