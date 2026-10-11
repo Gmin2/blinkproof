@@ -78,7 +78,8 @@ export function checkRules(c: Circuit, sketch?: string): Finding[] {
         add('no-power', 'error', [id], `${id} gets no power: wire ${id}:${v} to ${board}:5V and ${id}:${g} to a ${board}:GND pin`)
       }
       for (const s of need.signals) {
-        if (!c.signal(`${id}:${s}`)) add('unwired', 'error', [id], `${id}:${s} is not wired to a ${board} pin`)
+        // ECHO may reach its pin through a divider, the way the five volt rule asks for on a pico
+        if (!c.signal(`${id}:${s}`, s === 'ECHO')) add('unwired', 'error', [id], `${id}:${s} is not wired to a ${board} pin`)
       }
     }
 

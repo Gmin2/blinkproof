@@ -32,6 +32,27 @@ void loop() {
   })
 })
 
+describe('pico sonar', () => {
+  it('pings on a pico: its 10 us trigger comes out a hair short and still counts', async () => {
+    const { HCSR04 } = await import('../src/parts/hcsr04')
+    const pico = new Pico(await uf2(`
+void setup() { Serial.begin(115200); pinMode(10, OUTPUT); pinMode(11, INPUT); }
+void loop() {
+  digitalWrite(10, LOW); delayMicroseconds(2);
+  digitalWrite(10, HIGH); delayMicroseconds(10);
+  digitalWrite(10, LOW);
+  Serial.print("us "); Serial.println(pulseIn(11, HIGH, 30000));
+  delay(100);
+}
+`))
+    const sonar = new HCSR04(pico, 'GP10', 'GP11', 50)
+    pico.run(800)
+    expect(sonar.short).toBe(0)
+    expect(pico.serial).not.toMatch(/us 0\r?\n/)
+    expect(pico.serial).toMatch(/us 29\d\d/)
+  })
+})
+
 describe('pico plant monitor', () => {
   it('reads the soil on GP26, writes the oled over i2c on GP4/GP5, lights a neopixel through pio', async () => {
     const { readFileSync } = await import('node:fs')
@@ -64,6 +85,23 @@ describe('pico rules', () => {
     const f = checkRules(Circuit.parse(d).circuit!).filter((x) => x.rule === 'five-volt-pin')
     expect(f.map((x) => x.parts[0]).sort()).toEqual(['oled1', 'oled1', 'sonar'])
     expect(f.find((x) => x.parts[0] === 'sonar')!.message).toContain('divider')
+  })
+
+  it('takes the divider it asks for: ECHO through 1k to GP11, 2k from GP11 to GND', async () => {
+    const { Circuit, checkRules } = await import('../src')
+    const d = await plant()
+    d.parts.push({ id: 'sonar', type: 'wokwi-hc-sr04' }, { id: 'r1', type: 'wokwi-resistor', attrs: { value: '1000' } }, { id: 'r2', type: 'wokwi-resistor', attrs: { value: '2000' } })
+    d.connections.push(
+      ['sonar:VCC', 'pico:VBUS', '', []],
+      ['sonar:GND', 'pico:GND.2', '', []],
+      ['sonar:TRIG', 'pico:GP10', '', []],
+      ['sonar:ECHO', 'r1:1', '', []],
+      ['r1:2', 'pico:GP11', '', []],
+      ['r2:1', 'pico:GP11', '', []],
+      ['r2:2', 'pico:GND.3', '', []],
+    )
+    const errors = checkRules(Circuit.parse(d).circuit!).filter((x) => x.severity === 'error' && x.parts.includes('sonar'))
+    expect(errors).toEqual([])
   })
 
   it('wants the soil sensor on an adc pin and Wire on GP4 and GP5', async () => {
