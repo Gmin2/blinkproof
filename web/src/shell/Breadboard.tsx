@@ -493,23 +493,15 @@ function Resistor({ bands }: { bands: string[] }) {
   )
 }
 
-// one grey row the way the inspector shows a pin: a label on the left, where it goes on the right in mono
-function Line({ left, right, swatch, onHover }: { left: React.ReactNode; right: React.ReactNode; swatch?: string; onHover?: (on: boolean) => void }) {
-  return (
-    <div onPointerEnter={() => onHover?.(true)} onPointerLeave={() => onHover?.(false)} className={`flex h-6 items-center gap-2 rounded-[7px] px-2 text-[11px] ${onHover ? 'bg-input hover:bg-hover hover:shadow-[inset_0_0_0_1px_var(--divider)]' : 'bg-input'}`}>
-      {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
-      <span className="min-w-0 truncate font-mono text-ink">{left}</span>
-      <span className="ml-auto truncate font-mono text-dim">{right}</span>
-    </div>
-  )
-}
-
 // what a leg is called when you hold the part, where the pin name alone does not say it
 const LEG: Record<string, Record<string, string>> = {
   'wokwi-led': { A: 'long leg', C: 'short leg' },
   'wokwi-buzzer': { '2': '+ leg', '1': '− leg' },
-  'wokwi-rgb-led': { COM: 'longest' },
+  'wokwi-rgb-led': { COM: 'longest leg' },
 }
+
+// a hole as a small outlined chip, so holes stand apart from the words around them
+const Hole = ({ children }: { children: React.ReactNode }) => <span className="inline-flex h-[18px] items-center rounded-[5px] bg-frame px-[5px] font-mono text-[10.5px] text-ink shadow-[inset_0_0_0_1px_var(--divider)]">{children}</span>
 
 function SpotText({ spot }: { spot: Spot }) {
   if (spot.kind === 'rail') return <span className="truncate text-ink">{spot.text} rail</span>
@@ -520,39 +512,67 @@ function SpotText({ spot }: { spot: Spot }) {
         <span className="font-mono text-ink">{spot.text}</span>
       </span>
     )
-  return <span className="truncate font-mono text-ink">{spot.text}</span>
+  return <Hole>{spot.text}</Hole>
 }
 
-function Wire({ color, from, to, onHover }: { color: string; from: Spot; to: Spot; onHover: (on: boolean) => void }) {
+// how much a step adds, the way the list says it on the right
+const meta = (rows: Row[], last: boolean) => {
+  if (last) return 'last look'
+  if (rows.length && rows.every((r) => r.kind === 'wire')) return `${rows.length} wire${rows.length > 1 ? 's' : ''}`
+  return rows.length ? `${rows.length} thing${rows.length > 1 ? 's' : ''}` : ''
+}
+
+// one plain sentence of what the step is, before the holes and the wires
+// a part the way you would say it holding it
+const SAID: Record<string, string> = {
+  'wokwi-led': 'LED', 'wokwi-rgb-led': 'RGB LED', 'wokwi-hc-sr04': 'ultrasonic sensor', 'wokwi-ssd1306': 'OLED', 'wokwi-lcd1602': 'LCD',
+  'wokwi-dht22': 'DHT22', 'wokwi-pir-motion-sensor': 'motion sensor', 'wokwi-photoresistor-sensor': 'light sensor', 'wokwi-potentiometer': 'knob',
+  'wokwi-7segment': 'digit', 'wokwi-slide-switch': 'switch', 'wokwi-pushbutton': 'button', 'wokwi-buzzer': 'buzzer',
+}
+const WORD = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const count = (n: number, thing: string) => `${WORD[n] ?? n} ${thing}${n === 1 ? '' : 's'}`
+function sentence(p: Proto, rows: Row[], first: boolean): string {
+  if (first) return `Set the ${p.board.name} beside the breadboard, unplugged. Run its ${p.power} and ground to the top rails, then join them to the bottom ones.`
+  const parts = rows.filter((r): r is Extract<Row, { kind: 'part' }> => r.kind === 'part')
+  const beside = rows.filter((r) => r.kind === 'beside')
+  const res = rows.filter((r): r is Extract<Row, { kind: 'resistor' }> => r.kind === 'resistor')
+  const wires = rows.filter((r): r is Extract<Row, { kind: 'wire' }> => r.kind === 'wire')
+  const out: string[] = []
+  for (const r of parts) {
+    const kind = SAID[r.type] ?? KIND[r.type] ?? 'part'
+    out.push(r.type === 'wokwi-led' ? `Push the ${kind} in, long leg toward the pin` : r.straddle ? `Press the ${kind} in across the gap` : `Push the ${kind} in`)
+  }
+  for (const r of beside) out.push(`Leave ${r.id} beside the breadboard`)
+  if (res.length) out.push(`then ${res.length > 1 ? 'its resistors' : 'its resistor'}${res.some((r) => r.to.kind === 'rail' && r.to.text.endsWith('−')) ? ' to ground' : ''}`)
+  // where a wire goes, by either end: the board, a rail, or another strip
+  const onBoard = (x: Spot) => x.kind === 'pin' && x.on === p.board.name
+  const board = wires.filter((w) => onBoard(w.from) || onBoard(w.to)).length
+  const rails = wires.filter((w) => !onBoard(w.from) && !onBoard(w.to) && (w.from.kind === 'rail' || w.to.kind === 'rail')).length
+  const other = wires.length - board - rails
+  const bits = [board && `${count(board, 'wire')} to the ${p.board.name}`, rails && `${board ? WORD[rails] ?? rails : count(rails, 'wire')} to the rails`, other && `${count(other, 'wire')} between strips`].filter(Boolean) as string[]
+  if (bits.length) out.push(`${res.length ? 'and ' : 'then '}${bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0]}`)
+  const text = out.map((t, i) => (i && t.startsWith('and ') ? ` ${t}` : i ? `, ${t}` : t)).join('')
+  return text.charAt(0).toUpperCase() + text.slice(1) + '.'
+}
+
+// the marker on the line: done, the one you are on, or still to come
+function Marker({ state, n, onClick }: { state: 'done' | 'now' | 'todo'; n: number; onClick: () => void }) {
   return (
-    <div onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)} className="grid h-6 grid-cols-[8px_minmax(0,1fr)_14px_minmax(0,1fr)] items-center gap-1.5 rounded-[7px] bg-input px-2 text-[11px] hover:bg-hover hover:shadow-[inset_0_0_0_1px_var(--divider)]">
-      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-      <SpotText spot={from} />
-      <Icon name="chevron-right" size={9} className="justify-self-center text-icon-2" />
-      <SpotText spot={to} />
-    </div>
+    <button onClick={onClick} title={state === 'done' ? 'mark as not done' : 'mark as done'} className={`relative z-[1] flex h-[22px] w-[22px] items-center justify-center rounded-full font-mono text-[10px] font-medium ${state === 'done' ? 'bg-ok text-white' : state === 'now' ? 'bg-accent text-on-accent shadow-[0_0_0_4px_rgba(0,0,0,.08)]' : 'bg-panel text-dim shadow-[inset_0_0_0_1px_var(--switch)]'}`}>
+      {state === 'done' ? <Icon name="check" size={11} /> : n}
+    </button>
   )
 }
 
-const summary = (rows: Row[]) => {
-  const parts = rows.filter((r) => r.kind === 'part' || r.kind === 'beside').length
-  const res = rows.filter((r) => r.kind === 'resistor').length
-  const wires = rows.filter((r) => r.kind === 'wire').length
-  return [parts && `${parts} part${parts > 1 ? 's' : ''}`, res && `${res} resistor${res > 1 ? 's' : ''}`, wires && `${wires} wire${wires > 1 ? 's' : ''}`].filter(Boolean).join(', ')
-}
-
-// the right panel while building, in the inspector's own sections: the steps, what the open one adds, what sits
-// beside the board, or the shopping list, or the card of a part picked on the canvas
+// the right panel while building: the steps hang on one line, done ones solid, the rest dotted, and the one you
+// are on opens inline with what to do, its holes, its wires and the part's tip. or the shopping list, or a part's card
 export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram }) {
   const { p, step, setStep, ticks, tick, picked, setPicked, list, setList, last } = guide
   if (!p) return <p className="px-4 text-[12px] text-dim">Add a board to see how to build it.</p>
   if (picked) return <PartCard p={p} diagram={diagram} id={picked} onClose={() => setPicked(null)} onStep={(i) => (setPicked(null), setStep(i))} />
-  const done = p.steps.filter((s) => ticks.has(s.n)).length
-  const s = p.steps[step]
-  const rows = rowsOf(p, s.adds)
-  const lead = s.adds.length === 0 ? s.do : s.n === 1 ? s.do.slice(0, 1) : []
-  const parts = rows.filter((r): r is Extract<Row, { kind: 'part' }> => r.kind === 'part')
-  const others = rows.filter((r) => r.kind !== 'part')
+  const done = p.steps.filter((x) => ticks.has(x.n)).length
+  const leds = p.placed.filter((x) => x.type === 'wokwi-led')
+  const flashed = p.board.type === 'wokwi-pi-pico' ? 'sketch.uf2' : 'sketch.hex'
   return (
     <div className="flex h-full flex-col">
       <div className="px-2.5">
@@ -566,106 +586,153 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
           ))}
         </div>
       </div>
-      <div className="mt-3 min-h-0 flex-1 overflow-auto border-t border-sep pb-6 pt-3">
+      <div className="mt-3 min-h-0 flex-1 overflow-auto border-t border-sep px-4 pb-6 pt-4">
         {list === 'shopping' ? (
-          <Shopping p={p} diagram={diagram} />
+          <div className="-mx-4 -mt-1">
+            <Shopping p={p} diagram={diagram} />
+          </div>
         ) : (
           <>
-            <Section first title="Steps" right={<span className="text-[11px] text-dim">{done} of {p.steps.length} done</span>}>
-              <div className="space-y-px">
-                {p.steps.map((x, i) => {
-                  const isDone = ticks.has(x.n)
-                  const open = i === step
-                  return (
-                    <Fragment key={x.n}>
-                    <div className={`flex h-7 items-center gap-2 rounded-[7px] pl-1 pr-2 text-[12px] ${open ? 'chip' : 'hover:bg-hover'}`}>
-                      <button onClick={() => tick(x.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className="flex h-5 w-5 shrink-0 items-center justify-center">
-                        {isDone ? <Icon name="circle-check" size={15} className="text-ok" /> : <span className={`flex h-[15px] w-[15px] items-center justify-center rounded-full border font-mono text-[9px] ${open ? 'border-ink text-ink' : 'border-icon-2 text-dim'}`}>{x.n}</span>}
+            <div className="flex h-6 items-baseline justify-between text-[12px] font-semibold text-ink">
+              Steps
+              <span className="text-[11px] font-normal text-dim">
+                {done} of {p.steps.length} done
+              </span>
+            </div>
+            <ol className="mt-3">
+              {p.steps.map((x, i) => {
+                const isDone = ticks.has(x.n)
+                const open = i === step
+                const state = isDone && !open ? 'done' : open ? 'now' : isDone ? 'done' : 'todo'
+                const rows = rowsOf(p, x.adds)
+                const isLast = i === last
+                const parts = rows.filter((r): r is Extract<Row, { kind: 'part' }> => r.kind === 'part')
+                const wiring = rows.filter((r) => r.kind === 'wire' || r.kind === 'resistor')
+                const beside = rows.filter((r) => r.kind === 'beside')
+                const firstRes = rows.find((r): r is Extract<Row, { kind: 'resistor' }> => r.kind === 'resistor')
+                const note = parts.map((r) => FACTS[r.type]?.note).find(Boolean)
+                const raw = [note, firstRes && `Bands ${firstRes.bands.slice(0, 3).join(' ')}`].filter(Boolean).join('. ')
+                const tip = raw && raw.charAt(0).toUpperCase() + raw.slice(1).replace(/ ohm/g, ' Ω') + '.'
+                return (
+                  <li key={x.n} className="relative grid grid-cols-[22px_minmax(0,1fr)] gap-x-2.5">
+                    {!isLast && <span className="absolute bottom-0 left-[10.5px] top-[22px] w-px" style={{ background: isDone ? '#9a9a9a' : 'repeating-linear-gradient(to bottom, var(--divider) 0 3px, transparent 3px 6px)' }} />}
+                    <Marker state={state} n={x.n} onClick={() => tick(x.n, !isDone)} />
+                    <div className={open ? 'pb-4' : 'pb-3.5'}>
+                      <button onClick={() => setStep(i)} className="flex min-h-[22px] w-full items-center gap-2 text-left text-[12.5px]">
+                        <span className={`min-w-0 flex-1 truncate ${open ? 'font-semibold text-ink' : isDone ? 'text-dim' : 'text-ink'}`}>{x.title}</span>
+                        <span className="shrink-0 text-[11px] text-dim">{meta(rows, isLast)}</span>
                       </button>
-                      <button onClick={() => setStep(i)} className={`min-w-0 flex-1 truncate text-left ${isDone && !open ? 'text-dim' : 'text-ink'}`}>
-                        {x.title}
-                      </button>
-                      <span className="shrink-0 text-[11px] text-dim">{summary(rowsOf(p, x.adds))}</span>
-                    </div>
-                    {open && (
-                      <div className="relative mb-2 mt-1.5 pl-[30px] pr-0.5">
-                        <span className="absolute bottom-1 left-[13px] top-0 w-px bg-tree" />
-
-                    {lead.length > 0 && (
-                      <div className="mb-2.5 space-y-1">
-                        {lead.map((l, i) => (
-                          <p key={i} className="text-[12px] leading-[18px] text-dim">
-                            {l}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {parts.map((r) => (
-                      <div key={r.id} className="mb-2.5">
-                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-dim">
-                          <Icon name={PART_ICON[r.type] ?? 'box'} size={13} className="text-icon-2" />
-                          {r.straddle ? 'press' : 'push'} {r.id} in{r.straddle ? ' across the gap' : ''}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {r.legs.map((l, i) => (
-                            <Line key={i} left={<>{l.pin}{LEG[r.type]?.[l.pin] && <span className="font-sans text-dim"> {LEG[r.type][l.pin]}</span>}</>} right={l.hole} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {others.length > 0 && (
-                      <div className="space-y-1.5">
-                      {parts.length > 0 && others.some((r) => r.kind === 'wire') && <div className="pt-1 text-[11px] font-medium text-dim">then wire it</div>}
-                        {others.map((r) =>
-                          r.kind === 'resistor' ? (
-                            <div key={r.id} title={`${r.value}, ${r.bands.slice(0, 3).join(' ')}`} className="grid h-6 grid-cols-[34px_minmax(0,1fr)_14px_minmax(0,1fr)] items-center gap-1.5 rounded-[7px] bg-input px-2 text-[11px]">
-                              <Resistor bands={r.bands} />
-                              <span className="truncate">
-                                <span className="font-mono text-ink">{r.value}</span> <span className="text-dim">from</span> <SpotText spot={r.from} />
-                              </span>
-                              <Icon name="chevron-right" size={9} className="justify-self-center text-icon-2" />
-                              <SpotText spot={r.to} />
-                            </div>
-                          ) : r.kind === 'beside' ? (
-                            <Line key={r.id} left={r.id} right="beside the board" />
+                      {open && (
+                        <div>
+                          <p className="mb-2.5 mt-1 text-[11.5px] leading-[17px] text-dim">{isLast ? 'Before the usb cable goes in, look along every wire once.' : sentence(p, rows, i === 0)}</p>
+                          {isLast ? (
+                            <>
+                              {[
+                                'Red wires only on the + rail, black only on the − rail',
+                                ...leds.map((l) => {
+                                  const a = l.legs.find((g) => g.pin === 'A')!.hole
+                                  // the board pin whose wire lands in the long leg's strip, if one does
+                                  const pin = 'rail' in a ? undefined : p.jumpers.map((j) => [j.from, j.to] as const).find(([f, t]) => 'board' in f && 'hole' in t && !('rail' in t.hole) && t.hole.col === a.col && (t.hole.row <= 'e') === (a.row <= 'e'))?.[0]
+                                  const name = pin && 'board' in pin ? pin.board.split(':')[1].replace(/\.\d$/, '') : undefined
+                                  return `${l.id}'s long leg is in ${holeName(a)}${name ? `, toward ${/^\d+$/.test(name) ? `pin ${name}` : name}` : ''}`
+                                }),
+                                `Every wire matches the board on the left`,
+                              ].map((t, k) => (
+                                <label key={k} className="mb-2 flex cursor-pointer items-start gap-2 text-[11.5px] leading-4 text-ink">
+                                  <input type="checkbox" checked={ticks.has(1000 + k)} onChange={(e) => tick(1000 + k, e.target.checked)} className="mt-px h-[13px] w-[13px] shrink-0 accent-[var(--accent)]" />
+                                  {t}
+                                </label>
+                              ))}
+                              <div className="mb-1.5 mt-3.5 text-[10.5px] font-medium text-dim">Then</div>
+                              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-y-2 text-[11.5px] text-ink">
+                                <span>Plug the {p.board.name} in over usb</span>
+                                <span />
+                                <span>Flash the firmware that passed</span>
+                                <Hole>{flashed}</Hole>
+                              </div>
+                            </>
                           ) : (
-                            <Wire key={r.id} color={r.color} from={r.from} to={r.to} onHover={(on) => guide.setHover(on ? r.id : null)} />
-                          ),
-                        )}
-                      </div>
-                    )}
-                  
-                      </div>
-                    )}
-                  </Fragment>
-                  )
-                })}
-              </div>
-            </Section>
-
-            {p.beside.length > 0 && (
-              <>
-                <Sep />
-                <Section title="Beside the board" sub>
-                  <p className="flex gap-2 text-[11.5px] leading-[17px] text-ink">
-                    <Icon name="circle-info" size={14} className="mt-px shrink-0 text-icon-2" />
-                    {p.beside.map((b) => b.id).join(', ')} {p.beside.length > 1 ? 'have' : 'has'} no breadboard form, {p.beside.length > 1 ? 'they connect' : 'it connects'} with jumper wires
-                  </p>
-                </Section>
-              </>
-            )}
+                            <>
+                              {parts.map((r) => (
+                                <div key={r.id} className="mb-3">
+                                  <div className="mb-1.5 text-[10.5px] font-medium text-dim">{r.straddle ? 'Press in across the gap' : parts.length > 1 ? `Push ${r.id} in` : 'Push in'}</div>
+                                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-y-2 text-[11.5px]">
+                                    {r.legs.map((l, k) => (
+                                      <Fragment key={k}>
+                                        <span className="truncate text-ink">
+                                          {LEG[r.type]?.[l.pin] ? (
+                                            <>
+                                              {LEG[r.type][l.pin]} <span className="text-dim">{l.pin}</span>
+                                            </>
+                                          ) : (
+                                            <span className="font-mono">{l.pin}</span>
+                                          )}
+                                        </span>
+                                        <Hole>{l.hole}</Hole>
+                                      </Fragment>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                              {wiring.length > 0 && (
+                                <>
+                                  {(parts.length > 0 || beside.length > 0) && <div className="mb-1.5 mt-1 text-[10.5px] font-medium text-dim">Wire it</div>}
+                                  <div className="grid grid-cols-[42px_minmax(0,1fr)_14px_minmax(0,0.8fr)] items-center gap-y-2 text-[11.5px]">
+                                    {wiring.map((r) =>
+                                      r.kind === 'resistor' ? (
+                                        <Fragment key={r.id}>
+                                          <Resistor bands={r.bands} />
+                                          <span className="truncate" title={r.bands.slice(0, 3).join(' ')}>
+                                            <span className="text-ink">{r.value}</span> <span className="text-dim">from</span> <SpotText spot={r.from} />
+                                          </span>
+                                          <span className="text-dim">→</span>
+                                          <span className="justify-self-start">
+                                            <SpotText spot={r.to} />
+                                          </span>
+                                        </Fragment>
+                                      ) : r.kind === 'wire' ? (
+                                        <div key={r.id} className="contents" onPointerEnter={() => guide.setHover(r.id)} onPointerLeave={() => guide.setHover(null)}>
+                                          <span className="ml-[14px] h-[7px] w-[7px] rounded-full" style={{ background: r.color }} />
+                                          <SpotText spot={r.from} />
+                                          <span className="text-dim">→</span>
+                                          <span className="justify-self-start">
+                                            <SpotText spot={r.to} />
+                                          </span>
+                                        </div>
+                                      ) : null,
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                              {tip && (
+                                <p className="mt-3.5 flex gap-1.5 border-t border-sep pt-2.5 text-[11px] leading-4 text-dim">
+                                  <Icon name="circle-info" size={13} className="mt-px shrink-0 text-icon-2" />
+                                  {tip}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
           </>
         )}
       </div>
       {list === 'steps' && (
         <div className="flex shrink-0 items-center gap-2 border-t border-sep px-4 py-3">
-          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="h-7 rounded-[7px] bg-input px-2.5 text-[11px] font-semibold text-ink disabled:opacity-40">
+          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="h-7 rounded-[7px] px-2.5 text-[11px] font-semibold text-ink shadow-[inset_0_0_0_1px_var(--divider)] hover:bg-hover disabled:opacity-40">
             Back
           </button>
-          <div className="flex-1" />
-          <button onClick={() => (tick(s.n, true), setStep(Math.min(last, step + 1)))} className="flex h-7 items-center gap-1 rounded-[7px] bg-accent px-2.5 text-[11px] font-semibold text-on-accent hover:bg-accent-hover">
-            {step === last ? 'Done' : 'Done, next'}
-            <Icon name="chevron-right" size={10} />
+          <span className="flex-1 text-center text-[11px] text-dim">
+            Step {step + 1} of {p.steps.length}
+          </span>
+          <button onClick={() => (tick(p.steps[step].n, true), setStep(Math.min(last, step + 1)))} className="flex h-7 items-center gap-1 rounded-[7px] bg-accent px-2.5 text-[11px] font-semibold text-on-accent hover:bg-accent-hover">
+            {step === last ? 'Done, all built' : 'Done, next'}
+            {step !== last && <Icon name="chevron-right" size={10} />}
           </button>
         </div>
       )}
