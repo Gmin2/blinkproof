@@ -453,6 +453,7 @@ export default function App() {
         examples={lib.examples}
         onEditor={(id) => (id ? open(id) : openNew())}
         onBlank={blank}
+        onReset={() => build.reset()}
       />
     )
 

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
 import { BuildGuide } from './Guide'
-import type { Saved } from './library'
+import { api, type Saved } from './library'
 import { KIND } from './Sidebar'
 import { IDEAS, type Compiled, type FeedItem, type Run, type Verdict } from './useBuild'
 
@@ -27,6 +27,8 @@ type Props = {
   examples: Saved[]
   onEditor: (id?: string) => void
   onBlank: (board: 'uno' | 'nano' | 'pico') => void
+  // back to the start card, once a build is done
+  onReset: () => void
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
@@ -95,7 +97,49 @@ function SourceNode({ data }: NodeProps<Node<NodeData>>) {
         <circle cx="30" cy="30" r="12" fill="var(--panel)" stroke="currentColor" strokeWidth="1.3" />
         <path d="M26 27.5h8v5a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2zM28 27.5v-3M32 27.5v-3M30 34.5v3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
-      <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+    </button>
+  )
+}
+
+type IdeaData = { label: string; sub?: string; lines?: string[]; open: boolean; badge?: string; onPick: () => void }
+
+// what you asked for. while the agent is still picking parts it is the card you typed into, with what the agent
+// says inside it. once there is a board it folds into a node at the top of the path
+function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
+  return (
+    <button onClick={data.onPick} className={`rise block rounded-[14px] border p-[3px] text-left transition-all duration-300 ${selected ? 'border-accent/60 bg-accent/10' : 'border-line/80 bg-input/60'} ${data.open ? 'w-[420px]' : ''}`}>
+      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
+      <span className={`block overflow-hidden rounded-[11px] border bg-panel ${selected ? 'border-accent' : 'border-line'}`}>
+        <span className={`flex items-center gap-2.5 ${data.open ? 'border-b border-sep px-3.5 py-2.5' : 'px-3 py-2'}`}>
+          <Icon name="magic-wand" size={15} className="text-icon" />
+          <span className="min-w-0 flex-1">
+            <span className={`block truncate font-medium text-ink ${data.open ? 'text-[14px]' : 'max-w-[220px] text-[13px]'}`}>{data.label}</span>
+            {!data.open && data.sub && <span className="block text-[11px] text-dim">{data.sub}</span>}
+          </span>
+          {data.badge && (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[11.5px] font-medium text-ink">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />
+              {data.badge}
+            </span>
+          )}
+        </span>
+        {data.open && (
+          <span className="block space-y-1.5 px-3.5 py-3 text-[12.5px] leading-[18px] text-dim">
+            {(data.lines?.length ? data.lines : ['Reading what you asked for...']).map((l, i) => (
+              <span key={i} className="line-clamp-2 block">
+                {l}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+      {data.open && (
+        <span className="flex items-center gap-2 px-3.5 py-2 text-[12px] text-dim">
+          <Icon name="loader" size={13} className="animate-spin" />
+          Picking a board and parts, it has to pass a test before you get it
+        </span>
+      )}
     </button>
   )
 }
@@ -108,6 +152,7 @@ function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !rounded-[2px] !border-0 !bg-icon-2" />
       <Handle type="target" id="top" position={Position.Top} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="target" id="bottom" position={Position.Bottom} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
       <span className={`flex items-center gap-2.5 rounded-[9px] border bg-panel ${selected ? 'border-accent' : 'border-line'} ${big ? 'px-3.5 py-2.5' : 'px-3 py-2'}`}>
         <Icon name={data.icon} size={big ? 17 : 15} className="text-icon" />
         <span className="text-left">
@@ -147,13 +192,17 @@ function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   )
 }
 
-const nodeTypes = { source: SourceNode, card: CardNode }
+const nodeTypes = { source: SourceNode, card: CardNode, idea: IdeaNode }
 const edgeTypes = { chip: ChipEdge }
 
 // the circuit as a signal path: inputs come in from the left, the board in the middle, outputs go out to the right
-function layout(d: Diagram, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined) {
-  const board = d.parts.find((p) => BOARDS.includes(p.type))
-  if (!board) return { nodes: [] as Node[], edges: [] as Edge[] }
+type Idea = Omit<IdeaData, 'onPick' | 'open'>
+
+function layout(d: Diagram | null, idea: Idea, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined) {
+  const board = d?.parts.find((p) => BOARDS.includes(p.type))
+  const ideaNode = (open: boolean): Node => ({ id: 'idea', type: 'idea', position: { x: open ? -110 : 0, y: open ? -60 : -170 }, data: { ...idea, open, badge: open ? idea.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
+  // nothing to draw yet but the request: the card you typed into, still open
+  if (!d || !board) return { nodes: [ideaNode(true)], edges: [] as Edge[] }
   const resistors = new Set(d.parts.filter((p) => p.type === 'wokwi-resistor').map((p) => p.id))
   const peers = (ref: string) => d.connections.filter(([a, b]) => a === ref || b === ref).map(([a, b]) => (a === ref ? b : a))
   // what a part's signal pins reach on the board, straight or through a resistor
@@ -195,7 +244,8 @@ function layout(d: Diagram, picked: string | null, onPick: (id: string) => void,
   })
   const column = (n: number, i: number) => (i - (n - 1) / 2) * 78
   const nodes: Node[] = [
-    node('usb', 'source', 40, -132, 'USB', 'bolt'),
+    ideaNode(false),
+    node('usb', 'source', 50, 132, 'USB', 'bolt'),
     node(board.id, 'board', 0, 0, cap(KIND[board.type] ?? board.type), 'chip', `${items.length} ${items.length === 1 ? 'part' : 'parts'}`),
     ...ins.map((i, k) => node(i.p.id, 'part', -340, column(ins.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', KIND[i.p.type])),
     ...outs.map((i, k) => node(i.p.id, 'part', 360, column(outs.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', KIND[i.p.type])),
@@ -207,20 +257,21 @@ function layout(d: Diagram, picked: string | null, onPick: (id: string) => void,
   const line = (hot: boolean) => ({ stroke: hot ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5 })
   const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent)' : 'var(--icon-2)' })
   const edges: Edge[] = [
-    { id: 'usb', source: 'usb', target: board.id, targetHandle: 'top', type: 'smoothstep', style: { ...line(false), strokeDasharray: '4 3' } },
+    { id: 'idea', source: 'idea', target: board.id, targetHandle: 'top', type: 'smoothstep', markerEnd: arrow(false), style: line(false), animated: state === 'work' },
+    { id: 'usb', source: 'usb', target: board.id, targetHandle: 'bottom', type: 'smoothstep', style: { ...line(false), strokeDasharray: '4 3' } },
     ...ins.map((i) => ({ id: `in-${i.p.id}`, source: i.p.id, target: board.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'source' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
     ...outs.map((i) => ({ id: `out-${i.p.id}`, source: board.id, target: i.p.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'target' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
   ]
   return { nodes, edges }
 }
 
-function Path({ diagram, picked, onPick, state }: { diagram: Diagram; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state'] }) {
+function Path({ diagram, idea, picked, onPick, state }: { diagram: Diagram | null; idea: Idea; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state'] }) {
   const flow = useReactFlow()
   // the part that came in last glows for a moment, the way a new connection lights up
   const seen = useRef(new Set<string>())
   const [fresh, setFresh] = useState<string>()
   useEffect(() => {
-    const ids = diagram.parts.filter((p) => !BOARDS.includes(p.type)).map((p) => p.id)
+    const ids = (diagram?.parts ?? []).filter((p) => !BOARDS.includes(p.type)).map((p) => p.id)
     const added = ids.filter((id) => !seen.current.has(id))
     ids.forEach((id) => seen.current.add(id))
     if (added.length) {
@@ -229,7 +280,8 @@ function Path({ diagram, picked, onPick, state }: { diagram: Diagram; picked: st
       return () => clearTimeout(t)
     }
   }, [diagram])
-  const laid = useMemo(() => layout(diagram, picked, onPick, state, fresh), [diagram, picked, state, fresh])
+  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh), [diagram, idea.label, idea.sub, idea.badge, idea.lines?.join('\n'), picked, state, fresh])
+  const hasBoard = !!diagram?.parts.some((p) => BOARDS.includes(p.type))
   const edges = laid.edges
   // react flow measures nodes through onNodesChange, so they live in state and keep their sizes across relayouts
   const [nodes, setNodes] = useState<Node[]>(laid.nodes)
@@ -250,11 +302,12 @@ function Path({ diagram, picked, onPick, state }: { diagram: Diagram; picked: st
       const pad = { top: 80, bottom: 60, left: 60, right: picked ? 440 : 60 }
       const w = r.width - pad.left - pad.right
       const h = r.height - pad.top - pad.bottom
-      const zoom = Math.min(1.25, w / b.width, h / b.height)
+      // the open request card stays at reading size, a path gets fitted
+      const zoom = Math.min(hasBoard ? 1.25 : 1, w / b.width, h / b.height)
       flow.setViewport({ x: pad.left + (w - b.width * zoom) / 2 - b.x * zoom, y: pad.top + (h - b.height * zoom) / 2 - b.y * zoom, zoom }, { duration: document.visibilityState === 'visible' ? 500 : 0 })
     }, 40)
     return () => clearTimeout(t)
-  }, [ready, nodes.length, picked === null])
+  }, [ready, nodes.length, picked === null, hasBoard])
   return (
     <div ref={box} className="h-full w-full">
       <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} edgeTypes={edgeTypes} proOptions={{ hideAttribution: true }} nodesConnectable={false} elementsSelectable={false} panOnScroll minZoom={0.35} onPaneClick={() => onPick(null)} />
@@ -289,6 +342,22 @@ function Heading({ children, right }: { children: React.ReactNode; right?: React
 function Panel({ id, props }: { id: string; props: Props }) {
   const { diagram, source, test, runs, compiles, verdict, feed, request } = props
   if (id === 'guide') return diagram ? <BuildGuide diagram={diagram} /> : null
+  if (id === 'idea')
+    return (
+      <>
+        <p className="rounded-[9px] bg-input px-3 py-2.5 text-[13px] leading-5 text-ink">{request}</p>
+        <Heading>What the agent said</Heading>
+        <div className="space-y-1.5">
+          {feed
+            .filter((f) => f.kind === 'say')
+            .map((f, i) => (
+              <p key={i} className="text-[12px] leading-[18px] text-dim">
+                {(f as { text: string }).text}
+              </p>
+            ))}
+        </div>
+      </>
+    )
   if (id === 'usb')
     return (
       <>
@@ -373,10 +442,12 @@ type Step = 'menu' | 'describe' | 'board' | 'example'
 
 // the first thing someone sees: say what to make, or pick a board, and watch it come together as a path
 export function Onboarding(props: Props) {
-  const { busy, request, prompt, onPrompt, onStart, verdict, savedId, recent, examples, onEditor, onBlank, diagram, compiles, runs, feed } = props
+  const { busy, request, prompt, onPrompt, onStart, verdict, savedId, recent, examples, onEditor, onBlank, onReset, diagram, compiles, runs, feed } = props
   const [step, setStep] = useState<Step>('menu')
   const [picked, setPicked] = useState<string | null>(null)
   const [focus, setFocus] = useState(false)
+  // an example opened from the card grows on the same canvas, it needs no agent
+  const [shown, setShown] = useState<Saved | null>(null)
   const started = busy || !!request
   const input = useRef<HTMLInputElement>(null)
 
@@ -414,26 +485,38 @@ export function Onboarding(props: Props) {
                 : 'Wiring'
   const boardState: NodeData['state'] = verdict ? (verdict.ok ? 'done' : 'fail') : busy ? 'work' : 'idle'
 
+  const openId = shown?.id ?? savedId
   const top = (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between px-5">
-      <span className="pointer-events-auto flex items-center gap-2 text-[13px] font-semibold text-ink">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-14 items-center justify-between px-5">
+      <button
+        onClick={() => {
+          if (busy) return
+          setShown(null)
+          setPicked(null)
+          setStep('menu')
+          onReset()
+        }}
+        title={busy ? 'the agent is building' : 'start over'}
+        className="pointer-events-auto flex items-center gap-2 text-[13px] font-semibold text-ink"
+      >
         <Logo size={18} />
         blinkproof
-      </span>
-      <span className="pointer-events-auto flex items-center gap-1">
-        {started && (
-          <button onClick={() => onEditor(savedId)} disabled={!savedId} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink disabled:opacity-40">
+      </button>
+      <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out ${picked ? 'mr-[380px]' : ''}`}>
+        {(started || shown) && (
+          <button onClick={() => onEditor(openId)} disabled={!openId} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink disabled:opacity-40">
             Open in the editor
           </button>
         )}
-        <button onClick={() => onEditor()} title="go to the editor" className="flex h-8 w-8 items-center justify-center rounded-[8px] text-icon hover:bg-hover">
-          <Icon name="plus" size={16} />
+        <button onClick={() => onEditor()} title="skip onboarding and go to the editor" className="flex h-8 items-center gap-1 rounded-[8px] border border-line bg-panel px-3 text-[12px] font-medium text-ink hover:bg-hover">
+          Skip
+          <Icon name="chevron-right" size={11} />
         </button>
       </span>
     </div>
   )
 
-  if (!started)
+  if (!started && !shown)
     return (
       <div className="relative flex h-full flex-col items-center justify-center bg-canvas px-6 pb-20">
         {top}
@@ -504,7 +587,7 @@ export function Onboarding(props: Props) {
             <Frame>
               <div className="max-h-[360px] overflow-auto">
                 {examples.map((ex) => (
-                  <Row key={ex.id} icon={ex.diagram?.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'chip' : 'frame'} title={ex.title} line={ex.test ? 'With a test that passes' : 'A sketch to run and change'} onClick={() => onEditor(ex.id)} />
+                  <Row key={ex.id} icon={ex.diagram?.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'chip' : 'frame'} title={ex.title} line={ex.status === 'proven' ? 'With a test that passes' : 'A sketch to run and change'} onClick={() => api.get(ex.id).then((full) => full && (setShown(full), setPicked('guide')))} />
                 ))}
               </div>
             </Frame>
@@ -513,77 +596,48 @@ export function Onboarding(props: Props) {
       </div>
     )
 
-  // building: a status card until there is a circuit, then the path
+  // the same canvas from here on: the request is the first node, and the board and its parts grow from it
+  const ideaLines = feed.filter((f) => f.kind === 'say').slice(-3).map((f) => (f as { text: string }).text)
+  const idea = shown
+    ? { label: shown.title, sub: shown.test ? 'example, with a passing test' : 'example' }
+    : { label: cap(request.split(/[:.]/)[0]), sub: verdict ? (verdict.ok ? 'proven' : 'not proven') : 'the agent is building it', lines: ideaLines, badge: 'Building' }
+  const pathDiagram = shown ? (shown.diagram ?? null) : diagram
+  const pathState: NodeData['state'] = shown ? (shown.test ? 'done' : 'idle') : boardState
   return (
     <div className="relative flex h-full overflow-hidden bg-canvas">
       {top}
-      <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center">
-        <button onClick={() => verdict?.ok && setPicked('guide')} className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full border bg-panel px-3.5 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)] ${verdict ? (verdict.ok ? 'border-ok/40' : 'border-bad/40') : 'border-line'}`}>
-          {verdict ? <Status ok={verdict.ok} size={14} /> : <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />}
-          {phase}
-          {verdict?.ok && <span className="text-dim">· what you need to build it</span>}
-        </button>
-      </div>
+      {!shown && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center">
+          <button onClick={() => verdict?.ok && setPicked('guide')} className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full border bg-panel px-3.5 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)] ${verdict ? (verdict.ok ? 'border-ok/40' : 'border-bad/40') : 'border-line'}`}>
+            {verdict ? <Status ok={verdict.ok} size={14} /> : <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />}
+            {phase}
+            {verdict?.ok && <span className="text-dim">· what you need to build it</span>}
+          </button>
+        </div>
+      )}
       <div className="min-w-0 flex-1">
-        {diagram && diagram.parts.some((p) => BOARDS.includes(p.type)) ? (
-          <ReactFlowProvider>
-            <Path diagram={diagram} picked={picked} onPick={setPicked} state={boardState} />
-          </ReactFlowProvider>
-        ) : (
-          <div className="flex h-full items-center justify-center pb-10">
-            <div className="rise w-full max-w-[420px]">
-              <Frame
-                footer={
-                  <div className="flex items-center gap-2 px-3.5 py-2.5 text-[12.5px] text-dim">
-                    <Icon name="loader" size={14} className="animate-spin" />
-                    The agent is on it, it has to pass a test before you get it
-                  </div>
-                }
-              >
-                <div className="flex items-center justify-between border-b border-sep px-3.5 py-2.5">
-                  <span className="flex min-w-0 items-center gap-2 text-[14px] font-medium text-ink">
-                    <Icon name="magic-wand" size={15} className="text-icon" />
-                    <span className="truncate">{cap(request.split(/[:.]/)[0])}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[11.5px] font-medium text-ink">
-                    <span className="h-1.5 w-1.5 rounded-full bg-warn" />
-                    Building
-                  </span>
-                </div>
-                <div className="space-y-1.5 px-3.5 py-3 text-[12.5px] text-dim">
-                  {feed
-                    .filter((f) => f.kind === 'say')
-                    .slice(-3)
-                    .map((f, i) => (
-                      <p key={i} className="line-clamp-2">
-                        {(f as { text: string }).text}
-                      </p>
-                    ))}
-                  {!feed.some((f) => f.kind === 'say') && <p>Reading what you asked for...</p>}
-                </div>
-              </Frame>
-            </div>
-          </div>
-        )}
+        <ReactFlowProvider>
+          <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} />
+        </ReactFlowProvider>
       </div>
       <aside className={`absolute bottom-0 right-0 top-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel transition-transform duration-300 ease-out ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
         {picked && (
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">
               <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-medium text-ink">
-                <Icon name={picked === 'guide' ? 'box' : picked === 'usb' ? 'bolt' : (PART_ICON[diagram?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
-                <span className="truncate">{picked === 'guide' ? 'What you need to build it' : picked === 'usb' ? 'Power' : picked}</span>
+                <Icon name={picked === 'guide' ? 'box' : picked === 'usb' ? 'bolt' : picked === 'idea' ? 'magic-wand' : (PART_ICON[diagram?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip')} size={15} className="text-icon" />
+                <span className="truncate">{picked === 'guide' ? 'What you need to build it' : picked === 'usb' ? 'Power' : picked === 'idea' ? 'What you asked' : picked}</span>
               </span>
               <button onClick={() => setPicked(null)} title="close" className="flex h-7 w-7 items-center justify-center rounded-full text-icon-2 hover:bg-hover hover:text-ink">
                 <Icon name="xmark" size={12} />
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-4">
-              <Panel id={picked} props={props} />
+              <Panel id={picked} props={shown ? { ...props, diagram: shown.diagram ?? null, source: shown.sketch, test: shown.test, request: shown.title, runs: [], compiles: [], verdict: null, feed: [] } : props} />
             </div>
-            {savedId && (
+            {openId && (
               <div className="border-t border-sep p-3">
-                <button onClick={() => onEditor(savedId)} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent">
+                <button onClick={() => onEditor(openId)} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent">
                   Open in the editor
                   <Icon name="chevron-right" size={12} />
                 </button>

@@ -136,6 +136,7 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     setSavedId(undefined)
     setRuns([])
     setCompiles([])
+    setRequest('')
   }
 
   async function start(text: string, model: string) {
