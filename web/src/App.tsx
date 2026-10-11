@@ -1,10 +1,10 @@
-import { PARTS } from '@blinkproof/sim'
+import { PARTS, type Diagram } from '@blinkproof/sim'
 import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
 import { Inspector, type Mode } from './shell/Inspector'
-import { api, drafts, useLibrary, useRoute, type Saved } from './shell/library'
+import { api, drafts, useLibrary, useRoute, type Draft, type Saved } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
@@ -83,6 +83,10 @@ export default function App() {
   // your edits to the sketch: the draft you type, and what you last pressed run on
   const [draft, setDraft] = useState<string>()
   const [applied, setApplied] = useState<string>()
+  // your edits to the circuit, with undo and redo, as one value so they can never drift apart
+  type Edits = { past: (Diagram | undefined)[]; present?: Diagram; future: (Diagram | undefined)[] }
+  const [edits, setEdits] = useState<Edits>({ past: [], future: [] })
+  const circuit = edits.present
   const [draftIds, setDraftIds] = useState(() => drafts.ids())
   const [saving, setSaving] = useState(false)
   const [serialLine, setSerialLine] = useState('')
@@ -105,9 +109,10 @@ export default function App() {
 
   // an edit left on this build last time comes back, in the editor and on the board
   useEffect(() => {
-    const saved = docId ? drafts.get(docId) : undefined
-    setDraft(saved)
-    setApplied(saved)
+    const saved: Draft = docId ? drafts.get(docId) : {}
+    setDraft(saved.sketch)
+    setApplied(saved.sketch)
+    setEdits({ past: [], present: saved.diagram, future: [] })
     setSim('run')
   }, [docId])
 
@@ -138,12 +143,14 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  const diagram = (live ? build.diagram : doc?.diagram) ?? null
+  const baseDiagram = (live ? build.diagram : doc?.diagram) ?? null
+  const diagram = circuit ?? baseDiagram
   const original = live ? build.source : doc?.sketch
   const source = applied ?? original
   const test = live ? build.test : doc?.test
   const code = draft ?? (live ? build.code : doc?.sketch) ?? ''
-  const edited = draft !== undefined && draft !== original
+  const sketchEdited = draft !== undefined && draft !== original
+  const edited = sketchEdited || circuit !== undefined
   const request = live ? build.request : (doc?.request ?? '')
   const listed = lib.builds.find((b) => b.id === docId)?.title
   const title = live && listed ? listed : live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
@@ -214,28 +221,37 @@ export default function App() {
     }
   }
 
-  const editCode = (text: string) => {
-    setDraft(text)
+  // whatever is edited goes to this browser's drafts, a build without edits has none
+  useEffect(() => {
     if (!docId) return
-    drafts.set(docId, text === original ? undefined : text)
+    drafts.set(docId, { sketch: sketchEdited ? draft : undefined, diagram: circuit })
     setDraftIds(drafts.ids())
-  }
+  }, [draft, circuit])
+
+  const editCode = (text: string) => setDraft(text)
+
+  // a finished change to the circuit: one step of undo
+  const editCircuit = (d: Diagram | undefined) => setEdits((e) => ({ past: [...e.past.slice(-49), e.present], present: d, future: [] }))
+
+  const undo = () => setEdits((e) => (e.past.length ? { past: e.past.slice(0, -1), present: e.past[e.past.length - 1], future: [e.present, ...e.future] } : e))
+
+  const redo = () => setEdits((e) => (e.future.length ? { past: [...e.past, e.present], present: e.future[0], future: e.future.slice(1) } : e))
 
   const revert = () => {
     setDraft(undefined)
     setApplied(undefined)
-    if (docId) drafts.set(docId, undefined)
-    setDraftIds(drafts.ids())
+    setEdits({ past: [], future: [] })
     setRestart((n) => n + 1)
   }
 
   // the edit becomes its own build with its own link, the one it came from stays as it was
   const saveFork = async () => {
-    if (!docId || !edited || draft === undefined || saving) return
+    const sketch = draft ?? original
+    if (!docId || !edited || !sketch || saving) return
     setSaving(true)
     try {
-      const fork = await api.fork(docId, { sketch: draft, diagram: diagram ?? undefined, test })
-      drafts.set(docId, undefined)
+      const fork = await api.fork(docId, { sketch, diagram: diagram ?? undefined, test })
+      drafts.set(docId, {})
       setDraftIds(drafts.ids())
       go({ kind: 'doc', id: fork.id })
       lib.upsert(fork)
@@ -249,10 +265,18 @@ export default function App() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
+      const mod = e.metaKey || e.ctrlKey
+      if (e.key === 's' && mod) {
         e.preventDefault()
         if (edited) saveFork()
         else setToast('Nothing changed to save')
+      }
+      // the code editor and text boxes keep their own undo
+      const typing = (e.target as HTMLElement).closest?.('input, textarea')
+      if (!typing && mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
       }
     }
     addEventListener('keydown', key)
@@ -288,6 +312,10 @@ export default function App() {
             stopped={sim === 'stop'}
             restart={restart}
             serialIn={serialIn}
+            editable={!(build.busy && live)}
+            onDiagram={editCircuit}
+            onHint={setToast}
+            fixed={!!circuit || (!live && !!doc?.forkOf)}
             sound={sound}
             reveal={live}
             onState={onState}
@@ -465,7 +493,26 @@ export default function App() {
             </div>
           </Panel>
         )}
-        {toast && <div className="pill absolute left-1/2 top-[60px] z-30 -translate-x-1/2 px-4 py-2 text-[12px] font-medium text-ink">{toast}</div>}
+        {edited && route.kind === 'doc' && (
+          <div className="pill absolute left-1/2 top-[58px] z-20 flex h-9 -translate-x-1/2 items-center gap-1 pl-3.5 pr-1 text-[12px]" onPointerDown={(e) => e.stopPropagation()}>
+            <Icon name="pen-3" size={13} className="text-icon-2" />
+            <span className="mr-1.5 text-ink">Unsaved changes</span>
+            <button title="undo, cmd z" onClick={undo} disabled={!edits.past.length} className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-30">
+              <Icon name="rotate" size={14} className="-scale-x-100" />
+            </button>
+            <button title="redo, shift cmd z" onClick={redo} disabled={!edits.future.length} className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-30">
+              <Icon name="rotate" size={14} />
+            </button>
+            <button onClick={revert} className="h-7 rounded-full px-2.5 text-dim hover:bg-hover hover:text-ink">
+              Revert
+            </button>
+            <button onClick={saveFork} disabled={saving} title="save as a new build with its own link, cmd s" className="h-7 rounded-full bg-accent px-3 font-semibold text-on-accent disabled:opacity-40">
+              {saving ? 'Saving...' : 'Save as New Build'}
+            </button>
+          </div>
+        )}
+
+        {toast && <div className="pill absolute left-1/2 top-[102px] z-30 -translate-x-1/2 px-4 py-2 text-[12px] font-medium text-ink">{toast}</div>}
       </main>
 
       <Inspector

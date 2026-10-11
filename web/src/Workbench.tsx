@@ -46,6 +46,13 @@ type Props = {
   title?: string
   selected?: string | null
   onSelect?: (id: string | null) => void
+  // hand editing: drag parts around, every finished change comes back through onDiagram
+  editable?: boolean
+  // said when someone tries to move a part that cannot move right now
+  onHint?: (text: string) => void
+  onDiagram?: (d: Diagram) => void
+  // the parts sit where the diagram says, no tidying and no refitting while someone arranges them
+  fixed?: boolean
 }
 
 // diagram types we draw ourselves
@@ -53,8 +60,13 @@ const TAGS: Record<string, string> = { 'wokwi-pi-pico': 'bp-pi-pico' }
 
 const wireKey = (c: Diagram['connections'][number]) => `${c[0]}|${c[1]}`
 
-export function Workbench({ diagram, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
+export function Workbench({ diagram: given, editable = false, onDiagram, onHint, fixed = false, source, test, testRun = 0, running = true, stopped = false, restart = 0, serialIn, sound = false, reveal = false, onState, title, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
+  // a part being dragged: the diagram with it moved, drawn until the pointer lets go
+  const [moving, setMoving] = useState<Diagram | null>(null)
+  const diagram = moving ?? given
+  const fitted = useRef(false)
+  const forceFit = useRef(false)
   const els = useRef<Record<string, Wokwi>>({})
   const [paths, setPaths] = useState<{ key: string; d: string; color: string }[]>([])
   const [fit, setFit] = useState({ x: 40, y: 40, scale: 1 })
@@ -63,7 +75,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   const [rects, setRects] = useState<Record<string, Rect>>({})
   // where each part is drawn: the agent's spot, or a tidy one when its spots overlap
   const [pos, setPos] = useState<Record<string, { x: number; y: number }>>({})
-  const at = (p: { id: string; left?: number; top?: number }) => pos[p.id] ?? { x: p.left ?? 0, y: p.top ?? 0 }
+  // a dragged or hand arranged part sits exactly where the diagram says, no waiting on the next measure
+  const at = (p: { id: string; left?: number; top?: number }) => (moving || fixed ? undefined : pos[p.id]) ?? { x: p.left ?? 0, y: p.top ?? 0 }
   const [hover, setHover] = useState<string | null>(null)
   const [live, setLive] = useState<Record<string, PartState>>({})
   const [serial, setSerial] = useState('')
@@ -94,7 +107,9 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     for (const c of diagram.connections) shownWires.current.add(wireKey(c))
   }, [diagram])
 
-  const parsed = useMemo(() => Circuit.parse(diagram), [diagram])
+  // where parts sit does not change the circuit, so moving one keeps the board running
+  const wiring = JSON.stringify([diagram.parts.map((p) => [p.id, p.type, p.attrs]), diagram.connections.map((c) => [c[0], c[1]])])
+  const parsed = useMemo(() => Circuit.parse(diagram), [wiring])
   const findings = useMemo(() => (parsed.circuit ? checkRules(parsed.circuit, source) : []), [parsed, source])
 
   const board = diagram.parts.some((p) => p.type === 'wokwi-pi-pico') ? 'pico' : diagram.parts.some((p) => p.type === 'wokwi-arduino-nano') ? 'nano' : 'uno'
@@ -117,7 +132,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     const measure = () => {
 
       const sized = diagram.parts.filter((p) => els.current[p.id] && !p.hide)
-      const placed = untangle(sized.map((p) => ({ id: p.id, x: p.left ?? 0, y: p.top ?? 0, w: els.current[p.id].offsetWidth, h: els.current[p.id].offsetHeight, board: 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) })))
+      const boxes = sized.map((p) => ({ id: p.id, x: p.left ?? 0, y: p.top ?? 0, w: els.current[p.id].offsetWidth, h: els.current[p.id].offsetHeight, board: 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) }))
+      const placed = fixed ? Object.fromEntries(boxes.map((b) => [b.id, { x: b.x, y: b.y }])) : untangle(boxes)
       setPos(placed)
       const rects: Record<string, Rect> = {}
       for (const p of sized) rects[p.id] = { ...placed[p.id], w: els.current[p.id].offsetWidth, h: els.current[p.id].offsetHeight }
@@ -157,6 +173,10 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
         const m = 36
         const [minX, maxX, minY, maxY] = [Math.min(...xs) - m, Math.max(...xs) + m, Math.min(...ys) - m, Math.max(...ys) + m]
         setFrame({ x: minX, y: minY, w: maxX - minX, h: maxY - minY })
+        // someone arranging parts keeps their view, a new or agent built circuit gets fitted
+        if (fixed && fitted.current && !forceFit.current) return
+        fitted.current = true
+        forceFit.current = false
         const area = box.current!.getBoundingClientRect()
         const top = 92
         const bottom = 80
@@ -169,13 +189,14 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     // parts size themselves after they upgrade, and some only once they render: measure now, soon, and on resize
     const id = requestAnimationFrame(measure)
     const later = setTimeout(measure, 350)
-    addEventListener('resize', measure)
+    const refit = () => ((forceFit.current = true), measure())
+    addEventListener('resize', refit)
     return () => {
       cancelAnimationFrame(id)
       clearTimeout(later)
-      removeEventListener('resize', measure)
+      removeEventListener('resize', refit)
     }
-  }, [diagram])
+  }, [diagram, fixed])
 
   useEffect(() => {
     const firmware = build?.hex ?? build?.uf2
@@ -346,6 +367,71 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
     onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale, speed })
   }, [status, build, serial, steps, report, findings, simMs, fit.scale, speed])
 
+  // dragging a part: it moves once the pointer has gone 4 px, so a click is still a click
+  const drag = useRef<{ id: string; sx: number; sy: number; ox: number; oy: number; base: Diagram; on: boolean; last?: Diagram } | null>(null)
+  const INTERACTIVE = ['wokwi-pushbutton', 'wokwi-potentiometer']
+
+  const startDrag = (e: React.PointerEvent, p: Diagram['parts'][number]) => {
+    onSelect?.(p.id)
+    // a drag whose release never arrived does not get to hold the part
+    if (drag.current) endDrag()
+    if (!editable || e.button !== 0) return
+    // buttons and knobs answer the mouse while the board runs, like on wokwi they move when it is stopped
+    if (INTERACTIVE.includes(p.type) && !stopped) {
+      drag.current = null
+      hintFor.current = { sx: e.clientX, sy: e.clientY, kind: p.type === 'wokwi-pushbutton' ? 'button' : 'knob', said: false }
+      return
+    }
+    // what is on screen becomes the diagram, so the first move does not make the other parts jump
+    const base = { ...given, parts: given.parts.map((q) => ({ ...q, left: at(q).x, top: at(q).y })) }
+    const o = at(p)
+    drag.current = { id: p.id, sx: e.clientX, sy: e.clientY, ox: o.x, oy: o.y, base, on: false }
+    // follow the pointer on the window: a quick drag leaves the part before it would get any move
+    const move = (ev: PointerEvent) => moveDrag(ev)
+    const up = () => {
+      removeEventListener('pointermove', move)
+      removeEventListener('pointerup', up)
+      removeEventListener('pointercancel', up)
+      endDrag()
+    }
+    addEventListener('pointermove', move)
+    addEventListener('pointerup', up)
+    addEventListener('pointercancel', up)
+  }
+
+  const hintFor = useRef<{ sx: number; sy: number; kind: string; said: boolean } | null>(null)
+
+  const moveDrag = (e: { clientX: number; clientY: number; buttons: number }) => {
+    const h = hintFor.current
+    if (h && !h.said && e.buttons && Math.hypot(e.clientX - h.sx, e.clientY - h.sy) > 12) {
+      h.said = true
+      onHint?.(`Stop the simulation to move the ${h.kind}`)
+    }
+    const d = drag.current
+    if (!d) return
+    // the button came up somewhere we did not hear about
+    if (!e.buttons) return endDrag()
+    const dx = (e.clientX - d.sx) / fit.scale
+    const dy = (e.clientY - d.sy) / fit.scale
+    if (!d.on) {
+      if (Math.hypot(dx, dy) * fit.scale < 4) return
+      d.on = true
+    }
+    const snap = (v: number) => Math.round(v / 5) * 5
+    const next = { ...d.base, parts: d.base.parts.map((q) => (q.id === d.id ? { ...q, left: snap(d.ox + dx), top: snap(d.oy + dy) } : q)) }
+    d.last = next
+    setMoving(next)
+  }
+
+  const endDrag = () => {
+    hintFor.current = null
+    const d = drag.current
+    drag.current = null
+    if (!d?.on) return
+    if (d.last) onDiagram?.(d.last)
+    setMoving(null)
+  }
+
   const partDelay = (id: string) => fresh.parts.indexOf(id) * 0.15
   const wireDelay = (key: string) => fresh.parts.length * 0.15 + 0.3 + fresh.wires.indexOf(key) * 0.08
 
@@ -369,9 +455,11 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           return (
             <div
               key={p.id}
-              className={`part ${isNew ? 'drop' : ''}`}
+              className={`part ${isNew ? 'drop' : ''} ${editable && (!INTERACTIVE.includes(p.type) || stopped) ? 'cursor-grab active:cursor-grabbing' : ''} ${moving && drag.current?.id === p.id ? 'dragging' : ''}`}
               style={{ left: at(p).x, top: at(p).y, display: p.hide ? 'none' : undefined, animationDelay: isNew ? `${partDelay(p.id)}s` : undefined }}
-              onPointerDown={() => onSelect?.(p.id)}
+              onPointerDown={(e) => startDrag(e, p)}
+              onPointerMove={(e) => hintFor.current && moveDrag(e)}
+              onPointerUp={() => (hintFor.current = null)}
               onPointerEnter={() => setHover(p.id)}
               onPointerLeave={() => setHover((h) => (h === p.id ? null : h))}
             >
@@ -392,7 +480,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           })}
         </svg>
         {[hover, selected].map((id, k) => {
-          const r = id ? rects[id] : undefined
+          const part = id ? diagram.parts.find((q) => q.id === id) : undefined
+          const r = id && rects[id] && part ? { ...rects[id], ...at(part) } : undefined
           if (!r || (k === 0 && id === selected)) return null
           const s = 7 / fit.scale
           const line = 1 / fit.scale
