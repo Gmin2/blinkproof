@@ -212,12 +212,20 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     // parts size themselves after they upgrade, and some only once they render: measure now, soon, and on resize
     const id = requestAnimationFrame(measure)
     const later = setTimeout(measure, 350)
-    const refit = () => ((forceFit.current = true), measure())
-    addEventListener('resize', refit)
+    // its own box, not the window: a sidebar dragged wider changes it too
+    let size = { w: box.current?.offsetWidth ?? 0, h: box.current?.offsetHeight ?? 0 }
+    const watch = new ResizeObserver(() => {
+      const now = { w: box.current?.offsetWidth ?? 0, h: box.current?.offsetHeight ?? 0 }
+      if (now.w === size.w && now.h === size.h) return
+      size = now
+      forceFit.current = true
+      measure()
+    })
+    if (box.current) watch.observe(box.current)
     return () => {
       cancelAnimationFrame(id)
       clearTimeout(later)
-      removeEventListener('resize', refit)
+      watch.disconnect()
     }
   }, [diagram, fixed])
 
