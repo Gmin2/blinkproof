@@ -30,6 +30,10 @@ export function read(p: PartState): Reading | undefined {
       const text = p.oled?.text().replace(/\s+/g, ' ').trim() ?? ''
       return { cards: [['Screen', !p.oled ? 'not on the bus' : p.oled.on ? 'on' : 'off'], ['Frames', String(p.oled?.frames ?? 0)]], line: text ? `shows "${text.slice(0, 40)}"` : 'blank' }
     }
+    case 'wokwi-lcd1602': {
+      const rows = p.lcd?.rows().map((r) => r.trimEnd()) ?? []
+      return { cards: [['Screen', !p.lcd ? 'not on the bus' : p.lcd.on ? 'on' : 'off'], ['Backlight', p.lcd?.backlight ? 'on' : 'off'], ['Writes', String(p.lcd?.frames ?? 0)]], line: rows.some(Boolean) ? `shows "${rows.join(' | ').slice(0, 40)}"` : 'blank' }
+    }
     case 'wokwi-pir-motion-sensor':
       return { cards: [['Motion', p.moving ? 'moving' : 'still'], ['OUT', p.out ? 'high' : 'low'], ['Triggers', String(p.triggers)]], value: p.out ? 1 : 0, max: 1, line: !p.powered ? 'no power' : p.moving ? 'sees motion' : p.out ? 'holding high' : 'nothing moving' }
     case 'wokwi-dht22':

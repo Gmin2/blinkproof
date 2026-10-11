@@ -31,6 +31,7 @@ const CONNECT: [keyof typeof PARTS, string, string][][] = [
   ],
   [
     ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels over i2c'],
+    ['wokwi-lcd1602', 'LCD 16x2', 'Two rows of text over i2c'],
     ['wokwi-servo', 'Servo', 'Turn to an angle from 0 to 180'],
   ],
 ]

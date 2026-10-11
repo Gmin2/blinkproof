@@ -47,6 +47,7 @@ const PREFIX: Record<string, string> = {
   'wokwi-photoresistor-sensor': 'ldr',
   'wokwi-dht22': 'dht',
   'wokwi-pir-motion-sensor': 'pir',
+  'wokwi-lcd1602': 'lcd',
 }
 
 export type Added = { parts: DiagramPart[]; connections: Connection[]; pins: Record<string, string>; error?: string }
@@ -173,6 +174,18 @@ export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number
       wire(`${id}:GND`, B(ground()), GROUND)
       wire(`${id}:AO`, B(pin), color())
       got.AO = pin
+      break
+    }
+    case 'wokwi-lcd1602': {
+      if (d.parts.some((p) => p.type === 'wokwi-lcd1602')) return fail('One lcd is enough, a second needs its backpack set to another address')
+      part.attrs = { pins: 'i2c' }
+      wire(`${id}:VCC`, B(pins.five), POWER)
+      wire(`${id}:GND`, B(ground()), GROUND)
+      wire(`${id}:SDA`, B(pins.sda), '#38bdf8')
+      wire(`${id}:SCL`, B(pins.scl), '#818cf8')
+      taken.add(pins.sda).add(pins.scl)
+      got.SDA = pins.sda
+      got.SCL = pins.scl
       break
     }
     case 'wokwi-pir-motion-sensor': {

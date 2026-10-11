@@ -157,13 +157,14 @@ export function* play(bench: Bench, scenario: Scenario): Generator<StepResult | 
         case 'wait-text':
         case 'expect-text': {
           const id = arg?.['part-id']
-          const oled = part(bench, id, 'wokwi-ssd1306').oled
+          const screen = part(bench, id, 'wokwi-ssd1306', 'wokwi-lcd1602')
+          const oled = screen.type === 'wokwi-ssd1306' ? screen.oled : screen.lcd
           const want = arg?.contains !== undefined ? String(arg.contains) : undefined
           const not = arg?.['not-contains'] !== undefined ? String(arg['not-contains']) : undefined
           const text = () => oled?.text() ?? ''
           const good = () => (want === undefined || text().includes(want)) && (not === undefined || !text().includes(not))
           const describe = `${id} to show ${want !== undefined ? JSON.stringify(want) : ''}${not !== undefined ? ` and not ${JSON.stringify(not)}` : ''}`
-          if (!oled) throw new Fail(`${id} is not on the i2c bus, check DATA on A4, CLK on A5 and power`)
+          if (!oled) throw new Fail(`${id} is not on the i2c bus, check ${screen.type === 'wokwi-lcd1602' ? 'SDA on A4, SCL on A5' : 'DATA on A4, CLK on A5'} and power`)
           if (kind === 'wait-text') yield* until(good, arg?.timeout ? parseDuration(arg.timeout) : WAIT_LIMIT_MS, describe)
           else if (!good()) throw new Fail(`wanted ${describe}, the screen shows ${JSON.stringify(text()) || 'nothing'}`)
           result.detail = JSON.stringify(text())
