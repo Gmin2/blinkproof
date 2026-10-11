@@ -23,6 +23,8 @@ export type BenchState = {
   zoom: number
   // sim time over wall time, 1 is real time
   speed: number
+  // every serial line with the sim time it ended at
+  lines: { ms: number; text: string }[]
 }
 
 type Props = {
@@ -85,6 +87,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
   const [serial, setSerial] = useState('')
   const [simMs, setSimMs] = useState(0)
   const [speed, setSpeed] = useState(0)
+  const [lines, setLines] = useState<{ ms: number; text: string }[]>([])
   const [ram, setRam] = useState<{ leastFree: number; heapBytes: number; crashed: boolean } | null>(null)
   const [build, setBuild] = useState<Build | null>(null)
   const [problem, setProblem] = useState('')
@@ -260,6 +263,11 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
     }
     setSonars(distances)
     setSerial('')
+    setLines([])
+    // serial text arrives in pieces, a line is stamped with the sim time its newline came in
+    let read = 0
+    let partial = ''
+    let stamped: { ms: number; text: string }[] = []
     // the uart holds one byte, so typed text goes in a byte at a time, 2 ms of sim apart, like a real 9600 line
     const typed: number[] = []
     if (serialIn) serialIn.current = (text) => typed.push(...new TextEncoder().encode(text))
@@ -331,6 +339,18 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
         }
       }
       setSerial(bench.board.serial)
+      const text = bench.board.serial
+      if (text.length !== read) {
+        // the board keeps a tail of what it printed, so start over if it was trimmed
+        const fresh = text.length > read ? text.slice(read) : text
+        read = text.length
+        const parts = (partial + fresh).split('\n')
+        partial = parts.pop() ?? ''
+        if (parts.length) {
+          stamped = [...stamped, ...parts.map((t) => ({ ms: bench.board.ms, text: t.replace(/\r$/, '') }))].slice(-500)
+          setLines(stamped)
+        }
+      }
       setSimMs(Math.floor(bench.board.ms / 100) * 100)
       if (runningRef.current || playing) {
         window = { wall: window.wall + wall, sim: window.sim + bench.board.ms - simBefore }
@@ -367,8 +387,8 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
             : `compile failed: line ${build.diagnostics[0]?.line} ${build.diagnostics[0]?.message}`)
 
   useEffect(() => {
-    onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale, speed })
-  }, [status, build, serial, steps, report, findings, simMs, fit.scale, speed])
+    onState?.({ status, build, serial, steps, report, findings, parts: live, simMs, zoom: fit.scale, speed, lines })
+  }, [status, build, serial, steps, report, findings, simMs, fit.scale, speed, lines])
 
   // dragging a part: it moves once the pointer has gone 4 px, so a click is still a click
   const drag = useRef<{ id: string; sx: number; sy: number; ox: number; oy: number; base: Diagram; on: boolean; last?: Diagram } | null>(null)

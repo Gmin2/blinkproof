@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
+import { Serial } from './shell/Serial'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, drafts, useLibrary, useRoute, type Draft, type Saved } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
@@ -31,7 +32,7 @@ const PREFIX: Record<string, string> = {
   'wokwi-hc-sr04': 'sonar',
   'wokwi-buzzer': 'bz',
 }
-type Float = 'prompt' | 'code' | 'serial' | 'parts' | null
+type Float = 'prompt' | 'parts' | null
 
 function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -111,7 +112,6 @@ export default function App() {
   const circuit = edits.present
   const [draftIds, setDraftIds] = useState(() => drafts.ids())
   const [saving, setSaving] = useState(false)
-  const [serialLine, setSerialLine] = useState('')
   const serialIn = useRef<((text: string) => void) | null>(null)
   const [sound, setSound] = useState(false)
   const [prompt, setPrompt] = useState(IDEAS[1])
@@ -119,7 +119,7 @@ export default function App() {
   const [models, setModels] = useState<{ id: string; provider: string; label: string }[]>([{ id: 'claude-haiku', provider: 'litellm', label: 'claude haiku 4.5' }])
   const build = useBuild(
     () => setTestRun((n) => n + 1),
-    (t) => (t === 'code' ? setFloat('code') : setMode(t)),
+    (t) => setMode(t),
     (id) => {
       go({ kind: 'doc', id }, true)
       lib.refresh()
@@ -364,11 +364,51 @@ export default function App() {
     setRestart((n) => n + 1)
   }
 
-  const sendSerial = () => {
-    if (!serialIn.current) return
-    serialIn.current(serialLine + '\n')
-    setSerialLine('')
-  }
+
+
+  const codePanel = (
+    <>
+      <div className="flex h-7 items-center justify-between px-4 text-[12px]">
+        <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ink">
+          sketch.ino
+          {edited && <span className="font-normal text-dim">edited</span>}
+        </span>
+        <span className="flex items-center gap-2">
+          {edited && (
+            <>
+              <button onClick={revert} className="text-[11px] text-dim hover:text-ink">
+                Revert
+              </button>
+              <button onClick={saveFork} disabled={saving} title="save your edit as a new build with its own link, cmd s" className="h-6 rounded-[7px] bg-input px-2 text-[11px] font-semibold text-ink disabled:opacity-40">
+                {saving ? 'Saving...' : 'Save as New Build'}
+              </button>
+            </>
+          )}
+          <button onClick={runEdited} disabled={(build.busy && live) || !code} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
+            <Icon name="play" size={11} />
+            Run
+          </button>
+        </span>
+      </div>
+      <div className="mt-2 flex min-h-0 flex-1 flex-col border-t border-sep pt-2">
+        {code ? <CodeEditor value={code} onChange={editCode} onRun={runEdited} readOnly={build.busy && live} /> : <p className="px-4 text-[11px] text-dim">No sketch yet. The agent writes one while it builds.</p>}
+      </div>
+      {bench?.build && !bench.build.ok && (
+        <div className="border-t border-sep px-4 py-2.5 font-mono text-[10.5px] leading-4 text-bad">
+          {bench.build.diagnostics.slice(0, 3).map((d, i) => (
+            <div key={i}>
+              line {d.line}: {d.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+
+  const boardName = diagram?.parts.find((p) => p.type.includes('pico')) ? 'Pico' : diagram?.parts.find((p) => p.type.includes('nano')) ? 'Nano' : 'Uno'
+  const serialPanel = (
+    <Serial lines={bench?.lines ?? []} simMs={bench?.simMs ?? 0} speed={bench?.speed ?? 0} state={sim} flash={bench?.build?.flash} ram={bench?.build?.ram} board={boardName} onSend={(t) => serialIn.current?.(t)} />
+  )
 
   return (
     <div className="flex h-full">
@@ -440,10 +480,6 @@ export default function App() {
           </div>
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
-              <Tool icon="code" label="sketch.ino" onClick={() => toggle('code')} active={float === 'code'} disabled={!code} />
-              <Tool icon="terminal" label="serial monitor" onClick={() => toggle('serial')} active={float === 'serial'} disabled={!diagram} />
-            </div>
-            <div className="pill flex items-center">
               <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
             </div>
             <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
@@ -471,64 +507,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {float === 'code' && (
-          <Panel
-            title={edited ? 'sketch.ino, edited' : 'sketch.ino'}
-            onClose={() => setFloat(null)}
-            className="right-2.5 top-[56px] bottom-20 w-[400px]"
-            right={
-              <>
-                {edited && (
-                  <>
-                    <button onClick={revert} className="text-[11px] font-normal text-dim hover:text-ink">
-                      Revert
-                    </button>
-                    <button onClick={saveFork} disabled={saving} title="save your edit as a new build with its own link, cmd s" className="h-6 rounded-[7px] bg-input px-2 text-[11px] font-semibold text-ink disabled:opacity-40">
-                      {saving ? 'Saving...' : 'Save as New Build'}
-                    </button>
-                  </>
-                )}
-                <button onClick={runEdited} disabled={build.busy && live} title="compile and run, cmd enter" className="flex h-6 items-center gap-1 rounded-[7px] bg-accent px-2 text-[11px] font-semibold text-on-accent disabled:opacity-40">
-                  <Icon name="play" size={11} />
-                  Run
-                </button>
-              </>
-            }
-          >
-            <CodeEditor value={code} onChange={editCode} onRun={runEdited} readOnly={build.busy && live} />
-            {bench?.build && !bench.build.ok && (
-              <div className="border-t border-sep px-3 py-2 font-mono text-[10.5px] leading-4 text-bad">
-                {bench.build.diagnostics.slice(0, 3).map((d, i) => (
-                  <div key={i}>
-                    line {d.line}: {d.message}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Panel>
-        )}
-
-        {float === 'serial' && (
-          <Panel title="Serial Monitor" onClose={() => setFloat(null)} className="right-2.5 top-[56px] h-[320px] w-[360px]" right={<span className="font-mono text-[11px] font-normal text-dim">9600 baud</span>}>
-            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-4 pb-3 font-mono text-[11px] leading-[18px] text-ink">{bench?.serial || <span className="text-dim">Nothing printed yet</span>}</pre>
-            <form
-              onSubmit={(e) => (e.preventDefault(), sendSerial())}
-              className="flex items-center gap-2 border-t border-sep px-2.5 py-2"
-            >
-              <input
-                value={serialLine}
-                onChange={(e) => setSerialLine(e.target.value)}
-                placeholder={sim === 'stop' ? 'Start the simulation to type here' : 'Type and press return to send'}
-                disabled={sim === 'stop'}
-                className="h-7 min-w-0 flex-1 rounded-[7px] bg-input px-2 font-mono text-[11px] text-ink outline-none placeholder:font-sans placeholder:text-dim"
-              />
-              <button type="submit" disabled={sim === 'stop'} className="h-7 rounded-[7px] bg-input px-2.5 text-[11px] font-medium text-ink disabled:opacity-40">
-                Send
-              </button>
-            </form>
-          </Panel>
-        )}
 
         {float === 'parts' && (
           <Panel title="Parts" onClose={() => setFloat(null)} className="left-2.5 top-[56px] w-[260px]" right={<span className="text-[11px] font-normal text-dim">{Object.keys(PARTS).length}</span>}>
@@ -625,6 +603,8 @@ export default function App() {
         editable={!(build.busy && live)}
         onRemovePart={removePart}
         onSetAttr={setAttr}
+        code={codePanel}
+        serial={serialPanel}
         onOpen={open}
         canShare={route.kind === 'doc'}
         onShare={share}
