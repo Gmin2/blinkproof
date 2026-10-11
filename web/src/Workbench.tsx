@@ -1,9 +1,10 @@
 import '@wokwi/elements'
 import './elements/pico'
-import { Bench, Circuit, checkRules, parseScenario, play, type Diagram, type Finding, type PartState, type Report, type StepResult } from '@blinkproof/sim'
+import { Bench, Circuit, PARTS, checkRules, parseScenario, play, type Diagram, type Finding, type PartState, type Report, type StepResult } from '@blinkproof/sim'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compile, type Build } from './lib/compile'
 import { Speaker } from './lib/speaker'
+import { untangle } from './lib/layout'
 import { routeAll, type Rect } from './lib/router'
 import { rounded, route, split, type Point } from './lib/wires'
 
@@ -60,6 +61,9 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   // the frame around everything, in diagram units
   const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 })
   const [rects, setRects] = useState<Record<string, Rect>>({})
+  // where each part is drawn: the agent's spot, or a tidy one when its spots overlap
+  const [pos, setPos] = useState<Record<string, { x: number; y: number }>>({})
+  const at = (p: { id: string; left?: number; top?: number }) => pos[p.id] ?? { x: p.left ?? 0, y: p.top ?? 0 }
   const [hover, setHover] = useState<string | null>(null)
   const [live, setLive] = useState<Record<string, PartState>>({})
   const [serial, setSerial] = useState('')
@@ -112,11 +116,11 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
   useLayoutEffect(() => {
     const measure = () => {
 
+      const sized = diagram.parts.filter((p) => els.current[p.id] && !p.hide)
+      const placed = untangle(sized.map((p) => ({ id: p.id, x: p.left ?? 0, y: p.top ?? 0, w: els.current[p.id].offsetWidth, h: els.current[p.id].offsetHeight, board: 'board' in (PARTS[p.type as keyof typeof PARTS] ?? {}) })))
+      setPos(placed)
       const rects: Record<string, Rect> = {}
-      for (const p of diagram.parts) {
-        const el = els.current[p.id]
-        if (el) rects[p.id] = { x: p.left ?? 0, y: p.top ?? 0, w: el.offsetWidth, h: el.offsetHeight }
-      }
+      for (const p of sized) rects[p.id] = { ...placed[p.id], w: els.current[p.id].offsetWidth, h: els.current[p.id].offsetHeight }
       setRects(rects)
       const out: { key: string; d: string; color: string }[] = []
       const auto: { key: string; color: string; a: Point; b: Point; ra?: Rect; rb?: Rect }[] = []
@@ -127,7 +131,8 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           const [id, pin] = split(ref)
           const p = diagram.parts.find((q) => q.id === id)
           const info = els.current[id]?.pinInfo?.find((q) => q.name === pin)
-          return p && info ? { at: { x: (p.left ?? 0) + info.x, y: (p.top ?? 0) + info.y }, rect: rects[id] } : null
+          const xy = placed[id] ?? { x: p?.left ?? 0, y: p?.top ?? 0 }
+          return p && info ? { at: { x: xy.x + info.x, y: xy.y + info.y }, rect: rects[id] } : null
         }
         const a = end(from)
         const b = end(to)
@@ -365,7 +370,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
             <div
               key={p.id}
               className={`part ${isNew ? 'drop' : ''}`}
-              style={{ left: p.left ?? 0, top: p.top ?? 0, display: p.hide ? 'none' : undefined, animationDelay: isNew ? `${partDelay(p.id)}s` : undefined }}
+              style={{ left: at(p).x, top: at(p).y, display: p.hide ? 'none' : undefined, animationDelay: isNew ? `${partDelay(p.id)}s` : undefined }}
               onPointerDown={() => onSelect?.(p.id)}
               onPointerEnter={() => setHover(p.id)}
               onPointerLeave={() => setHover((h) => (h === p.id ? null : h))}
@@ -404,7 +409,7 @@ export function Workbench({ diagram, source, test, testRun = 0, running = true, 
           const p = diagram.parts.find((q) => q.id === id)
           if (!p) return null
           return (
-            <label key={id} className="pill absolute flex items-center gap-2 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: p.left ?? 0, top: (p.top ?? 0) + 95 }}>
+            <label key={id} className="pill absolute flex items-center gap-2 px-3 py-1 font-mono text-[11px] text-dim" style={{ left: at(p).x, top: at(p).y + 95 }}>
               distance
               <input
                 type="range"
