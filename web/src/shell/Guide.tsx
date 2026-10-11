@@ -1,4 +1,4 @@
-import type { Diagram } from '@blinkproof/sim'
+import { FACTS, type Diagram } from '@blinkproof/sim'
 import { Icon } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
 import { KIND } from './Sidebar'
@@ -90,6 +90,7 @@ export function BuildGuide({ diagram, only }: { diagram: Diagram; only?: 'parts'
               <span className="min-w-0 flex-1">
                 <span className="block text-[12.5px] text-ink">{l.name}</span>
                 {l.detail && <span className="block text-[11px] text-dim">{l.detail}</span>}
+                {FACTS[l.type]?.supply && <span className="block text-[11px] text-dim">runs on {FACTS[l.type].supply}</span>}
               </span>
               <span className="font-mono text-[12px] text-ink">× {l.count}</span>
             </div>
