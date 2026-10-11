@@ -1,6 +1,7 @@
 import { Circuit, PARTS, type Diagram, type PartState } from '@blinkproof/sim'
 import { useEffect, useMemo, useRef } from 'react'
 import { Icon } from '../icons/Icon'
+import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
 import { KIND, PART_ICON } from './Sidebar'
 import type { FeedItem, Verdict } from './useBuild'
@@ -138,9 +139,9 @@ export function Inspector({ tab, onTab, diagram, selected, bench, feed, verdict,
             <Section
               title="Wiring checks"
               right={
-                <span className={`flex items-center gap-1 text-[11px] font-normal ${errors ? 'text-bad' : 'text-ok'}`}>
-                  <Icon name={errors ? 'fail' : warnings ? 'warn' : 'pass'} size={14} />
-                  {errors} · {warnings}
+                <span className="flex items-center gap-1.5 text-[11px] font-normal text-dim">
+                  <Status ok={!errors} warn={!errors && warnings > 0} />
+                  {errors} errors · {warnings} warnings
                 </span>
               }
             >
@@ -148,7 +149,7 @@ export function Inspector({ tab, onTab, diagram, selected, bench, feed, verdict,
               <ul className="space-y-2">
                 {findings.map((f, i) => (
                   <li key={i} className="flex gap-2 text-[11px] leading-4">
-                    <Icon name={f.severity === 'error' ? 'fail' : f.severity === 'warning' ? 'warn' : 'checks'} size={14} className={f.severity === 'error' ? 'text-bad' : f.severity === 'warning' ? 'text-warn' : 'text-dim'} />
+                    {f.severity === 'info' ? <Icon name="checks" size={16} className="text-icon" /> : <Status ok={false} warn={f.severity === 'warning'} />}
                     <span className={f.severity === 'info' ? 'text-dim' : 'text-ink'}>{f.message}</span>
                   </li>
                 ))}
@@ -166,11 +167,12 @@ export function Inspector({ tab, onTab, diagram, selected, bench, feed, verdict,
                 f.kind === 'say' ? (
                   <p key={i} className="rise text-[11.5px] leading-[17px] text-dim">{f.text}</p>
                 ) : (
-                  <div key={i} className="rise flex gap-2 text-[11px] leading-4">
-                    <Icon name={f.ok ? 'pass' : 'fail'} size={14} className={f.ok ? 'text-ok' : 'text-bad'} />
-                    <span>
+                  <div key={i} className="rise flex items-start gap-2 text-[11px] leading-4">
+                    <Icon name={TOOL_ICON[f.name] ?? 'build'} size={18} className="text-icon" />
+                    <span className="min-w-0 flex-1">
                       <span className="font-mono text-ink">{f.name}</span> <span className={f.ok ? 'text-dim' : 'text-bad'}>{f.note}</span>
                     </span>
+                    <Status ok={f.ok} />
                   </div>
                 ),
               )}
@@ -178,7 +180,7 @@ export function Inspector({ tab, onTab, diagram, selected, bench, feed, verdict,
             {verdict && (
               <div className={`rise mt-3 rounded-[10px] border px-3 py-2.5 ${verdict.ok ? 'border-ok/40 bg-ok/10' : 'border-bad/40 bg-bad/10'}`}>
                 <div className={`flex items-center gap-1.5 text-[12px] font-semibold ${verdict.ok ? 'text-ok' : 'text-bad'}`}>
-                  <Icon name={verdict.ok ? 'pass' : 'fail'} size={16} />
+                  <Status ok={verdict.ok} size={20} />
                   {verdict.ok ? 'proven, the test passed' : 'not proven'}
                 </div>
                 <p className="mt-1 text-[11px] leading-4 text-dim">
@@ -194,15 +196,16 @@ export function Inspector({ tab, onTab, diagram, selected, bench, feed, verdict,
         {tab === 'test' && (
           <>
             {testRun > 0 && (
-              <Section title="Run" right={bench?.report && <span className={`text-[11px] ${bench.report.ok ? 'text-ok' : 'text-bad'}`}>{bench.report.ok ? 'passed' : 'failed'}</span>}>
+              <Section title="Run" right={bench?.report && <span className="flex items-center gap-1.5 text-[11px] font-normal text-dim"><Status ok={bench.report.ok} />{bench.report.ok ? 'passed' : 'failed'}</span>}>
                 <ol className="space-y-1.5">
                   {(bench?.steps ?? []).map((st) => (
-                    <li key={st.index} className="rise flex gap-2 text-[11px] leading-4">
-                      <Icon name={st.ok ? 'pass' : 'fail'} size={14} className={st.ok ? 'text-ok' : 'text-bad'} />
-                      <span className={st.ok ? 'text-ink' : 'text-bad'}>
+                    <li key={st.index} className="rise flex items-start gap-2 text-[11px] leading-4">
+                      <Icon name={STEP_ICON[st.kind] ?? 'test'} size={18} className="text-icon" />
+                      <span className={`min-w-0 flex-1 ${st.ok ? 'text-ink' : 'text-bad'}`}>
                         {st.name ?? st.kind}
-                        <span className="block font-mono text-[10.5px] text-dim">{st.detail}</span>
+                        <span className="block break-words font-mono text-[10.5px] text-dim">{st.detail}</span>
                       </span>
+                      <Status ok={st.ok} />
                     </li>
                   ))}
                   {!bench?.report && <li className="text-[11px] text-dim">running...</li>}
