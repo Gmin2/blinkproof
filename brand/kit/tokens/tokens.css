@@ -1,12 +1,22 @@
 /* generated from brand/tokens.json */
 :root {
-  --bp-glow: #A6F24A;
-  --bp-glow-soft: #D9F9B0;
-  --bp-glow-dim: #6E9A3A;
-  --bp-ink: #141414;
-  --bp-ink2: #262626;
-  --bp-paper: #F6F6F4;
-  --bp-lamp-off: #3A3A36;
+  --bp-paper: #FBFAF9;
+  --bp-ink: #343433;
+  --bp-stone: #D1CAC2;
+  --bp-stone-soft: #DFD9D3;
+  --bp-mist: #F6F4F2;
+  --bp-white: #FFFFFF;
+  --bp-code-window: #FFFFFF;
+  --bp-code-chrome: #FAFAFA;
+  --bp-code-dot: #E8E8E8;
+  --bp-code-title: #919191;
+  --bp-code-line: #B0B0B0;
+  --bp-code-text: #24292E;
+  --bp-code-keyword: #D73A49;
+  --bp-code-fn: #6F42C1;
+  --bp-code-constant: #005CC5;
+  --bp-code-string: #032F62;
+  --bp-code-comment: #8A8A8A;
   --bp-ui-canvas: #F6F6F6;
   --bp-ui-panel: #FFFFFF;
   --bp-ui-text: #141414;
@@ -19,11 +29,10 @@
   --bp-radius-sm: 6px;
   --bp-radius-md: 8px;
   --bp-radius-lg: 12px;
+  --bp-radius-window: 16px;
   --bp-radius-pill: 999px;
   --bp-font: 'Geist', system-ui, sans-serif;
   --bp-mono: 'Geist Mono', ui-monospace, monospace;
-  --bp-ease: cubic-bezier(0.2, 0, 0, 1);
-  --bp-blink: 1000ms;
 }
 
 :root[data-theme='dark'] {

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-for (const step of ['verify', 'mascot', 'logo', 'tokens', 'app', 'bitmap', 'og', 'social', 'gallery']) {
+for (const step of ['verify', 'logo', 'pictos', 'tokens', 'app', 'og', 'social', 'gallery']) {
   try {
     execFileSync(process.execPath, [`build/${step}.mjs`], { stdio: 'inherit' })
   } catch {
