@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
 import { KIND } from './Sidebar'
+import { Field, Section, Sep } from './ui'
 
 const P = 12
-const BAND_HEX: Record<string, string> = { black: '#111827', brown: '#7c2d12', red: '#dc2626', orange: '#f97316', yellow: '#facc15', green: '#16a34a', blue: '#2563eb', violet: '#7c3aed', grey: '#9ca3af', white: '#f9fafb', gold: '#c9a227' }
+const BAND_HEX: Record<string, string> = { black: '#111827', brown: '#7c2d12', red: '#dc2626', orange: '#f97316', yellow: '#facc15', green: '#16a34a', blue: 'var(--accent-line)', violet: '#7c3aed', grey: '#9ca3af', white: '#f9fafb', gold: '#c9a227' }
 const LED_HEX: Record<string, string> = { red: '#ef4444', green: '#22c55e', blue: '#3b82f6', yellow: '#facc15', white: '#f1f5f9', orange: '#fb923c' }
 const INK = '#2c4f9e'
 
@@ -145,8 +146,8 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       )}
 
       {/* the tray: parts with no breadboard form, dashed to their holes */}
-      {p.beside.length > 0 && (
-        <text x={x0} y={trayTop - 8} fontSize={8.5} fill={blue ? INK : '#8c8c8c'} {...label}>
+      {p.beside.some((b) => shown.has(b.id)) && (
+        <text x={x0} y={trayTop - 8} fontSize={7} fill={blue ? INK : '#8c8c8c'} fontFamily="Geist, sans-serif">
           beside the board: these connect with jumper wires
         </text>
       )}
@@ -175,7 +176,7 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
       {/* parts in the breadboard */}
       {p.placed.map((x) => (
         <g key={x.id} opacity={op(x.id)} onClick={click(x.id)} className="cursor-pointer">
-          <PartBody x={x} legs={x.legs.map((l) => at(l.hole))} look={look} ring={hot.has(x.id) ? '#2563eb' : undefined} color={diagram.parts.find((q) => q.id === x.id)?.attrs?.color} />
+          <PartBody x={x} legs={x.legs.map((l) => at(l.hole))} look={look} ring={hot.has(x.id) ? 'var(--accent-line)' : undefined} color={diagram.parts.find((q) => q.id === x.id)?.attrs?.color} />
         </g>
       ))}
 
@@ -187,19 +188,10 @@ export function Drawing({ p, diagram, look, upTo, focus, picked, onPick, callout
         const d = `M${a.x} ${a.y} Q${(a.x + b.x) / 2 + (k % 2 ? 4 : -4)} ${(a.y + b.y) / 2 - bow} ${b.x} ${b.y}`
         return (
           <g key={j.id} opacity={op(j.id)}>
-            {hot.has(j.id) && <path d={d} stroke="#2563eb" strokeOpacity={0.3} strokeWidth={6} fill="none" strokeLinecap="round" />}
+            {hot.has(j.id) && <path d={d} stroke="var(--accent-line)" strokeOpacity={0.14} strokeWidth={6} fill="none" strokeLinecap="round" />}
             <path d={d} stroke={j.color} strokeWidth={blue ? 1.2 : 2} fill="none" strokeLinecap="round" strokeDasharray={blue ? '4 3' : undefined} />
-            <circle cx={a.x} cy={a.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? '#2563eb' : 'none'} strokeWidth={1.2} />
-            <circle cx={b.x} cy={b.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? '#2563eb' : 'none'} strokeWidth={1.2} />
-            {/* the holes this step uses, named on the board the way the steps name them */}
-            {hot.has(j.id) &&
-              [j.from, j.to].map((e, k) =>
-                'hole' in e && !('rail' in e.hole) ? (
-                  <text key={k} x={(k ? b : a).x + 4} y={(k ? b : a).y - 4} fontSize={7} fontWeight={600} fill="#1d4ed8" fontFamily="Geist Mono, monospace" paintOrder="stroke" stroke="#ffffff" strokeWidth={2.4}>
-                    {holeName(e.hole)}
-                  </text>
-                ) : null,
-              )}
+            <circle cx={a.x} cy={a.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? 'var(--accent-line)' : 'none'} strokeWidth={1.2} />
+            <circle cx={b.x} cy={b.y} r={hot.has(j.id) ? 3.2 : 1.8} fill={hot.has(j.id) ? 'none' : j.color} stroke={hot.has(j.id) ? 'var(--accent-line)' : 'none'} strokeWidth={1.2} />
           </g>
         )
       })}
@@ -392,67 +384,52 @@ export function useGuide(diagram: Diagram | null, key: string) {
 }
 export type Guide = ReturnType<typeof useGuide>
 
-// the main area while building: the drawing big, its look switch, the notice about what sits beside, the legend
+// the main area while building, the same way the circuit view is laid out: the build on a white frame with its
+// name above it, and one floating pill at the bottom for where you are and the zoom
 export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Diagram; title: string }) {
-  const { p, step, picked, setPicked } = guide
+  const { p, step, picked, setPicked, setStep, last } = guide
   const [zoom, setZoom] = useState(1)
-  const box = useRef<HTMLDivElement>(null)
-  if (!p) return <div className="flex h-full items-center justify-center text-[13px] text-dim">There is no board in this circuit yet, add one to build it.</div>
-  const nets = [...new Map(p.jumpers.map((j) => [j.color, netName(p, j.color, j.why)])).entries()].slice(0, 6)
+  if (!p) return <div className="flex h-full items-center justify-center text-[12px] text-dim">There is no board in this circuit yet, add one to build it.</div>
   return (
-    <div className="relative flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-3 px-5 pb-2 pt-16">
-        <span className="text-[13px] font-semibold text-ink">{title}</span>
-        <span className="text-[12px] text-dim">on a {p.cols > 30 ? 'full' : 'half'} size breadboard</span>
-        <div className="flex-1" />
-      </div>
-      {p.beside.length > 0 && (
-        <div className="mx-5 mb-2 flex items-start gap-2 rounded-[10px] border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] leading-[18px] text-ink">
-          <Icon name="circle-info" size={14} className="mt-0.5 shrink-0 text-warn" />
-          <span>
-            <b className="font-semibold">{p.beside.map((b) => b.id).join(', ')}</b> {p.beside.length > 1 ? 'have' : 'has'} no breadboard form: {p.beside.length > 1 ? 'they sit' : 'it sits'} beside it in the tray and {p.beside.length > 1 ? 'connect' : 'connects'} with jumper wires.
-          </span>
-        </div>
-      )}
-      <div ref={box} className="relative min-h-0 flex-1 overflow-auto px-5">
-        {!picked && (
-          <div className="pointer-events-none sticky top-2 z-10 flex justify-center">
-            <div className="pill pointer-events-auto flex items-center gap-1 py-1 pl-1 pr-1">
-              <button onClick={() => guide.setStep(Math.max(0, step - 1))} disabled={step === 0} title="the step before" className="flex h-7 w-7 items-center justify-center rounded-[7px] text-icon hover:bg-hover disabled:opacity-30">
-                <Icon name="chevron-left" size={12} />
-              </button>
-              <span className="px-2 text-[12.5px] text-ink">
-                <span className="font-mono text-dim">{step + 1}/{p.steps.length}</span> <span className="font-medium">{p.steps[step].title}</span>
-              </span>
-              <button onClick={() => guide.setStep(Math.min(guide.last, step + 1))} disabled={step === guide.last} title="the next step" className="flex h-7 w-7 items-center justify-center rounded-[7px] text-icon hover:bg-hover disabled:opacity-30">
-                <Icon name="chevron-right" size={12} />
-              </button>
-            </div>
+    <div className="relative h-full overflow-auto" onClick={() => setPicked(null)}>
+      <div className="flex min-h-full items-center justify-center px-10 pb-24 pt-20">
+        <div className="relative" style={{ width: `${Math.round(Math.min(1, zoom) * 100)}%`, minWidth: zoom > 1 ? `${Math.round(zoom * 100)}%` : undefined, maxWidth: zoom === 1 ? 980 : undefined }}>
+          <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}, on a {p.cols > 30 ? 'full' : 'half'} size breadboard</span>
+          <div className="bg-frame px-6 py-5">
+            <Drawing p={p} diagram={diagram} look="real" upTo={picked ? last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} />
           </div>
-        )}
-        <div className="mx-auto h-full py-4" style={{ width: `${Math.round(zoom * 100)}%`, height: `${Math.round(zoom * 100)}%` }}>
-          <Drawing p={p} diagram={diagram} look="real" upTo={picked ? guide.last : step} focus={picked ? undefined : step} picked={picked} onPick={setPicked} callouts fill />
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-sep px-5 py-2 text-[11.5px] text-dim">
-        {nets.map(([c, n]) => (
-          <span key={c} className="flex items-center gap-1.5">
-            <span className="h-[3px] w-3.5 rounded-full" style={{ background: c }} />
-            {n}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+        <div className="pill pointer-events-auto flex h-9 items-center gap-1 px-1.5 font-mono text-[11px] text-dim" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || !!picked} title="the step before" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-40">
+            <Icon name="chevron-left" size={12} />
+          </button>
+          <span className="min-w-[150px] px-1 text-center font-sans text-[12px] text-ink">
+            {picked ? (
+              picked
+            ) : (
+              <>
+                <span className="font-mono text-dim">
+                  {step + 1}/{p.steps.length}
+                </span>{' '}
+                {p.steps[step].title}
+              </>
+            )}
           </span>
-        ))}
-        <span>
-          {p.jumpers.length} wires · {p.placed.length} on the board · {p.beside.length} beside it
-        </span>
-        <div className="flex-1" />
-        <div className="flex items-center rounded-[8px] border border-line bg-panel">
-          <button title="zoom out" onClick={() => setZoom((z) => Math.max(0.6, z - 0.2))} className="flex h-7 w-7 items-center justify-center text-icon hover:text-ink">
+          <button onClick={() => setStep(Math.min(last, step + 1))} disabled={step === last || !!picked} title="the next step" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-40">
+            <Icon name="chevron-right" size={12} />
+          </button>
+          <span className="mx-1.5 h-4 w-px bg-sep" />
+          <span className="px-1">{p.jumpers.length} wires</span>
+          <span className="mx-1.5 h-4 w-px bg-sep" />
+          <button onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.2).toFixed(1)))} title="zoom out" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover">
             <Icon name="minus" size={12} />
           </button>
-          <button title="fit" onClick={() => setZoom(1)} className="flex h-7 items-center px-1.5 font-mono text-[11px] text-ink">
+          <button onClick={() => setZoom(1)} title="fit" className="w-10 text-center text-ink">
             {Math.round(zoom * 100)}%
           </button>
-          <button title="zoom in" onClick={() => setZoom((z) => Math.min(3, z + 0.2))} className="flex h-7 w-7 items-center justify-center text-icon hover:text-ink">
+          <button onClick={() => setZoom((z) => Math.min(2.4, +(z + 0.2).toFixed(1)))} title="zoom in" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover">
             <Icon name="plus" size={12} />
           </button>
         </div>
@@ -461,8 +438,7 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
   )
 }
 
-// what a step adds, as rows to show rather than sentences: a part and the holes its legs go in, a resistor and its
-// bands, a wire from where to where
+// what a step adds, as rows rather than sentences: a part and the holes its legs go in, a resistor, a wire
 type Row =
   | { kind: 'part'; id: string; type: string; legs: { pin: string; hole: string }[]; straddle: boolean }
   | { kind: 'resistor'; id: string; value: string; bands: string[]; from: string; to: string }
@@ -473,7 +449,7 @@ function rowsOf(p: Proto, adds: string[]): Row[] {
     const n = pin.replace(/\.\d$/, '')
     return /^\d+$/.test(n) ? `D${n}` : n
   }
-  const end = (e: End) => ('hole' in e ? holeName(e.hole).replace(/^the /, '') : 'board' in e ? `${p.board.name} ${say(e.board.split(':')[1])}` : `${e.part} ${e.pin}`)
+  const end = (e: End) => ('hole' in e ? holeName(e.hole).replace(/^the /, '') : 'board' in e ? `${p.board.name.toLowerCase()}:${say(e.board.split(':')[1])}` : `${e.part}:${e.pin}`)
   const out: Row[] = []
   for (const id of adds) {
     const x = p.placed.find((q) => q.id === id)
@@ -487,80 +463,25 @@ function rowsOf(p: Proto, adds: string[]): Row[] {
   return out
 }
 
-const Chip = ({ children, strong }: { children: React.ReactNode; strong?: boolean }) => (
-  <span className={`inline-flex h-[22px] items-center rounded-[6px] border px-1.5 font-mono text-[11px] ${strong ? 'border-line bg-panel text-ink' : 'border-transparent bg-input text-dim'}`}>{children}</span>
-)
-
 function Resistor({ bands }: { bands: string[] }) {
   return (
-    <svg width="46" height="14" viewBox="0 0 46 14" aria-hidden="true" className="shrink-0">
-      <line x1="0" x2="46" y1="7" y2="7" stroke="#9ca3af" strokeWidth="1.4" />
-      <rect x="10" y="1.5" width="26" height="11" rx="5" fill="#e8d3a8" />
+    <svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true" className="shrink-0">
+      <line x1="0" x2="34" y1="5" y2="5" stroke="#9ca3af" strokeWidth="1.2" />
+      <rect x="8" y="1" width="18" height="8" rx="3.5" fill="#e8d3a8" />
       {bands.map((c, k) => (
-        <rect key={k} x={13.5 + k * 5 + (k === 3 ? 2 : 0)} y="1.5" width="2.6" height="11" fill={BAND_HEX[c]} />
+        <rect key={k} x={10.5 + k * 3.5 + (k === 3 ? 1.4 : 0)} y="1" width="1.8" height="8" fill={BAND_HEX[c]} />
       ))}
     </svg>
   )
 }
 
-function StepRows({ rows, lead }: { rows: Row[]; lead: string[] }) {
+// one grey row the way the inspector shows a pin: a label on the left, where it goes on the right in mono
+function Line({ left, right, swatch }: { left: React.ReactNode; right: React.ReactNode; swatch?: string }) {
   return (
-    <div className="space-y-2.5">
-      {lead.map((l, i) => (
-        <p key={i} className="text-[12px] leading-[18px] text-ink">
-          {l}
-        </p>
-      ))}
-      {rows.map((r) => {
-        if (r.kind === 'part')
-          return (
-            <div key={r.id} className="rounded-[10px] border border-sep bg-panel p-2.5">
-              <div className="mb-2 flex items-center gap-2 text-[12.5px] text-ink">
-                <Icon name={PART_ICON[r.type] ?? 'box'} size={14} className="text-icon" />
-                <span>
-                  {r.straddle ? 'Press' : 'Push'} <b className="font-semibold">{r.id}</b> in{r.straddle ? ' across the gap' : ''}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {r.legs.map((l, i) => (
-                  <span key={i} className="inline-flex items-center gap-1">
-                    <Chip>{l.pin}</Chip>
-                    <Chip strong>{l.hole}</Chip>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )
-        if (r.kind === 'resistor')
-          return (
-            <div key={r.id} className="flex items-center gap-2.5 rounded-[10px] border border-sep bg-panel px-2.5 py-2 text-[12px] text-ink">
-              <Resistor bands={r.bands} />
-              <span className="min-w-0 flex-1">
-                <b className="font-semibold">{r.value}</b> <span className="text-dim">{r.bands.slice(0, 3).join(' ')}</span>
-              </span>
-              <Chip strong>{r.from}</Chip>
-              <Icon name="chevron-right" size={10} className="text-icon-2" />
-              <Chip strong>{r.to}</Chip>
-            </div>
-          )
-        if (r.kind === 'beside')
-          return (
-            <div key={r.id} className="flex items-center gap-2 rounded-[10px] border border-dashed border-line px-2.5 py-2 text-[12px] text-ink">
-              <Icon name={PART_ICON[r.type] ?? 'box'} size={14} className="text-icon" />
-              <span>
-                <b className="font-semibold">{r.id}</b> stays beside the breadboard, on jumper wires
-              </span>
-            </div>
-          )
-        return (
-          <div key={r.id} className="flex items-center gap-2 px-0.5 text-[12px]">
-            <span className="h-[3px] w-4 shrink-0 rounded-full" style={{ background: r.color }} />
-            <Chip strong>{r.from}</Chip>
-            <Icon name="chevron-right" size={10} className="shrink-0 text-icon-2" />
-            <Chip strong>{r.to}</Chip>
-          </div>
-        )
-      })}
+    <div className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+      {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
+      <span className="min-w-0 truncate font-mono text-ink">{left}</span>
+      <span className="ml-auto truncate font-mono text-dim">{right}</span>
     </div>
   )
 }
@@ -569,136 +490,162 @@ const summary = (rows: Row[]) => {
   const parts = rows.filter((r) => r.kind === 'part' || r.kind === 'beside').length
   const res = rows.filter((r) => r.kind === 'resistor').length
   const wires = rows.filter((r) => r.kind === 'wire').length
-  return [parts && `${parts} part${parts > 1 ? 's' : ''}`, res && `${res} resistor${res > 1 ? 's' : ''}`, wires && `${wires} wire${wires > 1 ? 's' : ''}`].filter(Boolean).join(' · ')
+  return [parts && `${parts} part${parts > 1 ? 's' : ''}`, res && `${res} resistor${res > 1 ? 's' : ''}`, wires && `${wires} wire${wires > 1 ? 's' : ''}`].filter(Boolean).join(', ')
 }
 
-// the sidebar while building: where you are, the steps, each opening into what it adds, the shopping list,
-// or the card of the part picked
+// the right panel while building, in the inspector's own sections: the steps, what the open one adds, what sits
+// beside the board, or the shopping list, or the card of a part picked on the canvas
 export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram }) {
-  const { p, step, setStep, ticks, tick, picked, setPicked, list, setList } = guide
-  // keep the open step in view by scrolling its own list, never scrollIntoView, which drags the tab track along
-  const current = useRef<HTMLLIElement>(null)
-  useEffect(() => {
-    const el = current.current
-    const box = el?.closest('ol')
-    if (!el || !box) return
-    const top = el.offsetTop - box.offsetTop
-    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 80) box.scrollTop = top - 12
-  }, [step])
+  const { p, step, setStep, ticks, tick, picked, setPicked, list, setList, last } = guide
   if (!p) return <p className="px-4 text-[12px] text-dim">Add a board to see how to build it.</p>
-  const order = numbered(p)
-  if (picked) return <PartCard p={p} diagram={diagram} id={picked} n={order.indexOf(picked) + 1} onClose={() => setPicked(null)} onStep={(i) => (setPicked(null), setStep(i))} />
+  if (picked) return <PartCard p={p} diagram={diagram} id={picked} onClose={() => setPicked(null)} onStep={(i) => (setPicked(null), setStep(i))} />
   const done = p.steps.filter((s) => ticks.has(s.n)).length
+  const s = p.steps[step]
+  const rows = rowsOf(p, s.adds)
+  const lead = s.adds.length === 0 ? s.do : s.n === 1 ? s.do.slice(0, 1) : []
+  const parts = rows.filter((r): r is Extract<Row, { kind: 'part' }> => r.kind === 'part')
+  const others = rows.filter((r) => r.kind !== 'part')
   return (
     <div className="flex h-full flex-col">
-      <div className="mx-4 mb-3 flex shrink-0 rounded-[9px] bg-input p-0.5">
-        {(['steps', 'shopping'] as const).map((l) => (
-          <button key={l} onClick={() => setList(l)} className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[12px] font-medium ${list === l ? 'bg-panel text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)]' : 'text-dim hover:text-ink'}`}>
-            <Icon name={l === 'steps' ? 'unordered-list' : 'box'} size={12} />
-            {l === 'steps' ? 'Build it' : 'Shopping list'}
-          </button>
-        ))}
+      <div className="px-2.5">
+        <div className="relative grid grid-cols-2 rounded-[9px] bg-input p-0.5">
+          <span className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-[7px] bg-panel shadow-[0_1px_2px_rgba(0,0,0,.08),0_0_0_0.5px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out" style={{ transform: `translateX(${list === 'shopping' ? 100 : 0}%)` }} />
+          {(['steps', 'shopping'] as const).map((l) => (
+            <button key={l} onClick={() => setList(l)} className={`relative z-10 flex h-7 items-center justify-center gap-1 text-[11px] font-medium ${list === l ? 'text-ink' : 'text-dim hover:text-ink'}`}>
+              <Icon name={l === 'steps' ? 'unordered-list' : 'box'} size={13} />
+              {l === 'steps' ? 'Steps' : 'Shopping list'}
+            </button>
+          ))}
+        </div>
       </div>
-      {list === 'shopping' ? (
-        <Shopping p={p} diagram={diagram} />
-      ) : (
-        <>
-          <div className="shrink-0 px-4 pb-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[15px] font-semibold text-ink">
-                Step {step + 1} <span className="font-normal text-dim">of {p.steps.length}</span>
-              </span>
-              <span className="text-[11.5px] text-dim">{done} done</span>
-            </div>
-            <div className="mt-2 flex gap-1">
-              {p.steps.map((s, i) => (
-                <button key={s.n} onClick={() => setStep(i)} title={s.title} className={`h-1.5 flex-1 rounded-full transition-colors ${ticks.has(s.n) ? 'bg-ok/70' : i === step ? 'bg-accent-line' : 'bg-input'}`} />
-              ))}
-            </div>
-          </div>
-          <ol className="min-h-0 flex-1 space-y-1.5 overflow-auto px-3 pb-3">
-            {p.steps.map((s, i) => {
-              const open = i === step
-              const isDone = ticks.has(s.n)
-              const rows = rowsOf(p, s.adds)
-              const lead = s.adds.length === 0 || s.n === 1 ? (s.n === 1 ? s.do.slice(0, 1) : s.do) : []
-              return (
-                <li key={s.n} ref={open ? current : undefined} className={`rounded-[12px] border transition-colors ${open ? 'border-line bg-accent/5 shadow-[0_1px_2px_rgba(0,0,0,.04)]' : 'border-transparent hover:bg-hover'}`}>
-                  <div className="flex items-start gap-2.5 px-2.5 py-2">
-                    <button onClick={() => tick(s.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className={`mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-semibold transition-colors ${isDone ? 'border-ok bg-ok text-white' : open ? 'border-accent-line text-ink' : 'border-line text-dim'}`}>
-                      {isDone ? <Icon name="check" size={11} /> : s.n}
-                    </button>
-                    <button onClick={() => setStep(i)} className="min-w-0 flex-1 text-left">
-                      <span className={`block text-[13px] font-medium ${isDone && !open ? 'text-dim' : 'text-ink'}`}>{s.title}</span>
-                      {!open && summary(rows) && <span className="block text-[11px] text-dim">{summary(rows)}</span>}
-                    </button>
-                  </div>
-                  {open && (
-                    <div className="px-2.5 pb-3 pl-[42px]">
-                      <StepRows rows={rows} lead={lead} />
+      <div className="mt-3 min-h-0 flex-1 overflow-auto border-t border-sep pb-6 pt-3">
+        {list === 'shopping' ? (
+          <Shopping p={p} diagram={diagram} />
+        ) : (
+          <>
+            <Section first title="Steps" right={<span className="text-[11px] text-dim">{done} of {p.steps.length} done</span>}>
+              <div className="space-y-px">
+                {p.steps.map((x, i) => {
+                  const isDone = ticks.has(x.n)
+                  const open = i === step
+                  return (
+                    <div key={x.n} className={`flex h-7 items-center gap-2 rounded-[7px] pl-1 pr-2 text-[12px] ${open ? 'chip' : 'hover:bg-hover'}`}>
+                      <button onClick={() => tick(x.n, !isDone)} title={isDone ? 'mark as not done' : 'mark as done'} className="flex h-5 w-5 shrink-0 items-center justify-center">
+                        {isDone ? <Icon name="circle-check" size={15} className="text-ok" /> : <span className={`flex h-[15px] w-[15px] items-center justify-center rounded-full border font-mono text-[9px] ${open ? 'border-ink text-ink' : 'border-icon-2 text-dim'}`}>{x.n}</span>}
+                      </button>
+                      <button onClick={() => setStep(i)} className={`min-w-0 flex-1 truncate text-left ${isDone && !open ? 'text-dim' : 'text-ink'}`}>
+                        {x.title}
+                      </button>
+                      <span className="shrink-0 text-[11px] text-dim">{summary(rowsOf(p, x.adds))}</span>
                     </div>
+                  )
+                })}
+              </div>
+            </Section>
+            <Sep />
+            <Section title={`${step + 1}. ${s.title}`}>
+              {lead.length > 0 && (
+                <div className="mb-2.5 space-y-1">
+                  {lead.map((l, i) => (
+                    <p key={i} className="text-[12px] leading-[18px] text-dim">
+                      {l}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {parts.map((r) => (
+                <div key={r.id} className="mb-2.5">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-dim">
+                    <Icon name={PART_ICON[r.type] ?? 'box'} size={13} className="text-icon-2" />
+                    {r.straddle ? 'press' : 'push'} {r.id} in{r.straddle ? ' across the gap' : ''}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {r.legs.map((l, i) => (
+                      <Line key={i} left={l.pin} right={l.hole} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {others.length > 0 && (
+                <div className="space-y-1.5">
+                  {others.map((r) =>
+                    r.kind === 'resistor' ? (
+                      <div key={r.id} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px]">
+                        <Resistor bands={r.bands} />
+                        <span className="font-mono text-ink">{r.value}</span>
+                        <span className="ml-auto font-mono text-dim">
+                          {r.from} → {r.to}
+                        </span>
+                      </div>
+                    ) : r.kind === 'beside' ? (
+                      <Line key={r.id} left={r.id} right="beside the board" />
+                    ) : (
+                      <Line key={r.id} swatch={r.color} left={r.from} right={`→ ${r.to}`} />
+                    ),
                   )}
-                </li>
-              )
-            })}
-          </ol>
-          <div className="flex shrink-0 items-center gap-2 border-t border-sep px-4 py-3">
-            <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line text-icon hover:bg-hover disabled:opacity-40" title="the step before">
-              <Icon name="chevron-left" size={12} />
-            </button>
-            <button onClick={() => (tick(p.steps[step].n, true), setStep(Math.min(guide.last, step + 1)))} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent hover:bg-accent-hover">
-              <Icon name="check" size={12} />
-              {step === guide.last ? 'Done, all built' : 'Done, next step'}
-            </button>
-          </div>
-        </>
+                </div>
+              )}
+            </Section>
+            {p.beside.length > 0 && (
+              <>
+                <Sep />
+                <Section title="Beside the board" sub>
+                  <p className="flex gap-2 text-[11.5px] leading-[17px] text-ink">
+                    <Icon name="circle-info" size={14} className="mt-px shrink-0 text-icon-2" />
+                    {p.beside.map((b) => b.id).join(', ')} {p.beside.length > 1 ? 'have' : 'has'} no breadboard form, {p.beside.length > 1 ? 'they connect' : 'it connects'} with jumper wires
+                  </p>
+                </Section>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      {list === 'steps' && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-sep px-4 py-3">
+          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="h-7 rounded-[7px] bg-input px-2.5 text-[11px] font-semibold text-ink disabled:opacity-40">
+            Back
+          </button>
+          <div className="flex-1" />
+          <button onClick={() => (tick(s.n, true), setStep(Math.min(last, step + 1)))} className="flex h-7 items-center gap-1 rounded-[7px] bg-accent px-2.5 text-[11px] font-semibold text-on-accent hover:bg-accent-hover">
+            {step === last ? 'Done' : 'Done, next'}
+            <Icon name="chevron-right" size={10} />
+          </button>
+        </div>
       )}
     </div>
   )
 }
 
 function Shopping({ p, diagram }: { p: Proto; diagram: Diagram }) {
-  const lines = new Map<string, { name: string; note?: string; count: number }>()
+  const lines = new Map<string, { name: string; note?: string; count: number; bands?: string[] }>()
   for (const x of [...p.placed, ...p.beside]) {
-    const value = x.type === 'wokwi-resistor' ? `${x.label.split(', ')[1]}, ${x.bands?.slice(0, 3).join(' ')}` : undefined
+    const value = x.type === 'wokwi-resistor' ? x.label.split(', ')[1] : undefined
     const key = `${x.type}|${value ?? diagram.parts.find((q) => q.id === x.id)?.attrs?.color ?? ''}`
-    const line = lines.get(key) ?? { name: (KIND[x.type] ?? x.type).replace(/^./, (c) => c.toUpperCase()), note: value ?? FACTS[x.type]?.supply, count: 0 }
+    const line = lines.get(key) ?? { name: value ? `Resistor ${value}` : (KIND[x.type] ?? x.type).replace(/^./, (c) => c.toUpperCase()), note: value ? undefined : FACTS[x.type]?.supply, count: 0, bands: x.bands }
     line.count++
     lines.set(key, line)
   }
+  const all = [{ name: p.board.name, count: 1 } as { name: string; note?: string; count: number; bands?: string[] }, ...lines.values(), { name: 'Breadboard', note: p.cols > 30 ? 'full size' : 'half size', count: 1 }, { name: 'Jumper wires', note: 'male to male', count: p.jumpers.length }]
   return (
-    <ul className="min-h-0 flex-1 space-y-px overflow-auto px-4 pb-4">
-      <li className="flex justify-between py-1.5 text-[12.5px] text-ink">
-        <span>{p.board.name}</span>
-        <span className="font-mono">× 1</span>
-      </li>
-      {[...lines.values()].map((l, i) => (
-        <li key={i} className="flex justify-between gap-3 border-t border-sep py-1.5 text-[12.5px] text-ink">
-          <span className="min-w-0">
-            {l.name}
-            {l.note && <span className="block text-[11px] text-dim">{l.note}</span>}
-          </span>
-          <span className="font-mono">× {l.count}</span>
-        </li>
-      ))}
-      <li className="flex justify-between border-t border-sep py-1.5 text-[12.5px] text-ink">
-        <span>
-          Breadboard<span className="block text-[11px] text-dim">{p.cols > 30 ? 'full size' : 'half size'}</span>
-        </span>
-        <span className="font-mono">× 1</span>
-      </li>
-      <li className="flex justify-between border-t border-sep py-1.5 text-[12.5px] text-ink">
-        <span>
-          Jumper wires<span className="block text-[11px] text-dim">male to male, a kit of 65 is plenty</span>
-        </span>
-        <span className="font-mono">× {p.jumpers.length}</span>
-      </li>
-    </ul>
+    <Section first title="To buy" right={<span className="text-[11px] text-dim">{all.reduce((a, l) => a + (l.name === 'Jumper wires' ? 0 : l.count), 0)} pieces</span>}>
+      <div className="space-y-1.5">
+        {all.map((l, i) => (
+          <div key={i} className="flex min-h-6 items-center gap-2 rounded-[7px] bg-input px-2 py-1 text-[11px]">
+            {l.bands && <Resistor bands={l.bands} />}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-ink">{l.name}</span>
+              {l.note && <span className="block truncate text-dim">{l.note}</span>}
+            </span>
+            <span className="font-mono text-ink">× {l.count}</span>
+          </div>
+        ))}
+      </div>
+    </Section>
   )
 }
 
 // a part picked on the canvas: what it is, the step that places it, every pin with its hole and where it goes
-function PartCard({ p, diagram, id, n, onClose, onStep }: { p: Proto; diagram: Diagram; id: string; n: number; onClose: () => void; onStep: (i: number) => void }) {
+function PartCard({ p, diagram, id, onClose, onStep }: { p: Proto; diagram: Diagram; id: string; onClose: () => void; onStep: (i: number) => void }) {
   const x = [...p.placed, ...p.beside].find((q) => q.id === id)
   if (!x) return null
   const facts = FACTS[x.type]
@@ -708,64 +655,57 @@ function PartCard({ p, diagram, id, n, onClose, onStep }: { p: Proto; diagram: D
       .filter(([a, b]) => a === `${id}:${pin}` || b === `${id}:${pin}`)
       .map(([a, b]) => (a === `${id}:${pin}` ? b : a))
       .join(', ')
-  const pins = 'legs' in x && x.legs.length ? x.legs.map((l) => ({ pin: l.pin, hole: holeName(l.hole) })) : (p.jumpers.flatMap((j) => [j.from]).filter((e): e is { part: string; pin: string } => 'part' in e && e.part === id).map((e) => ({ pin: e.pin, hole: 'jumper' })))
+  const pins = x.legs.length ? x.legs.map((l) => ({ pin: l.pin, hole: holeName(l.hole) })) : p.jumpers.map((j) => j.from).filter((e): e is { part: string; pin: string } => 'part' in e && e.part === id).map((e) => ({ pin: e.pin, hole: 'jumper' }))
   return (
-    <div className="flex h-full flex-col overflow-auto px-4 pb-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full border border-line px-1.5 font-mono text-[11px] text-dim">{String(n).padStart(2, '0')}</span>
-        <Icon name={PART_ICON[x.type] ?? 'box'} size={14} className="text-icon" />
-        <span className="flex-1 truncate text-[13px] font-semibold text-ink">{id}</span>
-        <button onClick={onClose} title="back to the steps" className="flex h-6 w-6 items-center justify-center rounded-full text-icon-2 hover:bg-hover hover:text-ink">
-          <Icon name="xmark" size={11} />
-        </button>
-      </div>
-      <dl className="space-y-1.5 text-[12px]">
-        <div className="flex gap-3">
-          <dt className="w-20 shrink-0 text-dim">what it does</dt>
-          <dd className="text-ink">{facts?.what ?? KIND[x.type] ?? x.type}</dd>
+    <div className="h-full overflow-auto pb-6">
+      <Section
+        first
+        title={
+          <>
+            <Icon name={PART_ICON[x.type] ?? 'box'} size={13} className="text-icon-2" />
+            {(KIND[x.type] ?? x.type).replace(/^./, (c) => c.toUpperCase())}
+          </>
+        }
+        right={
+          <>
+            <span className="font-mono text-[11px] text-dim">{id}</span>
+            <button onClick={onClose} title="back to the steps" className="flex h-5 w-5 items-center justify-center rounded-full text-icon-2 hover:text-ink">
+              <Icon name="xmark" size={10} />
+            </button>
+          </>
+        }
+      >
+        <p className="text-[12px] leading-[18px] text-ink">{facts?.what ?? KIND[x.type]}</p>
+        <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+          {facts?.supply && <Field label="runs on" value={facts.supply} wide />}
+          {x.type === 'wokwi-resistor' && <Field label="bands" value={x.bands?.slice(0, 3).join(' ')} wide />}
+          <button onClick={() => stepAt >= 0 && onStep(stepAt)} className="col-span-2 flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 text-[11px] hover:text-ink">
+            <span className="text-dim">placed in</span>
+            <span className="ml-auto truncate font-mono text-ink">{stepAt >= 0 ? `step ${stepAt + 1}` : 'beside the board'}</span>
+            <Icon name="chevron-right" size={10} className="text-icon-2" />
+          </button>
         </div>
-        {x.type === 'wokwi-resistor' && (
-          <div className="flex gap-3">
-            <dt className="w-20 shrink-0 text-dim">bands</dt>
-            <dd className="text-ink">{x.bands?.join(' ')}</dd>
-          </div>
-        )}
-        {facts?.supply && (
-          <div className="flex gap-3">
-            <dt className="w-20 shrink-0 text-dim">runs on</dt>
-            <dd className="text-ink">{facts.supply}</dd>
-          </div>
-        )}
-        <div className="flex gap-3">
-          <dt className="w-20 shrink-0 text-dim">placed in</dt>
-          <dd>
-            {stepAt >= 0 ? (
-              <button onClick={() => onStep(stepAt)} className="text-accent-line underline-offset-2 hover:underline">
-                step {stepAt + 1}, {p.steps[stepAt].title.toLowerCase()}
-              </button>
-            ) : (
-              '-'
-            )}
-          </dd>
+      </Section>
+      <Sep />
+      <Section title="Pins and holes" sub>
+        <div className="space-y-1.5">
+          {pins.map((r, i) => (
+            <div key={i} className="flex h-6 items-center gap-2 rounded-[7px] bg-input px-2 font-mono text-[11px]">
+              <span className="w-12 shrink-0 text-ink">{r.pin}</span>
+              <span className="text-dim">{r.hole}</span>
+              <span className="ml-auto truncate text-dim">{goes(r.pin)}</span>
+            </div>
+          ))}
         </div>
-        {p.beside.some((b) => b.id === id) && (
-          <div className="flex gap-3">
-            <dt className="w-20 shrink-0 text-dim">why beside</dt>
-            <dd className="text-ink">it has no breadboard form, it connects with jumper wires</dd>
-          </div>
-        )}
-      </dl>
-      <div className="mb-1.5 mt-4 text-[10.5px] font-medium uppercase tracking-[.06em] text-dim">its pins and holes</div>
-      <div className="divide-y divide-sep rounded-[9px] border border-sep">
-        {pins.map((r, i) => (
-          <div key={i} className="flex gap-3 px-2.5 py-1.5 text-[11.5px]">
-            <span className="w-16 shrink-0 font-mono text-dim">{r.hole}</span>
-            <span className="font-mono text-ink">{r.pin}</span>
-            <span className="min-w-0 flex-1 truncate text-right font-mono text-dim">{goes(r.pin)}</span>
-          </div>
-        ))}
-      </div>
-      {facts?.note && <p className="mt-3 text-[11.5px] leading-[17px] text-dim">{facts.note}</p>}
+      </Section>
+      {facts?.note && (
+        <>
+          <Sep />
+          <Section title="Watch out" sub>
+            <p className="text-[11.5px] leading-[17px] text-ink">{facts.note}</p>
+          </Section>
+        </>
+      )}
     </div>
   )
 }
