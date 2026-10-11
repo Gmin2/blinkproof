@@ -13,6 +13,23 @@ async function prove(name: string, src = source(name), test = yaml(name)) {
 }
 
 describe('scenarios', () => {
+  it('times a blink from its edge with wait-led', async () => {
+    const led = (diagram('blink') as any).parts.find((p: any) => p.type === 'wokwi-led')?.id ?? 'led1'
+    const test = `name: blinks once a second
+version: 1
+steps:
+  - wait-led: { part-id: ${led}, lit: true, timeout: 2s }
+  - delay: 100ms
+  - expect-led: { part-id: ${led}, lit: true }
+  - delay: 500ms
+  - expect-led: { part-id: ${led}, lit: false }
+  - wait-led: { part-id: ${led}, lit: true, timeout: 1500ms }
+`
+    const r = await prove('blink', source('blink'), test)
+    expect(r.failed).toBeUndefined()
+    expect(r.ok).toBe(true)
+  })
+
   it('replays the wokwi slide pot test: 1 reads 1023, 0.5 reads 512, 0 reads 0', async () => {
     const r = await prove('pot-print')
     expect(r.failed).toBeUndefined()
