@@ -678,7 +678,18 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   const { diagram, source, test, runs, compiles, verdict, feed, request } = props
   const tools = feed.filter((f): f is Extract<FeedItem, { kind: 'tool' }> => f.kind === 'tool')
   if (id === 'parts') return diagram ? <BuildGuide diagram={diagram} only="parts" /> : null
-  if (id === 'wiring') return diagram ? <BreadboardGuide key={JSON.stringify(diagram.connections)} diagram={diagram} /> : null
+  if (id === 'wiring')
+    return diagram ? (
+      <>
+        {props.savedId && (
+          <a href={`/b/${props.savedId}/build`} className="mb-3 flex h-9 items-center justify-between rounded-[9px] border border-line px-3 text-[12.5px] font-medium text-ink hover:bg-hover">
+            Open the full build view
+            <Icon name="chevron-right" size={12} />
+          </a>
+        )}
+        <BreadboardGuide key={JSON.stringify(diagram.connections)} diagram={diagram} />
+      </>
+    ) : null
   if (id === 'proven') {
     const run = runs[runs.length - 1]
     const steps = run?.steps.length ?? test?.match(/^\s*- /gm)?.length ?? 0
@@ -734,12 +745,20 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   }
   if (id === 'keep') {
     const link = props.savedId ? `${location.origin}/b/${props.savedId}` : ''
+    const guide = link && `${link}/build`
     return (
       <>
         <p className="text-[12px] leading-[18px] text-dim">Every build gets its own link. Open it later, send it to someone, or keep changing it in the editor.</p>
         <div className="mt-3 flex items-center gap-1.5 rounded-[9px] border border-line bg-input py-1 pl-3 pr-1">
           <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">{link || 'saving...'}</span>
           <button onClick={() => link && navigator.clipboard.writeText(link)} disabled={!link} className="flex h-7 items-center rounded-[7px] border border-line bg-panel px-2.5 text-[11.5px] font-medium text-ink hover:bg-hover disabled:opacity-40">
+            Copy
+          </button>
+        </div>
+        <p className="mt-4 text-[12px] leading-[18px] text-dim">The build guide has its own link too, for whoever is building it on a breadboard.</p>
+        <div className="mt-2 flex items-center gap-1.5 rounded-[9px] border border-line bg-input py-1 pl-3 pr-1">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">{guide || 'saving...'}</span>
+          <button onClick={() => guide && navigator.clipboard.writeText(guide)} disabled={!guide} className="flex h-7 items-center rounded-[7px] border border-line bg-panel px-2.5 text-[11.5px] font-medium text-ink hover:bg-hover disabled:opacity-40">
             Copy
           </button>
         </div>

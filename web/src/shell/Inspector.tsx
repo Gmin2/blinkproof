@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from '../icons/Icon'
 import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
-import { BreadboardGuide } from './Breadboard'
+import { BuildDrawer, type Guide } from './Breadboard'
 import { PartFacts } from './Facts'
 import { ModelMenu } from './ModelMenu'
 import { Grip, useWidth } from './Resize'
@@ -101,6 +101,8 @@ type Props = {
   mode: Mode
   onMode: (m: Mode) => void
   diagram: Diagram | null
+  // the breadboard guide, while the main area shows the build
+  guide?: Guide
   selected: string | null
   bench: BenchState | null
   feed: FeedItem[]
@@ -132,6 +134,7 @@ export function Inspector({
   mode,
   onMode,
   diagram,
+  guide,
   selected,
   bench,
   feed,
@@ -173,8 +176,8 @@ export function Inspector({
   // code wants more room, so it keeps a width of its own
   const [width, setWidth] = useWidth('inspector', 300, 260, 560)
   const [codeWidth, setCodeWidth] = useWidth('inspector-code', 440, 320, 900)
-  const [buildWidth, setBuildWidth] = useWidth('inspector-build', 560, 420, 900)
-  const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 560] : [width, setWidth, 300]
+  const [buildWidth, setBuildWidth] = useWidth('inspector-build', 340, 280, 640)
+  const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 340] : [width, setWidth, 300]
   const [dragging, setDragging] = useState(false)
   const index = TABS.findIndex((t) => t.mode === mode)
   const pins = part ? ((PARTS[part.type as keyof typeof PARTS]?.pins as string[] | undefined) ?? []) : []
@@ -499,15 +502,8 @@ export function Inspector({
               <div ref={feedEnd} />
             </>
           </div>
-          <div className="h-full w-full shrink-0 overflow-auto px-4 pb-6 pt-3" aria-hidden={mode !== 'build'}>
-            {diagram ? (
-              <>
-                <div className="mb-3 flex h-6 items-center text-[12px] font-semibold text-ink">Build it on a breadboard</div>
-                <BreadboardGuide key={JSON.stringify(diagram.connections)} diagram={diagram} />
-              </>
-            ) : (
-              <p className="text-[12px] text-dim">Open or make a circuit first, then this shows how to build it for real.</p>
-            )}
+          <div className="h-full w-full shrink-0 pt-3" aria-hidden={mode !== 'build'}>
+            {diagram && guide ? <BuildDrawer guide={guide} diagram={diagram} /> : <p className="px-4 text-[12px] text-dim">Open or make a circuit first, then this shows how to build it for real.</p>}
           </div>
         </div>
       </div>
