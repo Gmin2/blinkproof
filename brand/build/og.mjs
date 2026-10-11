@@ -21,12 +21,30 @@ const SPOTS = [
   (x, y, w, h) => [x + 40, y + h / 2 - 115, 230],
 ]
 
-export function gridCard({ title, layout = 'left', pictos }) {
+// split a line of small text to fit a width, by an average glyph width
+function wrap(text, width, size) {
+  const max = Math.floor(width / (size * 0.5))
+  const lines = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    if (line && (line + ' ' + word).length > max) (lines.push(line), (line = word))
+    else line = line ? line + ' ' + word : word
+  }
+  return line ? [...lines, line] : lines
+}
+
+export function gridCard({ title, desc = '', layout = 'left', pictos }) {
   const L = LAYOUTS[layout]
   const [tx, ty, tw, th] = L.title
   const lines = title.split('\n')
-  const size = 88
-  const y0 = ty + th / 2 - ((lines.length - 1) * size * 1.08) / 2 + size * 0.35
+  // a two line title with a description under it steps down a size to keep its margins
+  const size = lines.length > 1 && desc ? 72 : 88
+  // a line or two under the title, small and grey, saying what this is
+  const small = 25
+  const descLines = desc ? wrap(desc, tw - 156, small) : []
+  const block = (lines.length - 1) * size * 1.08 + (descLines.length ? 28 + descLines.length * small * 1.45 : 0)
+  const y0 = ty + th / 2 - block / 2 + size * 0.35
+  const dy = y0 + (lines.length - 1) * size * 1.08 + 30 + small
   let defs = '', body = ''
   L.cells.forEach(([x, y, w, h], i) => {
     defs += `<clipPath id="c${i}"><rect x="${x + LINE / 2}" y="${y + LINE / 2}" width="${w - LINE}" height="${h - LINE}"/></clipPath>`
@@ -39,6 +57,7 @@ export function gridCard({ title, layout = 'left', pictos }) {
 ${L.lines.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c.stone}" stroke-width="${LINE}"/>`).join('')}
 ${body}
 ${lines.map((l, i) => `<text x="${tx + 78}" y="${y0 + i * size * 1.08}" font-family="Geist" font-weight="500" font-size="${size}" letter-spacing="${-0.03 * size}" fill="${c.ink}">${esc(l)}</text>`).join('')}
+${descLines.map((l, i) => `<text x="${tx + 80}" y="${dy + i * small * 1.45}" font-family="Geist" font-size="${small}" fill="${c.dim}">${esc(l)}</text>`).join('')}
 </svg>`
 }
 
@@ -76,10 +95,10 @@ ${lines.map((l, i) => `<text x="${x + 78}" y="${y + bar + 70 + i * 46}" text-anc
 }
 
 const samples = {
-  home: gridCard({ title: 'blinkproof', pictos: [['led', 0], ['resistor', 0, -40], ['proof', 0], ['blink', 2]] }),
-  'release': gridCard({ title: 'blinkproof\nversion 0.2', pictos: [['chip', 0], ['servo', 0], ['wire', 0, 0], ['knob', 1]] }),
-  docs: gridCard({ title: 'writing\na test', layout: 'right', pictos: [['proof', 0], ['button', 1], ['led', 0, -35], ['bolt', 0]] }),
-  'pico-support': gridCard({ title: 'raspberry pi\npico support', layout: 'right', pictos: [['chip', 0], ['blink', 0], ['knob', 0], ['wire', 1]] }),
+  home: gridCard({ title: 'blinkproof', desc: 'an ai agent wires your gadget, writes the firmware, and has to pass a test before you get it.', pictos: [['led', 0], ['resistor', 0, -40], ['proof', 0], ['blink', 2]] }),
+  'release': gridCard({ title: 'blinkproof\nversion 0.2', desc: 'the raspberry pi pico joins the uno and the nano.', pictos: [['chip', 0], ['servo', 0], ['wire', 0, 0], ['knob', 1]] }),
+  docs: gridCard({ title: 'writing\na test', desc: 'the steps a gadget has to pass before the agent can hand it over.', layout: 'right', pictos: [['proof', 0], ['button', 1], ['led', 0, -35], ['bolt', 0]] }),
+  'pico-support': gridCard({ title: 'raspberry pi\npico support', desc: 'rp2040 in the browser, with pio and a usb serial port.', layout: 'right', pictos: [['chip', 0], ['blink', 0], ['knob', 0], ['wire', 1]] }),
   code: codeCard({
     title: 'blink.ino',
     source: ['void setup() {', '  pinMode(LED_BUILTIN, OUTPUT);', '}', '', 'void loop() {', '  digitalWrite(LED_BUILTIN, HIGH);', '  delay(500);', '  digitalWrite(LED_BUILTIN, LOW);', '  delay(500);', '}'].join('\n'),
