@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* the editor follows sketch's mac ui (florence), light and dark. values from research/notes/04-sketch-ui.md */
+/* the editor palette, light and dark */
 :root {
   --canvas: #f6f6f6;
   --panel: #ffffff;
@@ -100,7 +100,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* a floating toolbar pill, like sketch's */
+/* a floating toolbar pill */
 .pill {
   background: var(--pill);
   box-shadow: 0 0 0 1px var(--pill-ring), var(--pill-shadow);
