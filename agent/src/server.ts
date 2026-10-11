@@ -1,57 +1,92 @@
-import { createServer } from 'node:http'
+import express from 'express'
 import { flush, init, shutdown } from 'neatlogs'
-import { build } from './agent.ts'
+import { build as agentBuild, type Event } from './agent.ts'
 import { listModels } from './models.ts'
+import { dynamoStore, memoryStore, type Build, type Store } from './store.ts'
 
-const PORT = Number(process.env.PORT ?? 5201)
+type BuildFn = (request: string, opts: { model?: string; sessionId: string; tags: string[]; onEvent: (e: Event) => void }) => ReturnType<typeof agentBuild>
 
-// POST /build {request, model?} -> server sent events, one per agent step, so the canvas can play the build
-async function main() {
-  // a long running server: init once here, flush after each build, shut down on exit
-  await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1 })
+// the editor's backend. every build gets an id the moment it starts, its record goes to the store as it runs,
+// and its event log at the end, so /b/:id can open and replay it later
+export function createApp({ store, build = agentBuild, after = flush }: { store: Store; build?: BuildFn; after?: () => Promise<unknown> }) {
+  const app = express()
+  app.use(express.json({ limit: '1mb' }))
   let busy = false
 
-  const server = createServer(async (req, res) => {
-    if (req.method === 'GET' && req.url === '/health') {
-      res.writeHead(200, { 'content-type': 'application/json' })
-      return res.end(JSON.stringify({ ok: true, busy }))
-    }
-    if (req.method === 'GET' && req.url === '/models') {
-      res.writeHead(200, { 'content-type': 'application/json' })
-      return res.end(JSON.stringify(await listModels()))
-    }
-    if (req.method !== 'POST' || req.url !== '/build') {
-      res.writeHead(404)
-      return res.end()
-    }
-    let body = ''
-    for await (const chunk of req) body += chunk
-    const { request, model } = JSON.parse(body || '{}') as { request?: string; model?: string }
-    if (!request?.trim()) {
-      res.writeHead(400)
-      return res.end('say what to build')
-    }
+  app.get('/health', (_req, res) => {
+    res.json({ ok: true, busy })
+  })
+
+  app.get('/models', async (_req, res) => {
+    res.json(await listModels())
+  })
+
+  // the sidebar: builds newest first, examples, without the heavy fields
+  app.get('/builds', async (req, res) => {
+    const kind = req.query.kind === 'example' ? 'example' : 'build'
+    const list = await store.list(kind, Math.min(100, Number(req.query.limit ?? 30)))
+    res.json(list.map(({ diagram, sketch, test, ...rest }) => rest))
+  })
+
+  app.get('/builds/:id', async (req, res) => {
+    const b = await store.get(req.params.id)
+    if (!b) return void res.status(404).json({ error: 'no build with that id' })
+    res.json(b)
+  })
+
+  app.get('/builds/:id/events', async (req, res) => {
+    res.json(await store.getEvents(req.params.id))
+  })
+
+  // POST /build {request, model?} -> server sent events, the first one says which id the build is stored under
+  app.post('/build', async (req, res) => {
+    const { request, model } = (req.body ?? {}) as { request?: string; model?: string }
+    if (!request?.trim()) return void res.status(400).send('say what to build')
     // one build at a time, the budget is shared
-    if (busy) {
-      res.writeHead(409)
-      return res.end('a build is already running')
-    }
+    if (busy) return void res.status(409).send('a build is already running')
     busy = true
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
-    const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`)
-    const id = `web-${new Date().toISOString().replace(/[:.]/g, '-')}`
+    const events: unknown[] = []
+    const send = (data: unknown) => {
+      events.push(data)
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+    let record: Build | undefined
     try {
-      const result = await build(request, { model, sessionId: id, tags: ['web'], onEvent: send })
-      send({ type: 'result', passed: result.passed, diagram: result.workspace.diagram, sketch: result.workspace.sketch, test: result.workspace.test })
+      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building' })
+      res.write(`data: ${JSON.stringify({ type: 'saved', id: record.id })}\n\n`)
+      const result = await build(request, { model, sessionId: record.id, tags: ['web'], onEvent: send })
+      const ws = result.workspace
+      send({ type: 'result', passed: result.passed, diagram: ws.diagram, sketch: ws.sketch, test: ws.test })
+      await store.update(record.id, { status: result.passed ? 'proven' : 'failed', diagram: ws.diagram, sketch: ws.sketch, test: ws.test, turns: result.turns, tokens: result.tokens, traceId: result.traceId })
     } catch (e) {
       send({ type: 'error', message: String(e) })
+      if (record) await store.update(record.id, { status: 'failed' }).catch(() => {})
     } finally {
+      if (record) await store.putEvents(record.id, events).catch((e) => console.error('events not saved', e))
       busy = false
-      await flush()
+      await after()
       res.end()
     }
   })
-  server.listen(PORT, '127.0.0.1', () => console.log(`agent on http://127.0.0.1:${PORT}`))
+
+  return app
+}
+
+// "a parking sensor for my garage: an ultrasonic..." -> "Parking sensor for my garage"
+export function titleOf(request: string) {
+  const head = request.split(/[:.\n]/)[0].trim().replace(/^(an?|the)\s+/i, '')
+  const t = head.length > 48 ? head.slice(0, 46).replace(/\s+\S*$/, '') + '...' : head
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+async function main() {
+  const PORT = Number(process.env.PORT ?? 5201)
+  // a long running server: init once here, flush after each build, shut down on exit
+  await init({ apiKey: process.env.NEATLOGS_API_KEY, endpoint: process.env.NEATLOGS_ENDPOINT, workflowName: 'gadget-build', flushInterval: 1 })
+  const store = process.env.BP_STORE === 'memory' ? memoryStore() : dynamoStore()
+  const app = createApp({ store })
+  app.listen(PORT, '127.0.0.1', () => console.log(`agent on http://127.0.0.1:${PORT} (${process.env.BP_STORE === 'memory' ? 'memory store' : 'dynamodb + s3'})`))
   const stop = async () => {
     await shutdown()
     process.exit(0)
@@ -60,7 +95,9 @@ async function main() {
   process.on('SIGTERM', stop)
 }
 
-main().catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+}

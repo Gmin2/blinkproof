@@ -81,9 +81,11 @@ type Props = {
   models: { id: string; provider: string; label: string }[]
   onModel: (id: string) => void
   onShare: () => void
+  onDownload: () => void
+  canShare: boolean
 }
 
-export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare }: Props) {
+export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdict, request, test, testRun, onRunTest, model, models, onModel, onShare, onDownload, canShare }: Props) {
   const circuit = useMemo(() => (diagram ? Circuit.parse(diagram).circuit : undefined), [diagram])
   const part = selected ? diagram?.parts.find((p) => p.id === selected) : undefined
   const feedEnd = useRef<HTMLDivElement>(null)
@@ -134,8 +136,11 @@ export function Inspector({ mode, onMode, diagram, selected, bench, feed, verdic
             })}
           </select>
         </label>
-        <button title="download the circuit, sketch and test" onClick={onShare} disabled={!diagram} className="pill flex h-9 w-9 items-center justify-center text-icon disabled:opacity-40">
-          <Icon name="share" size={19} />
+        <button title="download the circuit, sketch and test" onClick={onDownload} disabled={!diagram} className="pill flex h-9 w-9 items-center justify-center text-icon disabled:opacity-40">
+          <Icon name="export" size={18} />
+        </button>
+        <button title="copy the link to this build" onClick={onShare} disabled={!canShare} className="pill flex h-9 w-9 items-center justify-center text-icon disabled:opacity-40">
+          <Icon name="link" size={18} />
         </button>
       </div>
 

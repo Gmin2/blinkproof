@@ -9,17 +9,23 @@
     "build-one": "tsx --env-file=../.env src/cli.ts",
     "test": "vitest run",
     "serve": "tsx --env-file=../.env src/server.ts",
-    "eval": "tsx --env-file=../.env evals/run.ts"
+    "eval": "tsx --env-file=../.env evals/run.ts",
+    "seed": "tsx scripts/seed.ts"
   },
   "devDependencies": {
+    "@types/express": "5.0.3",
     "@types/node": "^24.19.2",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.3"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.901.0",
+    "@aws-sdk/client-s3": "3.901.0",
+    "@aws-sdk/lib-dynamodb": "3.901.0",
     "@blinkproof/compiler": "workspace:*",
     "@blinkproof/sim": "workspace:*",
+    "express": "5.1.0",
     "neatlogs": "^1.1.28",
     "openai": "^7.32.0"
   }
