@@ -44,6 +44,7 @@ const PREFIX: Record<string, string> = {
   'wokwi-servo': 'servo',
   'wokwi-hc-sr04': 'sonar',
   'wokwi-buzzer': 'bz',
+  'wokwi-photoresistor-sensor': 'ldr',
 }
 
 export type Added = { parts: DiagramPart[]; connections: Connection[]; pins: Record<string, string>; error?: string }
@@ -74,6 +75,7 @@ const KIND_OF: Record<string, 'pwm' | 'digital' | 'analog'> = {
   'wokwi-led-ring': 'digital',
   'wokwi-neopixel': 'digital',
   'wokwi-potentiometer': 'analog',
+  'wokwi-photoresistor-sensor': 'analog',
 }
 
 export function freePins(d: Diagram, type: keyof typeof PARTS): { pin: string; label: string }[] {
@@ -158,6 +160,15 @@ export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number
       wire(`${id}:GND`, B(ground()), GROUND)
       wire(`${id}:SIG`, B(pin), color())
       got.SIG = pin
+      break
+    }
+    case 'wokwi-photoresistor-sensor': {
+      const pin = take(pins.analog)
+      if (!pin) return fail('No free analog pin left for a light sensor')
+      wire(`${id}:VCC`, B(logic), POWER)
+      wire(`${id}:GND`, B(ground()), GROUND)
+      wire(`${id}:AO`, B(pin), color())
+      got.AO = pin
       break
     }
     case 'wokwi-ssd1306': {

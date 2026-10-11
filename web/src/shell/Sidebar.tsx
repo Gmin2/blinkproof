@@ -19,6 +19,7 @@ export const KIND: Record<string, string> = {
   "wokwi-servo": "servo",
   "wokwi-hc-sr04": "ultrasonic",
   "wokwi-buzzer": "buzzer",
+  "wokwi-photoresistor-sensor": "light sensor",
 };
 
 export const BOARDS = [

@@ -228,6 +228,20 @@ export const CASES: Case[] = [
 - delay: 800ms
 - expect-led: { part-id: $led, lit: true }`),
   },
+  {
+    id: 'dark-light',
+    board: 'uno',
+    request: 'a night light on an arduino uno that turns an led on when the room gets dark and off again when it is bright',
+    trap: 'more light is a lower reading on AO, the easy mistake is the comparison the wrong way round',
+    hidden: test('on in the dark only', `
+- set-control: { part-id: $light, control: lux, value: 800 }
+- delay: 500ms
+- expect-led: { part-id: $led, lit: false }
+- set-control: { part-id: $light, control: lux, value: 2 }
+- wait-led: { part-id: $led, lit: true, timeout: 1s }
+- set-control: { part-id: $light, control: lux, value: 800 }
+- wait-led: { part-id: $led, lit: false, timeout: 1s }`),
+  },
 ]
 
 const KINDS: Record<string, string> = {
@@ -240,6 +254,7 @@ const KINDS: Record<string, string> = {
   servo: 'wokwi-servo',
   sonar: 'wokwi-hc-sr04',
   buzzer: 'wokwi-buzzer',
+  light: 'wokwi-photoresistor-sensor',
 }
 
 // $led, $led.2, $led:red -> the id of that part in the agent's circuit

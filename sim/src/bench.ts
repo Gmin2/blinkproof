@@ -21,6 +21,8 @@ export type PartState =
   | { type: 'wokwi-servo'; servo: Servo | null }
   | { type: 'wokwi-hc-sr04'; sensor: HCSR04 | null; distance: number }
   | { type: 'wokwi-buzzer'; buzzer: Buzzer | null }
+  // volts is what AO puts out, dark is DO
+  | { type: 'wokwi-photoresistor-sensor'; lux: number; volts: number; dark: boolean; powered: boolean }
   | { type: 'wokwi-resistor' | 'wokwi-arduino-uno' | 'wokwi-arduino-nano' | 'wokwi-pi-pico' }
 
 const isDigital = (pin: string) => /^(D\d+|GP\d+)$/.test(pin)
@@ -62,6 +64,7 @@ export class Bench {
         case 'wokwi-servo': this.servo(id); break
         case 'wokwi-hc-sr04': this.sonar(id); break
         case 'wokwi-buzzer': this.buzzer(id); break
+        case 'wokwi-photoresistor-sensor': this.light(id); break
         default: this.parts[id] = { type: p.type }
       }
     }
@@ -202,6 +205,26 @@ export class Bench {
     if (buzzer) this.updates.push(() => buzzer.check(this.board.cycles))
   }
 
+  // the module as wokwi models it: an ldr of 50k at 10 lux, gamma 0.7, over a 10k resistor, so more light
+  // is a lower AO. DO goes high once AO passes half the supply, which is the trim pot in the middle, about 100 lux
+  private light(id: string) {
+    const c = this.circuit
+    const state = { type: 'wokwi-photoresistor-sensor' as const, lux: Number(c.attr(id, 'lux') ?? 500), volts: 0, dark: false, powered: false }
+    this.parts[id] = state
+    const vcc = c.supply(`${id}:VCC`)
+    state.powered = !!vcc && c.onGround(`${id}:GND`)
+    const ao = c.signal(`${id}:AO`)
+    const dout = c.signal(`${id}:DO`)
+    this.updates.push(() => {
+      if (!state.powered || !vcc) return
+      const ohms = 50_000 * Math.pow(10 / Math.max(0.1, state.lux), 0.7)
+      state.volts = (vcc * ohms) / (ohms + 10_000)
+      state.dark = state.volts > vcc / 2
+      if (ao && isAnalog(ao)) this.board.setVolts(ao, state.volts)
+      if (dout && isDigital(dout)) this.board.drive(dout, state.dark)
+    })
+  }
+
   // a person turning a knob, pressing a button, or moving the car closer
   control(id: string, name: string, value: number) {
     const part = this.parts[id]
@@ -211,7 +234,8 @@ export class Bench {
     else if (part.type === 'wokwi-hc-sr04' && name === 'distance') {
       part.distance = value
       if (part.sensor) part.sensor.distance = value
-    } else throw new Error(`${id} has no control ${name}`)
+    } else if (part.type === 'wokwi-photoresistor-sensor' && name === 'lux') part.lux = Math.min(100_000, Math.max(0.1, value))
+    else throw new Error(`${id} has no control ${name}`)
     this.update()
   }
 
@@ -229,6 +253,7 @@ export class Bench {
         out.push(`${id}: ${!p.oled ? 'not on the i2c bus (check DATA on A4, CLK on A5, power)' : !p.oled.on ? 'screen off' : text ? JSON.stringify(text) : 'on, blank'}`)
       }
       if (p.type === 'wokwi-potentiometer') out.push(`${id}: at ${Math.round(p.position * 100)}%`)
+      if (p.type === 'wokwi-photoresistor-sensor') out.push(`${id}: ${!p.powered ? 'not powered' : `${p.lux} lux, AO ${p.volts.toFixed(2)} V, DO ${p.dark ? 'high (dark)' : 'low (light)'}`}`)
       if (p.type === 'wokwi-pushbutton') out.push(`${id}: ${p.pressed ? 'pressed' : 'released'}, ${p.presses} presses`)
       if (p.type === 'wokwi-neopixel' || p.type === 'wokwi-led-ring') {
         if (!p.strip) out.push(`${id}: not powered or DIN not on a digital pin`)
