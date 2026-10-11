@@ -201,6 +201,9 @@ export default function App() {
   const title = live && listed ? listed : live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
   // the breadboard guide for whatever is open, and its own link: /b/<id>/build
   const guide = useGuide(diagram, route.kind === 'doc' ? route.id : 'new')
+  // in the breadboard view each layer says which step puts it on the board
+  const stepOf: Record<string, string> = {}
+  guide.p?.steps.forEach((st, i) => st.adds.forEach((id) => (stepOf[id] ??= `step ${i + 1}`)))
   useEffect(() => {
     if (route.kind === 'doc' && route.view === 'build') setMode('build')
   }, [route])
@@ -489,7 +492,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar me={me} loading={lib.loading} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
+      <Sidebar me={me} loading={lib.loading} meta={mode === 'build' ? stepOf : undefined} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={mode === 'build' ? guide.picked : selected} onSelect={mode === 'build' ? guide.setPicked : select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {/* building it for real: the breadboard takes the stage, the simulator stops until you come back */}

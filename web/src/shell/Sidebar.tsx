@@ -96,7 +96,7 @@ function Row({
   const tone = selected
     ? "bg-accent hover:bg-accent-hover font-semibold text-on-accent"
     : soft
-      ? "bg-accent-soft text-accent-line-ink"
+      ? "bg-accent-soft text-accent-ink"
       : current
         ? "chip text-ink"
         : "text-ink hover:bg-hover";
@@ -122,7 +122,7 @@ function Row({
               selected
                 ? "text-on-accent"
                 : soft
-                  ? "text-accent-line-ink"
+                  ? "text-accent-ink"
                   : "text-icon-2"
             }
           />
@@ -145,6 +145,8 @@ function Row({
 type Props = {
   me: ReturnType<typeof useMe>;
   loading?: boolean;
+  // a word to show beside a layer, like which build step adds it
+  meta?: Record<string, string>;
   route: Route;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -171,6 +173,7 @@ const STATUS: Record<Saved["status"], IconName> = {
 export function Sidebar({
   me,
   loading = false,
+  meta,
   route,
   onOpen,
   onNew,
@@ -385,6 +388,7 @@ export function Sidebar({
                 depth={1}
                 selected={selected === p.id}
                 onClick={() => onSelect(p.id)}
+                right={meta?.[p.id] && <span className="text-[10px]">{meta[p.id]}</span>}
               >
                 {p.id}
               </Row>
