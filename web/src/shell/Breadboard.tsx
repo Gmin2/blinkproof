@@ -1,4 +1,4 @@
-import { FACTS, holeName, proto, type Diagram, type End, type Hole, type Placed, type Proto } from '@blinkproof/sim'
+import { FACTS, holeName, proto, shop, type Diagram, type End, type Hole, type Placed, type Proto } from '@blinkproof/sim'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
@@ -740,29 +740,63 @@ export function BuildDrawer({ guide, diagram }: { guide: Guide; diagram: Diagram
   )
 }
 
+type Line = { name: string; note?: string; count: number; bands?: string[]; buy: { name: string; url: string }[] }
 function Shopping({ p, diagram }: { p: Proto; diagram: Diagram }) {
-  const lines = new Map<string, { name: string; note?: string; count: number; bands?: string[] }>()
+  const lines = new Map<string, Line>()
   for (const x of [...p.placed, ...p.beside]) {
+    const part = diagram.parts.find((q) => q.id === x.id)
     const value = x.type === 'wokwi-resistor' ? x.label.split(', ')[1] : undefined
-    const key = `${x.type}|${value ?? diagram.parts.find((q) => q.id === x.id)?.attrs?.color ?? ''}`
-    const line = lines.get(key) ?? { name: value ? `Resistor ${value}` : (KIND[x.type] ?? x.type).replace(/^./, (c) => c.toUpperCase()), note: value ? undefined : FACTS[x.type]?.supply, count: 0, bands: x.bands }
+    const key = `${x.type}|${value ?? part?.attrs?.color ?? part?.attrs?.pixels ?? part?.attrs?.common ?? ''}`
+    const line = lines.get(key) ?? { name: value ? `Resistor ${value}` : (KIND[x.type] ?? x.type).replace(/^./, (c) => c.toUpperCase()), note: value ? undefined : FACTS[x.type]?.supply, count: 0, bands: x.bands, buy: shop(x.type, part?.attrs) }
     line.count++
     lines.set(key, line)
   }
-  const all = [{ name: p.board.name, count: 1 } as { name: string; note?: string; count: number; bands?: string[] }, ...lines.values(), { name: 'Breadboard', note: p.cols > 30 ? 'full size' : 'half size', count: 1 }, { name: 'Jumper wires', note: 'male to male', count: p.jumpers.length }]
+  const board = diagram.parts.find((q) => q.id === p.board.id)
+  const all: Line[] = [
+    { name: p.board.name, count: 1, buy: shop(p.board.type, board?.attrs) },
+    ...lines.values(),
+    { name: 'Breadboard', note: p.cols > 30 ? 'full size' : 'half size', count: 1, buy: shop(p.cols > 30 ? 'breadboard-full' : 'breadboard-half') },
+    { name: 'Jumper wires', note: 'male to male', count: p.jumpers.length, buy: shop('jumpers') },
+  ]
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    const text = all.map((l) => `${l.count} x ${l.name}${l.note ? ` (${l.note})` : ''}${l.buy.map((b) => `\n    ${b.name}: ${b.url}`).join('')}`).join('\n')
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
   return (
     <Section first title="To buy" right={<span className="text-[11px] text-dim">{all.reduce((a, l) => a + (l.name === 'Jumper wires' ? 0 : l.count), 0)} pieces</span>}>
       <div className="space-y-1.5">
         {all.map((l, i) => (
-          <div key={i} className="flex min-h-6 items-center gap-2 rounded-[7px] bg-input px-2 py-1 text-[11px]">
-            {l.bands && <Resistor bands={l.bands} />}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-ink">{l.name}</span>
-              {l.note && <span className="block truncate text-dim">{l.note}</span>}
-            </span>
-            <span className="font-mono text-ink">× {l.count}</span>
+          <div key={i} className="rounded-[7px] bg-input px-2 py-1.5 text-[11px]">
+            <div className="flex min-h-5 items-center gap-2">
+              {l.bands && <Resistor bands={l.bands} />}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-ink">{l.name}</span>
+                {l.note && <span className="block truncate text-dim">{l.note}</span>}
+              </span>
+              <span className="font-mono text-ink">× {l.count}</span>
+            </div>
+            {l.buy.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {l.buy.map((b) => (
+                  <a key={b.url} href={b.url} target="_blank" rel="noopener noreferrer" title={b.url} className={`inline-flex h-5 items-center gap-[3px] rounded-[6px] bg-frame px-[7px] text-[10.5px] shadow-[inset_0_0_0_1px_var(--divider)] hover:text-ink ${b.name === 'robu.in' ? 'text-dim' : 'text-ink'}`}>
+                    {b.name}
+                    <Icon name="arrow-up-right" size={8} className="text-icon-2" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         ))}
+      </div>
+      <div className="mt-3 flex items-center justify-between border-t border-sep pt-2.5 text-[11px] text-dim">
+        <span>Prices and stock on the store pages</span>
+        <button onClick={copy} className="h-[26px] rounded-[7px] px-2.5 font-semibold text-ink shadow-[inset_0_0_0_1px_var(--divider)] hover:bg-hover">
+          {copied ? 'Copied' : 'Copy list'}
+        </button>
       </div>
     </Section>
   )

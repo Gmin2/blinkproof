@@ -200,7 +200,7 @@ export function Inspector({
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden border-t border-sep">
+      <div className="relative min-h-0 flex-1 overflow-clip border-t border-sep">
         <div className="flex h-full transition-transform duration-300 ease-out" style={{ transform: `translateX(${-index * 100}%)` }}>
           <div className="h-full w-full shrink-0 overflow-auto pb-6 pt-3" aria-hidden={mode !== 'design'}>
             {wire && (
