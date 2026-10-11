@@ -5,7 +5,7 @@ import { build as agentBuild, type Event } from './agent.ts'
 import { listModels } from './models.ts'
 import { dynamoStore, memoryStore, type Build, type Store } from './store.ts'
 
-type BuildFn = (request: string, opts: { model?: string; sessionId: string; tags: string[]; onEvent: (e: Event) => void }) => ReturnType<typeof agentBuild>
+type BuildFn = (request: string, opts: { model?: string; sessionId: string; tags: string[]; onEvent: (e: Event) => void; circuit?: unknown }) => ReturnType<typeof agentBuild>
 
 // the editor's backend. every build gets an id the moment it starts, its record goes to the store as it runs,
 // and its event log at the end, so /b/:id can open and replay it later
@@ -81,7 +81,8 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
 
   // POST /build {request, model?} -> server sent events, the first one says which id the build is stored under
   app.post('/build', async (req, res) => {
-    const { request, model } = (req.body ?? {}) as { request?: string; model?: string }
+    const { request, model, circuit } = (req.body ?? {}) as { request?: string; model?: string; circuit?: unknown }
+    if (circuit !== undefined && !Circuit.parse(circuit).circuit) return void res.status(400).send('that circuit does not parse')
     if (!request?.trim()) return void res.status(400).send('say what to build')
     // one build at a time, the budget is shared
     if (busy) return void res.status(409).send('a build is already running')
@@ -94,9 +95,9 @@ export function createApp({ store, build = agentBuild, after = flush }: { store:
     }
     let record: Build | undefined
     try {
-      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building' })
+      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}) })
       res.write(`data: ${JSON.stringify({ type: 'saved', id: record.id })}\n\n`)
-      const result = await build(request, { model, sessionId: record.id, tags: ['web'], onEvent: send })
+      const result = await build(request, { model, sessionId: record.id, tags: circuit ? ['web', 'hand-wired'] : ['web'], onEvent: send, circuit })
       const ws = result.workspace
       send({ type: 'result', passed: result.passed, diagram: ws.diagram, sketch: ws.sketch, test: ws.test })
       await store.update(record.id, { status: result.passed ? 'proven' : 'failed', diagram: ws.diagram, sketch: ws.sketch, test: ws.test, turns: result.turns, tokens: result.tokens, traceId: result.traceId })

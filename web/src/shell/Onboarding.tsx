@@ -1,6 +1,6 @@
 import { BaseEdge, EdgeLabelRenderer, applyNodeChanges, type NodeChange, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useNodesInitialized, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import type { Diagram } from '@blinkproof/sim'
+import { connect, freePins, type Diagram, type PARTS } from '@blinkproof/sim'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
@@ -29,6 +29,8 @@ type Props = {
   onBlank: (board: 'uno' | 'nano' | 'pico') => void
   // back to the start card, once a build is done
   onReset: () => void
+  // a circuit wired by hand here, and what it should do: the agent writes the code and the test for it
+  onBuildCircuit: (what: string, circuit: Diagram) => void
 }
 
 const BOARDS = ['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-pi-pico']
@@ -144,6 +146,83 @@ function IdeaNode({ data, selected }: NodeProps<Node<IdeaData>>) {
   )
 }
 
+type Side = 'in' | 'out'
+type Menu = { side: Side; type?: keyof typeof PARTS }
+type Hand = { menu: Menu | null; board: string; options: (type: keyof typeof PARTS) => { pin: string; label: string }[]; onPlus: (side: Side) => void; onPart: (type: keyof typeof PARTS) => void; onPin: (pin?: string) => void; onBack: () => void }
+
+const CHOICES: Record<Side, [keyof typeof PARTS, string, string][]> = {
+  in: [
+    ['wokwi-pushbutton', 'Button', 'Read a press'],
+    ['wokwi-potentiometer', 'Knob', 'A dial read with analogRead'],
+    ['wokwi-hc-sr04', 'Ultrasonic sensor', 'Distance from 2 to 400 cm'],
+  ],
+  out: [
+    ['wokwi-led', 'LED', 'Light from a pin, resistor included'],
+    ['wokwi-buzzer', 'Buzzer', 'Beeps and tunes'],
+    ['wokwi-led-ring', 'LED ring', '16 colour pixels on one pin'],
+    ['wokwi-ssd1306', 'OLED screen', '128 by 64 pixels'],
+    ['wokwi-servo', 'Servo', 'Turns to an angle'],
+  ],
+}
+
+// the blue + at the end of a dashed lead, it turns into a cross while its menu is open
+function PlusNode({ data }: NodeProps<Node<{ open: boolean; side: Side; onClick: () => void }>>) {
+  return (
+    <button onClick={data.onClick} title={data.side === 'in' ? 'connect an input' : 'connect an output'} className="nodrag flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-on-accent shadow-[0_1px_3px_rgba(0,0,0,.15)] transition-transform hover:scale-105">
+      <Handle type="target" position={Position.Left} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Handle type="source" position={Position.Right} className="!h-1 !w-1 !min-w-0 !border-0 !bg-transparent" />
+      <Icon name={data.open ? 'xmark' : 'plus'} size={data.open ? 11 : 15} />
+    </button>
+  )
+}
+
+// the menu hanging off a +: first which part, then which pin, each with a tab to go back the way it came
+function MenuNode({ data }: NodeProps<Node<{ hand: Hand }>>) {
+  const { hand } = data
+  const menu = hand.menu!
+  const choice = CHOICES[menu.side].find(([t]) => t === menu.type)
+  return (
+    <div className="nodrag nopan nowheel w-[290px]" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="flex">
+        <button onClick={menu.type ? hand.onBack : undefined} className="-mb-px flex h-8 items-center gap-1.5 rounded-t-[10px] border border-b-0 border-line bg-input/70 px-3 text-[12.5px] font-medium text-dim hover:text-ink">
+          {menu.type && <Icon name="chevron-left" size={11} />}
+          {menu.type ? `Connect ${/^(LED|OLED|[aeiou])/i.test(choice?.[1] ?? '') ? 'an' : 'a'} ${choice?.[1]}` : `Connect ${menu.side === 'in' ? 'an input' : 'an output'} to ${hand.board}`}
+        </button>
+      </div>
+      <Frame className="rounded-tl-none">
+        {!menu.type &&
+          CHOICES[menu.side].map(([type, name, line]) => (
+            <button key={type} onClick={() => hand.onPart(type)} className="flex w-full items-center gap-2.5 border-t border-sep px-3 py-2 text-left first:border-t-0 hover:bg-hover">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] border border-sep bg-input/70 text-icon">
+                <Icon name={PART_ICON[type] ?? 'box'} size={14} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-ink">{name}</span>
+                <span className="block truncate text-[11.5px] text-dim">{line}</span>
+              </span>
+            </button>
+          ))}
+        {menu.type && (
+          <>
+            <button onClick={() => hand.onPin()} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-hover">
+              <Icon name="sparkle-3" size={14} className="text-icon" />
+              <span className="flex-1 text-[13px] font-medium text-ink">Pick for me</span>
+              <span className="text-[11px] text-dim">a free pin that fits</span>
+            </button>
+            {hand.options(menu.type).slice(0, 5).map((o) => (
+              <button key={o.pin} onClick={() => hand.onPin(o.pin)} className="flex w-full items-center gap-2.5 border-t border-sep px-3 py-2 text-left hover:bg-hover">
+                <Icon name="wire" size={14} className="text-icon-2" />
+                <span className="flex-1 font-mono text-[12.5px] text-ink">{o.label}</span>
+                <span className="text-[11px] text-dim">free</span>
+              </button>
+            ))}
+          </>
+        )}
+      </Frame>
+    </div>
+  )
+}
+
 function CardNode({ data, selected }: NodeProps<Node<NodeData>>) {
   const dot = data.state === 'done' ? 'bg-ok' : data.state === 'fail' ? 'bg-bad' : data.state === 'work' ? 'bg-accent animate-pulse' : 'bg-icon-2/50'
   const big = data.kind === 'board'
@@ -192,17 +271,17 @@ function ChipEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   )
 }
 
-const nodeTypes = { source: SourceNode, card: CardNode, idea: IdeaNode }
+const nodeTypes = { source: SourceNode, card: CardNode, idea: IdeaNode, plus: PlusNode, menu: MenuNode }
 const edgeTypes = { chip: ChipEdge }
 
 // the circuit as a signal path: inputs come in from the left, the board in the middle, outputs go out to the right
 type Idea = Omit<IdeaData, 'onPick' | 'open'>
 
-function layout(d: Diagram | null, idea: Idea, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined) {
+function layout(d: Diagram | null, idea: Idea | null, picked: string | null, onPick: (id: string) => void, state: NodeData['state'], fresh: string | undefined, hand?: Hand) {
   const board = d?.parts.find((p) => BOARDS.includes(p.type))
-  const ideaNode = (open: boolean): Node => ({ id: 'idea', type: 'idea', position: { x: open ? -110 : 0, y: open ? -60 : -170 }, data: { ...idea, open, badge: open ? idea.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
+  const ideaNode = (open: boolean): Node => ({ id: 'idea', type: 'idea', position: { x: open ? -110 : 0, y: open ? -60 : -170 }, data: { ...idea!, open, badge: open ? idea!.badge : undefined, onPick: () => onPick('idea') }, selected: picked === 'idea', draggable: false })
   // nothing to draw yet but the request: the card you typed into, still open
-  if (!d || !board) return { nodes: [ideaNode(true)], edges: [] as Edge[] }
+  if (!d || !board) return { nodes: idea ? [ideaNode(true)] : [], edges: [] as Edge[] }
   const resistors = new Set(d.parts.filter((p) => p.type === 'wokwi-resistor').map((p) => p.id))
   const peers = (ref: string) => d.connections.filter(([a, b]) => a === ref || b === ref).map(([a, b]) => (a === ref ? b : a))
   // what a part's signal pins reach on the board, straight or through a resistor
@@ -244,7 +323,7 @@ function layout(d: Diagram | null, idea: Idea, picked: string | null, onPick: (i
   })
   const column = (n: number, i: number) => (i - (n - 1) / 2) * 78
   const nodes: Node[] = [
-    ideaNode(false),
+    ...(idea ? [ideaNode(false)] : []),
     node('usb', 'source', 50, 132, 'USB', 'bolt'),
     node(board.id, 'board', 0, 0, cap(KIND[board.type] ?? board.type), 'chip', `${items.length} ${items.length === 1 ? 'part' : 'parts'}`),
     ...ins.map((i, k) => node(i.p.id, 'part', -340, column(ins.length, k), i.p.id, PART_ICON[i.p.type] ?? 'box', KIND[i.p.type])),
@@ -257,15 +336,34 @@ function layout(d: Diagram | null, idea: Idea, picked: string | null, onPick: (i
   const line = (hot: boolean) => ({ stroke: hot ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5 })
   const arrow = (hot: boolean) => ({ type: MarkerType.ArrowClosed, width: 14, height: 14, color: hot ? 'var(--accent)' : 'var(--icon-2)' })
   const edges: Edge[] = [
-    { id: 'idea', source: 'idea', target: board.id, targetHandle: 'top', type: 'smoothstep', markerEnd: arrow(false), style: line(false), animated: state === 'work' },
+    ...(idea ? [{ id: 'idea', source: 'idea', target: board.id, targetHandle: 'top', type: 'smoothstep', markerEnd: arrow(false), style: line(false), animated: state === 'work' }] : []),
     { id: 'usb', source: 'usb', target: board.id, targetHandle: 'bottom', type: 'smoothstep', style: { ...line(false), strokeDasharray: '4 3' } },
     ...ins.map((i) => ({ id: `in-${i.p.id}`, source: i.p.id, target: board.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'source' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
     ...outs.map((i) => ({ id: `out-${i.p.id}`, source: board.id, target: i.p.id, type: 'chip', data: { chips: chipsOf(i), hot: fresh === i.p.id, at: 'target' as const }, markerEnd: arrow(fresh === i.p.id), style: line(fresh === i.p.id) })),
   ]
+  // building by hand: a + at the end of each side, and the menu of whichever is open
+  if (hand) {
+    const plusAt = (side: Side) => {
+      const list = side === 'in' ? ins : outs
+      const x = side === 'in' ? -300 : 330
+      return list.length ? { x: x + 60, y: column(list.length, list.length - 1) + 64 } : { x: side === 'in' ? -150 : 280, y: 14 }
+    }
+    for (const side of ['in', 'out'] as Side[]) {
+      const at = plusAt(side)
+      const open = hand.menu?.side === side
+      nodes.push({ id: `plus-${side}`, type: 'plus', position: at, data: { open, side, onClick: () => hand.onPlus(side) }, draggable: false })
+      edges.push(
+        side === 'in'
+          ? { id: `lead-${side}`, source: `plus-${side}`, target: board.id, type: 'smoothstep', style: { stroke: open ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' } }
+          : { id: `lead-${side}`, source: board.id, target: `plus-${side}`, type: 'smoothstep', style: { stroke: open ? 'var(--accent)' : 'var(--icon-2)', strokeWidth: 1.5, strokeDasharray: '4 4' } },
+      )
+      if (open) nodes.push({ id: 'menu', type: 'menu', position: side === 'out' ? { x: at.x + 44, y: at.y - 46 } : { x: at.x - 306, y: at.y - 46 }, data: { hand }, draggable: false, zIndex: 10 })
+    }
+  }
   return { nodes, edges }
 }
 
-function Path({ diagram, idea, picked, onPick, state }: { diagram: Diagram | null; idea: Idea; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state'] }) {
+function Path({ diagram, idea, picked, onPick, state, hand }: { diagram: Diagram | null; idea: Idea | null; picked: string | null; onPick: (id: string | null) => void; state: NodeData['state']; hand?: Hand }) {
   const flow = useReactFlow()
   // the part that came in last glows for a moment, the way a new connection lights up
   const seen = useRef(new Set<string>())
@@ -280,7 +378,7 @@ function Path({ diagram, idea, picked, onPick, state }: { diagram: Diagram | nul
       return () => clearTimeout(t)
     }
   }, [diagram])
-  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh), [diagram, idea.label, idea.sub, idea.badge, idea.lines?.join('\n'), picked, state, fresh])
+  const laid = useMemo(() => layout(diagram, idea, picked, onPick, state, fresh, hand), [diagram, idea?.label, idea?.sub, idea?.badge, idea?.lines?.join('\n'), picked, state, fresh, hand?.menu?.side, hand?.menu?.type, !!hand])
   const hasBoard = !!diagram?.parts.some((p) => BOARDS.includes(p.type))
   const edges = laid.edges
   // react flow measures nodes through onNodesChange, so they live in state and keep their sizes across relayouts
@@ -442,12 +540,16 @@ type Step = 'menu' | 'describe' | 'board' | 'example'
 
 // the first thing someone sees: say what to make, or pick a board, and watch it come together as a path
 export function Onboarding(props: Props) {
-  const { busy, request, prompt, onPrompt, onStart, verdict, savedId, recent, examples, onEditor, onBlank, onReset, diagram, compiles, runs, feed } = props
+  const { busy, request, prompt, onPrompt, onStart, verdict, savedId, recent, examples, onEditor, onReset, onBuildCircuit, diagram, compiles, runs, feed } = props
   const [step, setStep] = useState<Step>('menu')
   const [picked, setPicked] = useState<string | null>(null)
   const [focus, setFocus] = useState(false)
   // an example opened from the card grows on the same canvas, it needs no agent
   const [shown, setShown] = useState<Saved | null>(null)
+  // a circuit being wired by hand on the canvas, and the menu open off one of its +
+  const [own, setOwn] = useState<Diagram | null>(null)
+  const [menu, setMenu] = useState<Menu | null>(null)
+  const [what, setWhat] = useState('')
   const started = busy || !!request
   const input = useRef<HTMLInputElement>(null)
 
@@ -492,6 +594,8 @@ export function Onboarding(props: Props) {
         onClick={() => {
           if (busy) return
           setShown(null)
+          setOwn(null)
+          setMenu(null)
           setPicked(null)
           setStep('menu')
           onReset()
@@ -515,6 +619,55 @@ export function Onboarding(props: Props) {
       </span>
     </div>
   )
+
+  // wiring by hand: the same canvas, a + off each side of the board
+  const hand: Hand | undefined = own
+    ? {
+        menu,
+        board: own.parts[0].id,
+        options: (type) => freePins(own, type),
+        onPlus: (side) => setMenu((m) => (m?.side === side ? null : { side })),
+        onPart: (type) => (freePins(own, type).length ? setMenu((m) => m && { ...m, type }) : addPart(type)),
+        onPin: (pin) => menu?.type && addPart(menu.type, pin),
+        onBack: () => setMenu((m) => m && { side: m.side }),
+      }
+    : undefined
+  function addPart(type: keyof typeof PARTS, pin?: string) {
+    if (!own) return
+    const added = connect(own, type, { left: 400, top: own.parts.length * 90 }, { pin })
+    if (added.error) return
+    setOwn({ ...own, parts: [...own.parts, ...added.parts], connections: [...own.connections, ...added.connections] })
+    setMenu(null)
+  }
+
+  if (own && !started)
+    return (
+      <div className="relative flex h-full overflow-hidden bg-canvas">
+        {top}
+        <div className="min-w-0 flex-1">
+          <ReactFlowProvider>
+            <Path diagram={own} idea={null} picked={picked} onPick={(id) => (setPicked(id), setMenu(null))} state="idle" hand={hand} />
+          </ReactFlowProvider>
+        </div>
+        {own.parts.length > 1 && (
+          <div className="rise absolute inset-x-0 bottom-6 z-30 flex justify-center px-6">
+            <div className="w-full max-w-[480px]">
+              <Tab label="What should it do?" />
+              <Frame>
+                <form onSubmit={(e) => (e.preventDefault(), what.trim() && (onBuildCircuit(what, own), setOwn(null)))} className="flex items-center">
+                  <Icon name="magic-wand" size={16} className="ml-3 text-icon-2" />
+                  <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="light the led while the button is held" className="h-11 min-w-0 flex-1 bg-transparent px-2.5 text-[14px] text-ink outline-none placeholder:text-dim" />
+                  <button type="submit" disabled={!what.trim()} title="write the code and prove it" className="flex h-11 items-center gap-1.5 border-l border-sep px-3.5 text-[12.5px] font-medium text-ink hover:bg-hover disabled:opacity-40">
+                    Build it
+                    <Icon name="chevron-right" size={12} />
+                  </button>
+                </form>
+              </Frame>
+            </div>
+          </div>
+        )}
+      </div>
+    )
 
   if (!started && !shown)
     return (
@@ -575,9 +728,9 @@ export function Onboarding(props: Props) {
           <div className="rise w-full max-w-[400px]">
             <Tab label="Pick a board" onBack={() => setStep('menu')} />
             <Frame>
-              <Row icon="frame" title="Arduino Uno" line="5 V, 14 digital pins, 6 analog, 2 kb of ram" onClick={() => onBlank('uno')} />
-              <Row icon="frame" title="Arduino Nano" line="The Uno's chip on a small board" onClick={() => onBlank('nano')} />
-              <Row icon="chip" title="Raspberry Pi Pico" line="3.3 V, rp2040, 264 kb of ram" onClick={() => onBlank('pico')} />
+              <Row icon="frame" title="Arduino Uno" line="5 V, 14 digital pins, 6 analog, 2 kb of ram" onClick={() => (setOwn({ version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: 'wokwi-arduino-uno', id: 'uno', left: 0, top: 0 }], connections: [] } as unknown as Diagram), setMenu({ side: 'out' }))} />
+              <Row icon="frame" title="Arduino Nano" line="The Uno's chip on a small board" onClick={() => (setOwn({ version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: 'wokwi-arduino-nano', id: 'nano', left: 0, top: 0 }], connections: [] } as unknown as Diagram), setMenu({ side: 'out' }))} />
+              <Row icon="chip" title="Raspberry Pi Pico" line="3.3 V, rp2040, 264 kb of ram" onClick={() => (setOwn({ version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: 'wokwi-pi-pico', id: 'pico', left: 0, top: 0 }], connections: [] } as unknown as Diagram), setMenu({ side: 'out' }))} />
             </Frame>
           </div>
         )}

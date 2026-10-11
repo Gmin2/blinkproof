@@ -454,6 +454,7 @@ export default function App() {
         onEditor={(id) => (id ? open(id) : openNew())}
         onBlank={blank}
         onReset={() => build.reset()}
+        onBuildCircuit={(what, circuit) => build.start(what, model, circuit)}
       />
     )
 

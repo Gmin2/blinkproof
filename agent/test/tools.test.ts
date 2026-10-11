@@ -5,6 +5,18 @@ import { callTool, type Workspace } from '../src/tools.ts'
 const file = (path: string) => readFileSync(new URL(`../../sketches/${path}`, import.meta.url), 'utf8')
 
 describe('agent tools', () => {
+  it('keeps a hand wired circuit that checks out, and lets the agent fix one that does not', async () => {
+    const good = JSON.parse(file('blink/diagram.json'))
+    const ws: Workspace = { diagram: good, handWired: true }
+    const moved = { ...good, connections: good.connections.map((c: string[]) => (c[0] === 'uno:13' ? ['uno:12', ...c.slice(1)] : c)) }
+    expect(await callTool(ws, 'write_circuit', { diagram: moved })).toMatchObject({ ok: false, refused: expect.stringContaining('wired by hand') })
+    expect(ws.diagram).toBe(good)
+    // an led straight on a pin with no resistor is an error, so that one may be rewired
+    const bad = { ...good, parts: good.parts.filter((p: { type: string }) => p.type !== 'wokwi-resistor'), connections: [['uno:13', 'led1:A', '', []], ['led1:C', 'uno:GND.1', '', []]] }
+    const ws2: Workspace = { diagram: bad, handWired: true }
+    expect((await callTool(ws2, 'write_circuit', { diagram: good })).refused).toBeUndefined()
+  })
+
   it('builds the parking sensor by hand through the tools, finish only once the test passed', async () => {
     const ws: Workspace = {}
     expect(await callTool(ws, 'finish', { summary: 'x' })).toMatchObject({ ok: false, refused: expect.stringContaining('has not passed') })

@@ -65,7 +65,30 @@ function used(d: Diagram, board: string) {
   return out
 }
 
-export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number; top: number }): Added {
+// what a part's one signal pin can go on, free pins first in the order connect would pick them
+const KIND_OF: Record<string, 'pwm' | 'digital' | 'analog'> = {
+  'wokwi-led': 'pwm',
+  'wokwi-servo': 'pwm',
+  'wokwi-pushbutton': 'digital',
+  'wokwi-buzzer': 'digital',
+  'wokwi-led-ring': 'digital',
+  'wokwi-neopixel': 'digital',
+  'wokwi-potentiometer': 'analog',
+}
+
+export function freePins(d: Diagram, type: keyof typeof PARTS): { pin: string; label: string }[] {
+  const b = boardOf(d)
+  const kind = KIND_OF[type]
+  if (!b || !kind) return []
+  const pins = b.kind === 'pico' ? PICO : AVR
+  const taken = used(d, b.part.id)
+  const list = kind === 'pwm' ? [...pins.pwm, ...pins.digital.filter((p) => !pins.pwm.includes(p))] : pins[kind]
+  return list
+    .filter((p) => !taken.has(p))
+    .map((p) => ({ pin: p, label: `${/^\d+$/.test(p) ? `pin ${p}` : p}${pins.pwm.includes(p) ? ' · pwm' : pins.analog.includes(p) ? ' · analog' : ''}` }))
+}
+
+export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number; top: number }, opts: { pin?: string } = {}): Added {
   const b = boardOf(d)
   if (!b) return { parts: [], connections: [], pins: {}, error: 'There is no board to wire it to' }
   if ('board' in PARTS[type]) return { parts: [], connections: [], pins: {}, error: 'A circuit has one board' }
@@ -82,8 +105,9 @@ export function connect(d: Diagram, type: keyof typeof PARTS, at: { left: number
   }
   let signal = d.connections.length
   const color = () => SIGNALS[signal++ % SIGNALS.length]
+  // a pin asked for wins when it is free and the right kind
   const take = (list: string[]) => {
-    const pin = list.find((p) => !taken.has(p))
+    const pin = opts.pin && list.includes(opts.pin) && !taken.has(opts.pin) ? opts.pin : list.find((p) => !taken.has(p))
     if (pin) taken.add(pin)
     return pin
   }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { Circuit, checkRules, connect, type Diagram } from '../src'
+import { Circuit, checkRules, connect, freePins, type Diagram } from '../src'
 
 const load = (name: string) => JSON.parse(readFileSync(new URL(`../../sketches/${name}/diagram.json`, import.meta.url), 'utf8')) as Diagram
 const add = (d: Diagram, type: Parameters<typeof connect>[1]) => {
@@ -38,6 +38,19 @@ describe('connect a part by hand', () => {
     const { d, a } = add(load('pico-plant'), 'wokwi-hc-sr04')
     expect(a.parts.filter((p) => p.type === 'wokwi-resistor').map((p) => p.attrs?.value)).toEqual(['1000', '2000'])
     expect(errors(d)).toEqual([])
+  })
+
+  it('lists the free pins a part can take, and uses the one picked', () => {
+    const d = load('blink')
+    const pins = freePins(d, 'wokwi-led').map((p) => p.pin)
+    expect(pins[0]).toBe('9')
+    expect(pins).not.toContain('13')
+    expect(freePins(d, 'wokwi-led')[0].label).toBe('pin 9 · pwm')
+    expect(freePins(d, 'wokwi-potentiometer').map((p) => p.pin)).toEqual(['A0', 'A1', 'A2', 'A3'])
+    const a = connect(d, 'wokwi-led', { left: 0, top: 0 }, { pin: '5' })
+    expect(a.pins.A).toBe('5')
+    // a pin already taken falls back to a free one
+    expect(connect(d, 'wokwi-led', { left: 0, top: 0 }, { pin: '13' }).pins.A).toBe('9')
   })
 
   it('says so when the pins run out', () => {

@@ -3,6 +3,8 @@ import { Bench, Circuit, PARTS, STEPS, checkRules, parseScenario, run, type Diag
 
 // what the agent has built so far
 export type Workspace = {
+  // wired by hand in the editor or onboarding: the agent may not rewire it while it checks out
+  handWired?: boolean
   diagram?: Diagram
   sketch?: string
   test?: string
@@ -109,6 +111,9 @@ export async function callTool(ws: Workspace, name: string, args: any): Promise<
       }
 
     case 'write_circuit': {
+      // a circuit someone wired by hand stays theirs, unless the checks find something actually wrong with it
+      if (ws.handWired && !findings(ws).some((f) => f.severity === 'error'))
+        return { ok: false, refused: 'this circuit was wired by hand and passes the checks. keep it as it is and write the sketch for the pins as they are wired' }
       const { circuit, errors } = Circuit.parse(args?.diagram)
       if (!circuit) return { ok: false, errors }
       ws.diagram = args.diagram

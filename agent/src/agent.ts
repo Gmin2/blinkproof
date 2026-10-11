@@ -34,6 +34,8 @@ export type Options = {
   tags?: string[]
   // swap superseded tool arguments and results for stubs before each call
   compact?: boolean
+  // a circuit someone already wired by hand: the agent keeps it and writes the code and the test for it
+  circuit?: unknown
 }
 
 // tools whose arguments replace the last call's: only the newest copy needs to stay in the history
@@ -77,7 +79,7 @@ export async function build(request: string, opts: Options = {}) {
   const emit = opts.onEvent ?? (() => {})
   const { provider } = await findModel(model)
   const client = wrapOpenAI(clientFor(provider))
-  const ws: Workspace = {}
+  const ws: Workspace = opts.circuit ? { diagram: opts.circuit as Workspace['diagram'], handWired: true } : {}
   const counts: Record<string, number> = {}
   const compact = opts.compact ?? process.env.BP_COMPACT !== '0'
   // what each call sends, in bytes of json: the cost the history puts on tokens and traces
@@ -95,14 +97,19 @@ export async function build(request: string, opts: Options = {}) {
       promptTemplate: SYSTEM,
       version: PROMPT_VERSION,
       tags: ['blinkproof', PROMPT_VERSION, ...(compact ? ['compact'] : []), ...(opts.tags ?? [])],
-      metadata: { request, model, provider, compact },
+      metadata: { request, model, provider, compact, handWired: !!opts.circuit },
     },
     async (root: any) => {
       const traceId: string | undefined = root?.spanContext?.().traceId
       emit({ type: 'start', request, model, version: PROMPT_VERSION })
       const messages: OpenAI.ChatCompletionMessageParam[] = [
         { role: 'system', content: SYSTEM.compile({}) as string },
-        { role: 'user', content: request },
+        {
+          role: 'user',
+          content: opts.circuit
+            ? `${request}\n\nI already wired this circuit, it is loaded as your current circuit. keep the parts and the pins, change the wiring only if a check says it is wrong. write the sketch and the test for it.\n${JSON.stringify(opts.circuit)}`
+            : request,
+        },
       ]
       let tokens = 0
       let summary: string | undefined
