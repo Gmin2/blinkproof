@@ -4,6 +4,7 @@ import { Icon, type IconName } from '../icons/Icon'
 import { STEP_ICON, Status, TOOL_ICON } from '../icons/Status'
 import type { BenchState } from '../Workbench'
 import { BuildDrawer, type Guide } from './Breadboard'
+import { NetsPanel, type SheetState } from './Schematic'
 import { PartFacts } from './Facts'
 import { Field, Section, Sep } from './ui'
 import { ModelMenu } from './ModelMenu'
@@ -11,7 +12,7 @@ import { Grip, useWidth } from './Resize'
 import { HeaderButton, KIND } from './Sidebar'
 import type { FeedItem, Verdict } from './useBuild'
 
-export type Mode = 'design' | 'code' | 'serial' | 'test' | 'agent' | 'build'
+export type Mode = 'design' | 'code' | 'serial' | 'test' | 'agent' | 'build' | 'schematic'
 
 const TABS: { mode: Mode; label: string; icon: IconName }[] = [
   { mode: 'design', label: 'Design', icon: 'frame' },
@@ -75,6 +76,8 @@ type Props = {
   diagram: Diagram | null
   // the breadboard guide, while the main area shows the build
   guide?: Guide
+  // the schematic's nets, while the main area shows the schematic
+  sheet?: SheetState
   selected: string | null
   bench: BenchState | null
   feed: FeedItem[]
@@ -107,6 +110,7 @@ export function Inspector({
   onMode,
   diagram,
   guide,
+  sheet,
   selected,
   bench,
   feed,
@@ -149,10 +153,11 @@ export function Inspector({
   const [width, setWidth] = useWidth('inspector', 300, 260, 560)
   const [codeWidth, setCodeWidth] = useWidth('inspector-code', 440, 320, 900)
   const [buildWidth, setBuildWidth] = useWidth('inspector-build', 340, 280, 640)
-  const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 340] : [width, setWidth, 300]
+  const [netsWidth, setNetsWidth] = useWidth('inspector-nets', 300, 260, 560)
+  const [w, setW, reset] = mode === 'code' ? [codeWidth, setCodeWidth, 440] : mode === 'build' ? [buildWidth, setBuildWidth, 340] : mode === 'schematic' ? [netsWidth, setNetsWidth, 300] : [width, setWidth, 300]
   const [dragging, setDragging] = useState(false)
-  // the build drawer sits after the five tabs, shown while the breadboard has the stage
-  const index = mode === 'build' ? TABS.length : TABS.findIndex((t) => t.mode === mode)
+  // the build drawer and the nets sit after the five tabs, shown while the breadboard or the schematic has the stage
+  const index = mode === 'build' ? TABS.length : mode === 'schematic' ? TABS.length + 1 : TABS.findIndex((t) => t.mode === mode)
   const pins = part ? ((PARTS[part.type as keyof typeof PARTS]?.pins as string[] | undefined) ?? []) : []
   const peers = (pin: string) => (circuit && part ? circuit.peers(`${part.id}:${pin}`).filter((r) => !r.startsWith(`${part.id}:`)) : [])
 
@@ -173,7 +178,7 @@ export function Inspector({
 
       {/* the tabs: the chip slides to the one picked, and the panels slide along with it */}
       <div className="px-2.5 pb-2">
-        <div className={`relative grid grid-cols-5 rounded-[9px] bg-input p-0.5 ${mode === 'build' ? 'hidden' : ''}`}>
+        <div className={`relative grid grid-cols-5 rounded-[9px] bg-input p-0.5 ${mode === 'build' || mode === 'schematic' ? 'hidden' : ''}`}>
           <span
             className="absolute inset-y-0.5 left-0.5 rounded-[7px] bg-panel shadow-[0_1px_2px_rgba(0,0,0,.08),0_0_0_0.5px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
             style={{
@@ -477,6 +482,9 @@ export function Inspector({
           </div>
           <div className="h-full w-full shrink-0 pt-3" aria-hidden={mode !== 'build'}>
             {diagram && guide ? <BuildDrawer guide={guide} diagram={diagram} /> : <p className="px-4 text-[12px] text-dim">Open or make a circuit first, then this shows how to build it for real.</p>}
+          </div>
+          <div className="h-full w-full shrink-0 pt-3" aria-hidden={mode !== 'schematic'}>
+            {diagram && sheet ? <NetsPanel state={sheet} /> : <p className="px-4 text-[12px] text-dim">Open or make a circuit first, then this shows its schematic.</p>}
           </div>
         </div>
       </div>

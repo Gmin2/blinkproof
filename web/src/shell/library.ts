@@ -80,11 +80,11 @@ export function useLibrary() {
 }
 
 // three pages: / is onboarding, /new is the editor with nothing open, /b/:id is anything stored
-export type Route = { kind: 'onboard' } | { kind: 'new' } | { kind: 'doc'; id: string; view?: 'build' }
+export type Route = { kind: 'onboard' } | { kind: 'new' } | { kind: 'doc'; id: string; view?: 'build' | 'schematic' }
 
 const parse = (path: string): Route => {
-  const m = path.match(/^\/b\/([\w-]+)(\/build)?/)
-  return m ? { kind: 'doc', id: m[1], ...(m[2] ? { view: 'build' as const } : {}) } : path.startsWith('/new') ? { kind: 'new' } : { kind: 'onboard' }
+  const m = path.match(/^\/b\/([\w-]+)(?:\/(build|schematic))?/)
+  return m ? { kind: 'doc', id: m[1], ...(m[2] ? { view: m[2] as 'build' | 'schematic' } : {}) } : path.startsWith('/new') ? { kind: 'new' } : { kind: 'onboard' }
 }
 
 export function useRoute() {
@@ -96,7 +96,7 @@ export function useRoute() {
   }, [])
   // replace keeps the back button sane when a new build gets its id
   const go = useCallback((r: Route, replace = false) => {
-    const path = r.kind === 'doc' ? `/b/${r.id}${r.view === 'build' ? '/build' : ''}` : r.kind === 'new' ? '/new' : '/'
+    const path = r.kind === 'doc' ? `/b/${r.id}${r.view ? `/${r.view}` : ''}` : r.kind === 'new' ? '/new' : '/'
     if (location.pathname !== path) history[replace ? 'replaceState' : 'pushState'](null, '', path)
     setRoute(r)
   }, [])

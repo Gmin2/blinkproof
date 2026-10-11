@@ -46,6 +46,15 @@
   --ok: #16a34a;
   --bad: #dc4f70;
   --warn: #d9730d;
+  /* the schematic sheet, drawn the way schematic editors draw it */
+  --sch-sheet: #f4f3ef;
+  --sch-body: #fffde8;
+  --sch-edge: #a31515;
+  --sch-wire: #2e7d32;
+  --sch-label: #1f3f7a;
+  --sch-ink: #2b2b2b;
+  --sch-dim: #6f6f6f;
+  --sch-pick: #1d1d1d;
   color-scheme: light;
 }
 
@@ -80,6 +89,14 @@
   --ok: #3ccf82;
   --bad: #ff6b8a;
   --warn: #ffab3d;
+  --sch-sheet: #18181a;
+  --sch-body: #2a2823;
+  --sch-edge: #d8705f;
+  --sch-wire: #5fbf6c;
+  --sch-label: #8fb2ee;
+  --sch-ink: #e4e4e4;
+  --sch-dim: #9a9aa0;
+  --sch-pick: #f2f2f2;
   color-scheme: dark;
 }
 
