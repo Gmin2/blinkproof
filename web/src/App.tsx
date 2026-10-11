@@ -6,6 +6,7 @@ import { CodeEditor } from './shell/CodeEditor'
 import { Start } from './shell/Start'
 import { Onboarding } from './shell/Onboarding'
 import { Serial } from './shell/Serial'
+import { BuildView, useGuide } from './shell/Breadboard'
 import { Inspector, type Mode } from './shell/Inspector'
 import { api, drafts, useLibrary, useRoute, type Draft, type Saved, useMe, pending } from './shell/library'
 import { KIND, Sidebar } from './shell/Sidebar'
@@ -103,7 +104,7 @@ export default function App() {
   // the stored build or example the link points at, when it is not the one being built live
   const [doc, setDoc] = useState<Saved | null>()
   const [toast, setToast] = useState('')
-  const [mode, setMode] = useState<Mode>('design')
+  const [mode, setMode] = useState<Mode>(() => (route.kind === 'doc' && route.view === 'build' ? 'build' : 'design'))
   const [float, setFloat] = useState<Float>(null)
   const [zoomMenu, setZoomMenu] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -198,6 +199,16 @@ export default function App() {
   const request = live ? build.request : (doc?.request ?? '')
   const listed = lib.builds.find((b) => b.id === docId)?.title
   const title = live && listed ? listed : live ? (build.request ? build.request.split(/[:,.]/)[0].replace(/^(an?|the)\s+/i, '').replace(/^./, (c) => c.toUpperCase()) : 'New Build') : doc === null ? 'Not Found' : (doc?.title ?? 'Loading...')
+  // the breadboard guide for whatever is open, and its own link: /b/<id>/build
+  const guide = useGuide(diagram, route.kind === 'doc' ? route.id : 'new')
+  useEffect(() => {
+    if (route.kind === 'doc' && route.view === 'build') setMode('build')
+  }, [route])
+  useEffect(() => {
+    if (route.kind !== 'doc') return
+    const want = `/b/${route.id}${mode === 'build' ? '/build' : ''}`
+    if (location.pathname !== want) history.replaceState(null, '', want)
+  }, [mode, route])
 
 
   const openNew = () => {
@@ -481,7 +492,10 @@ export default function App() {
       <Sidebar me={me} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={selected} onSelect={select} busy={build.busy} onParts={() => toggle('parts')} />
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
-        {diagram ? (
+        {/* building it for real: the breadboard takes the stage, the simulator stops until you come back */}
+        {diagram && mode === 'build' ? (
+          <BuildView guide={guide} diagram={diagram} title={title} />
+        ) : diagram ? (
           <Workbench
             key={route.kind === 'doc' ? route.id : 'new'}
             diagram={diagram}
@@ -652,6 +666,7 @@ export default function App() {
       <Inspector
         mode={mode}
         onMode={setMode}
+        guide={guide}
         diagram={diagram}
         selected={selected}
         bench={bench}
