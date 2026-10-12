@@ -42,13 +42,15 @@ export function Icon({ name, size = 18, className = '', title }: Props) {
   )
 }
 
-// our mark: a 5mm led side on, from brand/src/mark.mjs. it takes the text colour
-const MARK = 'M29 58 V27 A21 21 0 0 1 71 27 V58 Z M26 58 H74 Q77 58 77 61 V64 Q77 67 74 67 H26 Q23 67 23 64 V61 Q23 58 26 58 Z M34.5 66 H42 V92.25 A3.75 3.75 0 0 1 34.5 92.25 Z M58 66 H65.5 V84.25 A3.75 3.75 0 0 1 58 84.25 Z'
+// our mark: an led as a schematic draws it, from brand/src/mark.mjs. the diode takes the text colour, its light stays lit
+const BODY = 'M8 56.5 H24.5 A3.5 3.5 0 0 1 28 60 V60 A3.5 3.5 0 0 1 24.5 63.5 H8 A3.5 3.5 0 0 1 4.5 60 V60 A3.5 3.5 0 0 1 8 56.5 Z M28 38 L60 60 L28 82 Z M62 34 H62 A3.5 3.5 0 0 1 65.5 37.5 V82.5 A3.5 3.5 0 0 1 62 86 H62 A3.5 3.5 0 0 1 58.5 82.5 V37.5 A3.5 3.5 0 0 1 62 34 Z M65.5 56.5 H92 A3.5 3.5 0 0 1 95.5 60 V60 A3.5 3.5 0 0 1 92 63.5 H65.5 A3.5 3.5 0 0 1 62 60 V60 A3.5 3.5 0 0 1 65.5 56.5 Z'
+const LIGHT = 'M58.94 31.94 L69.58 21.31 L71.88 23.61 L74 13 L63.39 15.12 L65.69 17.42 L55.06 28.06 Z M71.94 44.94 L82.58 34.31 L84.88 36.61 L87 26 L76.39 28.12 L78.69 30.42 L68.06 41.06 Z'
 
 export function Logo({ size = 20, className = 'text-ink' }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" className={`shrink-0 ${className}`} aria-hidden>
-      <path d={MARK} fill="currentColor" />
+      <path d={BODY} fill="currentColor" />
+      <path d={LIGHT} fill="#F2552C" />
     </svg>
   )
 }

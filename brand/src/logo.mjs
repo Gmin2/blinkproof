@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import opentype from 'opentype.js'
 import tokens from '../tokens.json' with { type: 'json' }
-import { MARK } from './mark.mjs'
+import { BODY, LIGHT, LIT } from './mark.mjs'
 
 export const FONTS = new URL('../node_modules/geist/dist/fonts/', import.meta.url).pathname
 const buf = readFileSync(FONTS + 'geist-sans/Geist-Medium.ttf')
@@ -34,16 +34,16 @@ export function wordmarkSvg(fill) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${(-asc).toFixed(1)} ${width.toFixed(1)} ${(asc + desc).toFixed(1)}" width="${width.toFixed(1)}" height="${(asc + desc).toFixed(1)}"><path d="${d}" fill="${fill}"/></svg>`
 }
 
-// the led stands as tall as an ascender, its legs dropping toward the descender
-export function lockupSvg(fill) {
+// the symbol sits centred on the capitals, a little taller than them, its light reaching above
+export function lockupSvg(fill, lit = LIT) {
   const { d, width, asc, desc, capH } = wordmark
-  const mh = capH * 1.22
-  const gap = mh * 0.24
-  const my = -capH - mh * 0.04
+  const mh = capH * 1.9
+  const gap = mh * 0.1
+  const my = -capH / 2 - mh * 0.495
   const total = mh + gap + width
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${(-asc).toFixed(1)} ${total.toFixed(1)} ${(asc + desc).toFixed(1)}" width="${total.toFixed(1)}" height="${(asc + desc).toFixed(1)}">` +
-    `<g transform="translate(0 ${my.toFixed(2)}) scale(${(mh / 100).toFixed(4)})"><path d="${MARK}" fill="${fill}"/></g>` +
+    `<g transform="translate(0 ${my.toFixed(2)}) scale(${(mh / 100).toFixed(4)})"><path d="${BODY}" fill="${fill}"/><path d="${LIGHT}" fill="${lit}"/></g>` +
     `<g transform="translate(${(mh + gap).toFixed(2)} 0)"><path d="${d}" fill="${fill}"/></g></svg>`
   )
 }

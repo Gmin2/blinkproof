@@ -1,30 +1,23 @@
-// the mark: a 5mm led seen side on. one filled path, viewBox 0 0 100 100.
-// a round dome, the flat flange at its base, two legs, the anode a little longer.
+// the mark: an led the way a schematic draws it. viewBox 0 0 100 100, two filled shapes.
+// BODY is the diode in ink: the two leads, the triangle and the bar. LIGHT is the two arrows it gives off, in lit.
 
-const f = (n) => +n.toFixed(2)
+const rr = (x, y, w, h, r) => `M${x + r} ${y} H${x + w - r} A${r} ${r} 0 0 1 ${x + w} ${y + r} V${y + h - r} A${r} ${r} 0 0 1 ${x + w - r} ${y + h} H${x + r} A${r} ${r} 0 0 1 ${x} ${y + h - r} V${y + r} A${r} ${r} 0 0 1 ${x + r} ${y} Z`
 
-const DOME = { x0: 29, x1: 71, top: 6, base: 58 }
-const r = (DOME.x1 - DOME.x0) / 2
-const FLANGE = { x0: 23, x1: 77, y0: 58, y1: 67, r: 3 }
-const LEG = { w: 7.5, anode: 34.5, cathode: 58, anodeEnd: 96, cathodeEnd: 88 }
+export const BODY = [rr(4.5, 56.5, 23.5, 7, 3.5), 'M28 38 L60 60 L28 82 Z', rr(58.5, 34, 7, 52, 3.5), rr(62, 56.5, 33.5, 7, 3.5)].join(' ')
 
-const dome = `M${DOME.x0} ${DOME.base} V${DOME.top + r} A${r} ${r} 0 0 1 ${DOME.x1} ${DOME.top + r} V${DOME.base} Z`
-const flange = (() => {
-  const { x0, x1, y0, y1, r: k } = FLANGE
-  return `M${x0 + k} ${y0} H${x1 - k} Q${x1} ${y0} ${x1} ${y0 + k} V${y1 - k} Q${x1} ${y1} ${x1 - k} ${y1} H${x0 + k} Q${x0} ${y1} ${x0} ${y1 - k} V${y0 + k} Q${x0} ${y0} ${x0 + k} ${y0} Z`
-})()
-const leg = (x, end) => {
-  const h = LEG.w / 2
-  return `M${f(x)} ${FLANGE.y1 - 1} H${f(x + LEG.w)} V${f(end - h)} A${h} ${h} 0 0 1 ${f(x)} ${f(end - h)} Z`
-}
+// each arrow runs up and right at 45 degrees: a 5.5 wide shaft and a head 9 long, 12 across
+export const LIGHT =
+  'M58.94 31.94 L69.58 21.31 L71.88 23.61 L74 13 L63.39 15.12 L65.69 17.42 L55.06 28.06 Z ' +
+  'M71.94 44.94 L82.58 34.31 L84.88 36.61 L87 26 L76.39 28.12 L78.69 30.42 L68.06 41.06 Z'
 
-export const MARK = [dome, flange, leg(LEG.anode, LEG.anodeEnd), leg(LEG.cathode, LEG.cathodeEnd)].join(' ')
+export const LIT = '#F2552C'
 
-export function markSvg({ fill = '#343433', size = 100, bg = null, radius = 0, pad = 0 } = {}) {
+// lit defaults to the brand orange; pass the fill again for a one colour version
+export function markSvg({ fill = '#343433', lit = LIT, size = 100, bg = null, radius = 0, pad = 0 } = {}) {
   const k = (100 - pad * 2) / 100
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}">` +
     (bg ? `<rect width="100" height="100" rx="${radius}" fill="${bg}"/>` : '') +
-    `<path d="${MARK}" fill="${fill}" transform="translate(${pad} ${pad}) scale(${k})"/></svg>`
+    `<g transform="translate(${pad} ${pad}) scale(${k})"><path d="${BODY}" fill="${fill}"/><path d="${LIGHT}" fill="${lit}"/></g></svg>`
   )
 }

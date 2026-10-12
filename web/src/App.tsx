@@ -557,7 +557,7 @@ export default function App() {
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
               <Tool label="describe a gadget" onClick={openNew} active={route.kind === 'new'}>
-                <Logo size={20} />
+                <Logo size={24} />
               </Tool>
               <Tool icon="plus" label="new build" onClick={openNew} />
             </div>

@@ -2,10 +2,11 @@ import { markSvg } from '../src/mark.mjs'
 import { lockupSvg, wordmark, wordmarkSvg } from '../src/logo.mjs'
 import { c, out, png, put } from './lib.mjs'
 
-for (const [name, fill] of [['ink', c.ink], ['paper', c.paper], ['white', '#FFFFFF'], ['stone', c.stone]]) {
+// ink and paper carry the lit light, white and stone are one colour for places that only take one
+for (const [name, fill, lit] of [['ink', c.ink, c.lit], ['paper', c.paper, c.lit], ['white', '#FFFFFF', '#FFFFFF'], ['stone', c.stone, c.stone]]) {
   out(`kit/logo/wordmark-${name}.svg`, wordmarkSvg(fill))
-  out(`kit/logo/lockup-${name}.svg`, lockupSvg(fill))
-  out(`kit/logo/mark-${name}.svg`, markSvg({ fill }))
+  out(`kit/logo/lockup-${name}.svg`, lockupSvg(fill, lit))
+  out(`kit/logo/mark-${name}.svg`, markSvg({ fill, lit }))
 }
 const ground = (svg, bg) => `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400"><rect width="1200" height="400" fill="${bg}"/>${put(svg, 200, 140, 800)}</svg>`
 out('kit/logo/lockup-on-paper.png', png(ground(lockupSvg(c.ink), c.paper), 1200))
