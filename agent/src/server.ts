@@ -105,6 +105,8 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
       events.push(data)
       res.write(`data: ${JSON.stringify(data)}\n\n`)
     }
+    // a proxy in front drops a stream that goes quiet for two minutes, and a long model turn can
+    const ping = setInterval(() => res.write(': ping\n\n'), 20_000)
     let record: Build | undefined
     try {
       record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}), ...by(req) })
@@ -117,6 +119,7 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
       send({ type: 'error', message: String(e) })
       if (record) await store.update(record.id, { status: 'failed' }).catch(() => {})
     } finally {
+      clearInterval(ping)
       if (record) await store.putEvents(record.id, events).catch((e) => console.error('events not saved', e))
       busy = false
       await after()

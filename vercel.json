@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm -C web build",
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    { "source": "/agent/:path*", "destination": "https://api.blinkproofs.xyz/agent/:path*" },
+    { "source": "/api/:path*", "destination": "https://api.blinkproofs.xyz/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
