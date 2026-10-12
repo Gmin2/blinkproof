@@ -15,6 +15,7 @@ export function Wire({ meshes, tracked, handle, className }: { meshes: Mesh[]; t
   const fills = useRef<(SVGPathElement | null)[]>([])
   const lines = useRef<(SVGPathElement | null)[]>([])
   const floor = useRef<SVGPathElement>(null)
+  const board = useRef<SVGPathElement>(null)
 
   useImperativeHandle(
     handle,
@@ -22,6 +23,7 @@ export function Wire({ meshes, tracked, handle, className }: { meshes: Mesh[]; t
       draw(cam, vp) {
         const l = buildLayers(meshes, cam, vp, tracked)
         floor.current?.setAttribute('d', l.under)
+        board.current?.setAttribute('d', l.board)
         for (let i = 0; i < BINS; i++) {
           lines.current[i]?.setAttribute('d', l.line[i] || '')
           for (let s = 0; s < SHADES; s++) fills.current[i * SHADES + s]?.setAttribute('d', l.fill[i * SHADES + s] || '')
@@ -43,6 +45,7 @@ export function Wire({ meshes, tracked, handle, className }: { meshes: Mesh[]; t
             {TONES.map((t, s) => (
               <path key={s} ref={(el) => void (fills.current[i * SHADES + s] = el)} fill={t} />
             ))}
+            {i === 0 && <path ref={board} fill="none" stroke="var(--home-ink)" strokeWidth={0.7} strokeOpacity={0.55} strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
             <path
               ref={(el) => void (lines.current[i] = el)}
               fill="none"

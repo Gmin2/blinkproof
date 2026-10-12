@@ -126,6 +126,8 @@ export type Layers = {
   line: string[]
   /** the floor, painted before anything else */
   under: string
+  /** the boards' own lines, right after their faces and before any part, at full strength */
+  board: string
   anchors: Record<string, [number, number, number]>
 }
 
@@ -139,6 +141,7 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
   const fill: string[] = new Array(BINS * SHADES).fill('')
   const line: string[] = new Array(BINS).fill('')
   let under = ''
+  let board = ''
   const near = cam.dist - HALF_DEPTH
   const span = HALF_DEPTH * 2
   // the furthest depth lands in bin 0, the nearest in the last
@@ -205,6 +208,10 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
       const pa = proj[a]
       const pb = proj[b]
       if (pa[2] <= 0.06 || pb[2] <= 0.06) continue
+      if (m.base) {
+        board += `M${pa[0].toFixed(1)} ${pa[1].toFixed(1)}L${pb[0].toFixed(1)} ${pb[1].toFixed(1)}`
+        continue
+      }
       // one bin nearer, so a face never paints over its own outline. a base's edges go right after its faces
       const i = m.base ? 0 : Math.max(top, Math.min(BINS - 1, binOf((pa[2] + pb[2]) / 2 + bias) + (m.ghost ? 0 : 1)))
       line[i] += `M${pa[0].toFixed(1)} ${pa[1].toFixed(1)}L${pb[0].toFixed(1)} ${pb[1].toFixed(1)}`
@@ -222,5 +229,5 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
   }
   const anchors: Record<string, [number, number, number]> = {}
   for (const k in tracked) anchors[k] = project(tracked[k])
-  return { fill, line, under, anchors }
+  return { fill, line, under, board, anchors }
 }
