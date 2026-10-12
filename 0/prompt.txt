@@ -1,0 +1,1 @@
+by default our app should be of light mode
