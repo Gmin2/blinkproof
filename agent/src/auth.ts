@@ -15,6 +15,8 @@ export type AuthOptions = {
 
 const SESSION = 'bp_session'
 const STATE = 'bp_state'
+// what this browser built before signing in, so it can see them and keep them once it does
+const MADE = 'bp_made'
 const MONTH = 30 * 24 * 3600
 
 function cookies(req: Request) {
@@ -57,6 +59,24 @@ export function auth({ clientId, clientSecret, secret, publicUrl = 'http://local
     }
   }
   const user = (req: Request) => (on ? open(cookies(req)[SESSION]) : null)
+  // the ids built signed out, in a signed cookie so nobody can claim someone else's
+  const made = (req: Request): string[] => {
+    const [body, mac] = (cookies(req)[MADE] ?? '').split('.')
+    if (!body || !mac) return []
+    const want = Buffer.from(sign(body))
+    const got = Buffer.from(mac)
+    if (want.length !== got.length || !timingSafeEqual(want, got)) return []
+    try {
+      const ids = JSON.parse(Buffer.from(body, 'base64url').toString())
+      return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  }
+  const remember = (req: Request, res: Response, id: string) => {
+    const body = Buffer.from(JSON.stringify([...made(req).filter((x) => x !== id), id].slice(-40))).toString('base64url')
+    setCookie(res, MADE, `${body}.${sign(body)}`, MONTH, secure)
+  }
   const callback = `${publicUrl}/agent/auth/github/callback`
 
   const router = Router()
@@ -83,7 +103,14 @@ export function auth({ clientId, clientSecret, secret, publicUrl = 'http://local
       if (!tok.access_token) return void res.status(400).send(tok.error_description ?? 'github said no')
       const gh = await get('https://api.github.com/user', { headers: { authorization: `Bearer ${tok.access_token}`, accept: 'application/vnd.github+json', 'user-agent': 'blinkproof' } }).then((r) => r.json() as Promise<{ id: number; login: string; name?: string; avatar_url?: string }>)
       if (!gh.id) return void res.status(502).send('could not read your github account')
-      setCookie(res, SESSION, seal({ id: String(gh.id), login: gh.login, name: gh.name ?? undefined, avatar: gh.avatar_url }), MONTH, secure)
+      const u: User = { id: String(gh.id), login: gh.login, name: gh.name ?? undefined, avatar: gh.avatar_url }
+      setCookie(res, SESSION, seal(u), MONTH, secure)
+      // what you built before signing in becomes yours
+      const ids = made(req)
+      if (ids.length) {
+        await api.claim(u, ids).catch((e) => console.error('could not keep the builds made signed out', e))
+        setCookie(res, MADE, '', 0, secure)
+      }
       res.redirect(safeNext(next))
     } catch (e) {
       console.error('github sign in failed', e)
@@ -94,5 +121,7 @@ export function auth({ clientId, clientSecret, secret, publicUrl = 'http://local
     setCookie(res, SESSION, '', 0, secure)
     res.json({ ok: true })
   })
-  return { on, user, router, seal }
+  // the server sets claim to hand builds over to whoever just signed in
+  const api = { on, user, made, remember, router, seal, claim: async (_u: User, _ids: string[]) => {} }
+  return api
 }

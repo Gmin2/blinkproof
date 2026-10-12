@@ -160,7 +160,7 @@ export function useBuild(onRunTest: () => void, onTab: (tab: 'agent' | 'test' | 
     })()
     try {
       const res = await fetch('/agent/build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: text, model, ...(circuit && { circuit }) }) })
-      if (!res.ok || !res.body) throw new Error(res.status === 409 ? 'a build is already running' : res.status === 401 ? 'sign in with github to build with the agent' : 'agent server not running, start it with pnpm -C agent serve')
+      if (!res.ok || !res.body) throw new Error(res.status === 409 ? 'a build is already running' : res.status === 429 ? await res.text() : res.status === 401 ? 'sign in with github to build with the agent' : 'agent server not running, start it with pnpm -C agent serve')
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       let buf = ''
       for (;;) {
