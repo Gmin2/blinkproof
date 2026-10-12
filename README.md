@@ -43,8 +43,9 @@ agent trace per build, a span per tool call, `finish` as a guardrail and a span 
   25 runs, 16% with problems. `evidence/neatroots/proximity-alarm-base.jpg` is the flagged run
 - every trace id in the eval tables can be looked up
 
-**Entire.** enabled on the repo since the first commit (`.entire/settings.json`). missing: no checkpoint is saved
-yet, so there is no checkpoint link or id to show.
+**Entire.** enabled on the repo (`.entire/settings.json`) with claude code. checkpoint `01M4R0XZZS0FFJ71YPHZV4VQR9`,
+the session that wrote this section, linked to its commit:
+https://entire.io/gh/Gmin2/blinkproof/commit/88cdd736a2172d6ac65c731c80bf4043965ba8dd
 
 **cfo.ai.** missing: the business plan is not in the repo yet.
 
