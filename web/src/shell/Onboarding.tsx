@@ -1039,7 +1039,7 @@ export function Onboarding(props: Props) {
         title={busy ? 'the agent is building' : 'start over'}
         className="pointer-events-auto flex items-center gap-2 text-[13px] font-semibold text-ink"
       >
-        <Logo size={18} />
+        <Logo size={22} />
         blinkproof
       </button>
       <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out ${picked === 'wiring' ? 'mr-[620px]' : picked === 'schematic' ? 'mr-[560px]' : picked ? 'mr-[380px]' : ''}`}>

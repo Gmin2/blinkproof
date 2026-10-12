@@ -220,7 +220,7 @@ export function Sidebar({
       <Grip side="right" width={width} onWidth={setWidth} onReset={() => setWidth(240)} />
       <div className="flex h-[52px] shrink-0 items-center justify-between pl-[18px] pr-[10px]">
         <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-ink">
-          <Logo size={18} />
+          <Logo size={22} />
           blinkproof
         </span>
         <button
