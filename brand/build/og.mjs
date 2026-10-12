@@ -95,7 +95,7 @@ ${lines.map((l, i) => `<text x="${x + 78}" y="${y + bar + 70 + i * 46}" text-anc
 }
 
 const samples = {
-  home: gridCard({ title: 'blinkproof', desc: 'an ai agent wires your gadget, writes the firmware, and has to pass a test before you get it.', pictos: [['led', 0], ['resistor', 0, -40], ['proof', 0], ['blink', 2]] }),
+  home: gridCard({ title: 'blinkproof', desc: 'just say what to build. we wire real parts, write the firmware and prove it runs in a simulator.', pictos: [['led', 0], ['resistor', 0, -40], ['proof', 0], ['blink', 2]] }),
   'release': gridCard({ title: 'blinkproof\nversion 0.2', desc: 'the raspberry pi pico joins the uno and the nano.', pictos: [['chip', 0], ['servo', 0], ['wire', 0, 0], ['knob', 1]] }),
   docs: gridCard({ title: 'writing\na test', desc: 'the steps a gadget has to pass before the agent can hand it over.', layout: 'right', pictos: [['proof', 0], ['button', 1], ['led', 0, -35], ['bolt', 0]] }),
   'pico-support': gridCard({ title: 'raspberry pi\npico support', desc: 'rp2040 in the browser, with pio and a usb serial port.', layout: 'right', pictos: [['chip', 0], ['blink', 0], ['knob', 0], ['wire', 1]] }),
