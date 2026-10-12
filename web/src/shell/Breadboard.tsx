@@ -1,5 +1,5 @@
 import { FACTS, holeName, proto, shop, type Diagram, type End, type Hole, type Placed, type Proto } from '@blinkproof/sim'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../icons/Icon'
 import { PART_ICON } from '../icons/Status'
 import { KIND } from './Sidebar'
@@ -18,13 +18,6 @@ function numbered(p: Proto) {
   const ids = new Set([...p.placed.map((x) => x.id), ...p.beside.map((x) => x.id)])
   for (const s of p.steps) for (const a of s.adds) if (ids.has(a) && !order.includes(a)) order.push(a)
   return order
-}
-
-// what a net is, in words: ground, the power rail, or the board pin it starts from
-function netName(p: Proto, color: string, why: string) {
-  if (color === '#1f2937') return 'ground'
-  if (color === '#dc2626') return `${p.power} from the ${p.board.name}`
-  return why
 }
 
 type DrawProps = { p: Proto; diagram: Diagram; look: Look; upTo: number; focus?: number; picked?: string | null; onPick?: (id: string | null) => void; callouts?: boolean; fill?: boolean; hover?: string | null }
@@ -866,6 +859,12 @@ function PartCard({ p, diagram, id, onClose, onStep }: { p: Proto; diagram: Diag
       )}
     </div>
   )
+}
+
+// the shopping list on its own, for the onboarding panel
+export function ShoppingList({ diagram }: { diagram: Diagram }) {
+  const p = useMemo(() => proto(diagram), [diagram])
+  return p ? <Shopping p={p} diagram={diagram} /> : <p className="text-[12px] text-dim">There is no board in this circuit yet.</p>
 }
 
 // the compact version for a narrow panel, used in onboarding: the drawing and its steps under it
