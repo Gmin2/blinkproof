@@ -66,16 +66,39 @@ function uno(): Mesh[] {
   return at(out, [UNO.x, 0, UNO.z])
 }
 
+// holes as short ticks, one edge each: a 0.1 inch pitch is about 0.1 units here
+function holes(cols: number, rows: number, x0: number, z0: number, step: number, y: number): Mesh {
+  const pts: V3[] = []
+  const edges: Edge[] = []
+  for (let c = 0; c < cols; c++)
+    for (let r = 0; r < rows; r++) {
+      const x = x0 + c * step
+      const z = z0 + r * step
+      pts.push([x - 0.022, y, z], [x + 0.022, y, z])
+      edges.push([pts.length - 2, pts.length - 1])
+    }
+  return mesh(pts, edges)
+}
+
 function breadboard(): Mesh[] {
   const { w, d, h } = BB
   const top = BB_TOP
+  const y = top + 0.003
+  const pitch = 0.1
+  const cols = 30
+  const x0 = -((cols - 1) * pitch) / 2
   const out: Mesh[] = [translate(box(w, h, d), [0, DESK + h / 2, 0])]
-  // the centre channel and the two power rails each side
-  out.push(translate(box(w * 0.94, 0.02, 0.1), [0, top - 0.01, 0]))
+  // the centre channel
+  out.push(translate(box(w * 0.94, 0.02, 0.12), [0, top - 0.01, 0]))
   for (const sz of [-1, 1]) {
-    out.push(translate(grid(w * 0.9, 0.62, 15, 2, 1), [0, top + 0.002, sz * 0.48]))
-    out.push(seg([-w * 0.45, top + 0.002, sz * (d / 2 - 0.12)], [w * 0.45, top + 0.002, sz * (d / 2 - 0.12)]))
-    out.push(seg([-w * 0.45, top + 0.002, sz * (d / 2 - 0.22)], [w * 0.45, top + 0.002, sz * (d / 2 - 0.22)]))
+    // the two blocks of five rows either side of the channel
+    out.push(holes(cols, 5, x0, sz < 0 ? -0.12 - 4 * pitch : 0.12, pitch, y))
+    // the two power rails along each long edge, with the lines printed beside them
+    const rz = sz * (d / 2 - 0.13)
+    out.push(holes(25, 1, x0 + 0.1, rz - 0.05, pitch * 1.12, y))
+    out.push(holes(25, 1, x0 + 0.1, rz + 0.05, pitch * 1.12, y))
+    out.push(seg([-w * 0.44, y, rz - sz * 0.13], [w * 0.44, y, rz - sz * 0.13]))
+    out.push(seg([-w * 0.44, y, rz + sz * 0.11], [w * 0.44, y, rz + sz * 0.11]))
   }
   // all of it is flat on the desk or on its own top, so it goes down before the parts stood on it
   return at(out, [BB.x, 0, BB.z]).map((m) => ({ ...m, base: true }))
