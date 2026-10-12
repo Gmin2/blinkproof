@@ -1,0 +1,5 @@
+Write a README section for the judges that maps each judging item to its evidence in evidence/, then commit it and push
+
+---
+
+no like see previous session use /agent-canvas
