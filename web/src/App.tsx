@@ -1,10 +1,12 @@
 import { PARTS, connect, type Diagram } from '@blinkproof/sim'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from './icons/Icon'
 import { PART_ICON } from './icons/Status'
 import { CodeEditor } from './shell/CodeEditor'
 import { Start } from './shell/Start'
 import { Onboarding } from './shell/Onboarding'
+
+const Home = lazy(() => import('./home/Home').then((m) => ({ default: m.Home })))
 import { Serial } from './shell/Serial'
 import { BuildView, useGuide } from './shell/Breadboard'
 import { SchematicView, useSheet } from './shell/Schematic'
@@ -131,7 +133,7 @@ export default function App() {
   const [prompt, setPrompt] = useState(IDEAS[1])
   // back from signing in in the editor: put back what you typed. onboarding takes its own
   useEffect(() => {
-    if (route.kind === 'onboard') return
+    if (route.kind === 'onboard' || route.kind === 'home') return
     const p = pending.take()
     if (p?.prompt) setPrompt(p.prompt)
   }, [])
@@ -468,6 +470,12 @@ export default function App() {
     <Serial lines={bench?.lines ?? []} simMs={bench?.simMs ?? 0} speed={bench?.speed ?? 0} state={sim} flash={bench?.build?.flash} ram={bench?.build?.ram} board={boardName} onSend={(t) => serialIn.current?.(t)} />
   )
 
+  if (route.kind === 'home')
+    return (
+      <Suspense fallback={null}>
+        <Home me={me} onStart={() => go({ kind: 'onboard' })} onExample={() => open('parking')} onEditor={openNew} />
+      </Suspense>
+    )
   if (route.kind === 'onboard')
     return (
       <Onboarding
