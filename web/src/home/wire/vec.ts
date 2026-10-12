@@ -12,6 +12,10 @@ export type Mesh = {
   ghost?: number
   /** a board other parts sit on: painted first, so its top never covers them */
   base?: boolean
+  /** pushes it back in the painting order, for a plate that small parts sit on */
+  bias?: number
+  /** the floor: drawn under everything */
+  floor?: boolean
 }
 
 export function mesh(pts: V3[], edges: Edge[], ghost = 0, faces?: Face[]): Mesh {
@@ -91,7 +95,7 @@ export function cyl(r: number, h: number, seg = 12, ghost = 0, ribs = seg): Mesh
     edges.push([i * 2 + 1, j * 2 + 1])
   }
   const step = Math.max(1, Math.round(seg / ribs))
-  for (let i = 0; i < seg; i += step) edges.push([i * 2, i * 2 + 1])
+  if (ribs > 0) for (let i = 0; i < seg; i += step) edges.push([i * 2, i * 2 + 1])
   const faces: Face[] = []
   for (let i = 0; i < seg; i++) {
     const j = (i + 1) % seg

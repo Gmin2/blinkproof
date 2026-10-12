@@ -14,12 +14,14 @@ export type WireHandle = {
 export function Wire({ meshes, tracked, handle, className }: { meshes: Mesh[]; tracked: Tracked; handle: Ref<WireHandle>; className?: string }) {
   const fills = useRef<(SVGPathElement | null)[]>([])
   const lines = useRef<(SVGPathElement | null)[]>([])
+  const floor = useRef<SVGPathElement>(null)
 
   useImperativeHandle(
     handle,
     () => ({
       draw(cam, vp) {
         const l = buildLayers(meshes, cam, vp, tracked)
+        floor.current?.setAttribute('d', l.under)
         for (let i = 0; i < BINS; i++) {
           lines.current[i]?.setAttribute('d', l.line[i] || '')
           for (let s = 0; s < SHADES; s++) fills.current[i * SHADES + s]?.setAttribute('d', l.fill[i * SHADES + s] || '')
@@ -32,6 +34,7 @@ export function Wire({ meshes, tracked, handle, className }: { meshes: Mesh[]; t
 
   return (
     <svg className={className} aria-hidden="true">
+      <path ref={floor} fill="none" stroke="var(--home-ink)" strokeWidth={0.5} strokeOpacity={0.12} vectorEffect="non-scaling-stroke" />
       {Array.from({ length: BINS }, (_, i) => {
         // bin 0 is the furthest
         const u = 1 - i / (BINS - 1)

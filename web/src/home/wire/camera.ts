@@ -124,6 +124,8 @@ export type Layers = {
   /** BINS * SHADES entries: bin i, shade s at i * SHADES + s */
   fill: string[]
   line: string[]
+  /** the floor, painted before anything else */
+  under: string
   anchors: Record<string, [number, number, number]>
 }
 
@@ -136,6 +138,7 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
   const project = projector(cam, vp)
   const fill: string[] = new Array(BINS * SHADES).fill('')
   const line: string[] = new Array(BINS).fill('')
+  let under = ''
   const near = cam.dist - HALF_DEPTH
   const span = HALF_DEPTH * 2
   // the furthest depth lands in bin 0, the nearest in the last
@@ -145,10 +148,20 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
   }
   for (const m of meshes) {
     const proj = m.pts.map(project)
+    if (m.floor) {
+      for (const [a, b] of m.edges) if (proj[a][2] > 0.06 && proj[b][2] > 0.06) under += `M${proj[a][0].toFixed(1)} ${proj[a][1].toFixed(1)}L${proj[b][0].toFixed(1)} ${proj[b][1].toFixed(1)}`
+      continue
+    }
     // a solid only shows the edges of faces turned toward the camera, so its back edges stay hidden
     let seen: Set<number> | null = null
+    // edges of faces turned away, so where a front face meets a back one the outline is drawn even with no edge there
+    let back: Set<number> | null = null
+    // the nearest bin any of its faces went to: its edges go no earlier, so a solid never covers its own outline
+    let top = -1
+    const bias = m.bias ?? 0
     if (m.faces && !m.ghost) {
       seen = new Set()
+      back = new Set()
       for (const f of m.faces) {
         let depth = 0
         let ok = true
@@ -167,7 +180,14 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
           const b = proj[f[(i + 1) % f.length]]
           area += a[0] * b[1] - b[0] * a[1]
         }
-        if (area >= 0) continue
+        if (area >= 0) {
+          for (let i = 0; i < f.length; i++) {
+            const a = f[i]
+            const b = f[(i + 1) % f.length]
+            back.add(a < b ? a * 65536 + b : b * 65536 + a)
+          }
+          continue
+        }
         for (let i = 0; i < f.length; i++) {
           const a = f[i]
           const b = f[(i + 1) % f.length]
@@ -175,7 +195,9 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
         }
         let s = 'M'
         for (let i = 0; i < f.length; i++) s += `${proj[f[i]][0].toFixed(1)} ${proj[f[i]][1].toFixed(1)}${i === f.length - 1 ? 'Z' : 'L'}`
-        fill[(m.base ? 0 : binOf(depth / f.length)) * SHADES + shadeOf(m.pts, f)] += s
+        const bin = m.base ? 0 : binOf(depth / f.length + bias)
+        if (bin > top) top = bin
+        fill[bin * SHADES + shadeOf(m.pts, f)] += s
       }
     }
     for (const [a, b] of m.edges) {
@@ -184,11 +206,21 @@ export function buildLayers(meshes: Mesh[], cam: Cam, vp: Viewport, tracked: Tra
       const pb = proj[b]
       if (pa[2] <= 0.06 || pb[2] <= 0.06) continue
       // one bin nearer, so a face never paints over its own outline. a base's edges go right after its faces
-      const i = m.base ? 0 : Math.min(BINS - 1, binOf((pa[2] + pb[2]) / 2) + (m.ghost ? 0 : 1))
+      const i = m.base ? 0 : Math.max(top, Math.min(BINS - 1, binOf((pa[2] + pb[2]) / 2 + bias) + (m.ghost ? 0 : 1)))
       line[i] += `M${pa[0].toFixed(1)} ${pa[1].toFixed(1)}L${pb[0].toFixed(1)} ${pb[1].toFixed(1)}`
+    }
+    if (seen && back && !m.base) {
+      const have = new Set(m.edges.map(([a, b]) => (a < b ? a * 65536 + b : b * 65536 + a)))
+      for (const k of seen) {
+        if (!back.has(k) || have.has(k)) continue
+        const pa = proj[Math.floor(k / 65536)]
+        const pb = proj[k % 65536]
+        const i = Math.max(top, Math.min(BINS - 1, binOf((pa[2] + pb[2]) / 2 + bias) + 1))
+        line[i] += `M${pa[0].toFixed(1)} ${pa[1].toFixed(1)}L${pb[0].toFixed(1)} ${pb[1].toFixed(1)}`
+      }
     }
   }
   const anchors: Record<string, [number, number, number]> = {}
   for (const k in tracked) anchors[k] = project(tracked[k])
-  return { fill, line, anchors }
+  return { fill, line, under, anchors }
 }
