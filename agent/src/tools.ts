@@ -27,12 +27,12 @@ const NOTES: Record<string, string> = {
   'wokwi-neopixel': 'one ws2812 pixel. VDD 5V, VSS GND, DIN to a digital pin. Adafruit_NeoPixel, NEO_GRB + NEO_KHZ800, call begin()',
   'wokwi-led-ring': 'ws2812 ring. VCC 5V, GND, DIN to a digital pin. attrs: pixels (default "16"). Adafruit_NeoPixel, NEO_GRB + NEO_KHZ800, call begin(). 3 bytes of ram a pixel',
   'wokwi-servo': 'V+ 5V, GND, PWM to a digital pin. Servo library, attach(pin), write(0..180)',
-  'wokwi-hc-sr04': 'ultrasonic distance. VCC 5V (not 3.3V), GND, TRIG and ECHO to digital pins. trigger 10us high, pulseIn(ECHO, HIGH, 30000) / 58 = cm. attrs: distance (cm). test control: distance (2 to 400)',
+  'wokwi-hc-sr04': 'ultrasonic distance. VCC 5V (not 3.3V), GND, TRIG and ECHO to digital pins. trigger 10us high, pulseIn(ECHO, HIGH, 30000) / 58 = cm, it can read a cm under the true distance. attrs: distance (cm as a string, like "30"). test control: distance (2 to 400)',
   'wokwi-photoresistor-sensor': 'light sensor module (photoresistor). VCC to 5V (3V3 on a pico), GND, AO to an analog pin: analogRead goes DOWN as the light goes up, about 250 at 500 lux (a lit room), over 900 at 1 lux (dark). DO to a digital pin reads HIGH when dark, LOW when bright, switching near 100 lux. wire AO, DO or both. attrs: lux (default 500). test control: lux (0.1 to 100000)',
   'wokwi-rgb-led': 'rgb led, common cathode: COM to GND, R G B each through its own 220 ohm resistor to a pwm pin, analogWrite(pin, 0..255) mixes the colour. attrs: common ("cathode" default, or "anode": COM to 5V and a channel lights when its pin is LOW). tests: wait-color and expect-color read the colour by name',
   'wokwi-slide-switch': 'slide switch, three pins: 2 is the middle. wire 2 to a digital pin, 1 to GND and 3 to 5V, then digitalRead is LOW with the lever at 1 and HIGH at 3. or leave 3 open and use INPUT_PULLUP, then the lever at 3 reads HIGH from the pull up. attrs: value ("0" or "1"). test control: value (0 or 1)',
   'wokwi-7segment': 'one 7 segment digit, common cathode. segments A B C D E F G (and DP) each to a digital pin, COM.1 through one 220 ohm resistor to GND (or a resistor on each segment). COM.1 and COM.2 are the same pin inside: wire only COM.1 and leave COM.2 unconnected, a wire on COM.2 bypasses the resistor. a segment lights when its pin is HIGH. bits for 0..9 in A..G order (A is bit 0): 0x3f 0x06 0x5b 0x4f 0x66 0x6d 0x7d 0x07 0x7f 0x6f. attrs: common ("cathode" default, or "anode": COM to 5V, segments light LOW). tests: wait-digit and expect-digit read the number it shows',
-  'wokwi-lcd1602': '16x2 character lcd with an i2c backpack at 0x27. set attrs pins: "i2c". VCC to 5V (VBUS on a pico), GND, SDA to A4, SCL to A5 (GP4 and GP5 on a pico). #include <LiquidCrystal_I2C.h>, LiquidCrystal_I2C lcd(0x27, 16, 2), lcd.init() then lcd.backlight() in setup, lcd.setCursor(col, row), lcd.print(...), lcd.clear(). init() takes about a second, and print does not wipe what was there, so pad or clear. tests: expect-text and wait-text work on it, the text is both rows joined by a newline',
+  'wokwi-lcd1602': '16x2 character lcd with an i2c backpack at 0x27. set attrs pins: "i2c". VCC to 5V (VBUS on a pico), GND, SDA to A4, SCL to A5 (GP4 and GP5 on a pico). #include <LiquidCrystal_I2C.h>, LiquidCrystal_I2C lcd(0x27, 16, 2), lcd.init() then lcd.backlight() in setup, lcd.setCursor(col, row), lcd.print(...), lcd.clear(). init() takes about a second. print does not wipe what was there, so overwrite with text padded to a fixed width. do not lcd.clear() in loop(): writing over i2c is slow, the screen is half drawn while it redraws and a test can read it that way. each row holds 16 characters and anything past that is cut off, so plan both rows to fit, like "T 24.0C  H 40%". tests: expect-text and wait-text work on it, the text is both rows joined by a newline',
   'wokwi-pir-motion-sensor': 'pir motion sensor (hc-sr501). VCC to 5V (VBUS on a pico), GND, OUT to a digital pin: HIGH while something moves, and it stays HIGH for delayTime seconds after the motion stops. pinMode INPUT, no pull up needed. attrs: delayTime (seconds, default 5). test control: motion (1 moving, 0 still); after motion 0 a test must wait out delayTime before OUT drops',
   'wokwi-dht22': 'temperature and humidity on one wire. VCC to 5V (3V3 on a pico), GND, SDA to a digital pin, leave NC alone. #include <DHT.h>, DHT dht(pin, DHT22), dht.begin() in setup, then dht.readTemperature() and dht.readHumidity(), they return NAN when the read fails. it answers at most every 2 seconds, so read it no faster than that. attrs: temperature (C, default 24), humidity (%, default 40). test controls: temperature (-40 to 80), humidity (0 to 100); a test has to wait over 2 s after changing one before the sketch sees it',
   'wokwi-buzzer': 'passive buzzer. 2 (+) to a digital pin, 1 (-) to GND. tone(pin, hz) and noTone(pin), a steady HIGH is silent',
@@ -112,6 +112,10 @@ const boardOf = (ws: Workspace) => {
 const fingerprint = (ws: Workspace) => JSON.stringify([ws.diagram, ws.sketch, ws.test])
 
 // each tool returns a plain object, it goes back to the model as json
+// a failed build with no compiler error: arduino-cli's own summary is all there is, and it is not about the code
+const HICCUP = 'the build failed without a compiler error, so it was the build server and not your sketch. call compile again'
+const tail = (log: string) => log.replace(/\u001b\[[0-9;]*m/g, '').trim().slice(-400)
+
 export async function callTool(ws: Workspace, name: string, args: any): Promise<Record<string, unknown>> {
   switch (name) {
     case 'list_parts':
@@ -159,13 +163,19 @@ export async function callTool(ws: Workspace, name: string, args: any): Promise<
       const pico = boardOf(ws) === 'pico'
       return b.ok
         ? { ok: true, flash: pico ? `${b.flash} bytes` : `${b.flash} of 32256 bytes`, ram: pico ? `${b.ram} of 264 kb` : `${b.ram} of 2048 bytes before malloc`, warnings: b.diagnostics.filter((d) => d.severity === 'warning').slice(0, 5) }
-        : { ok: false, errors: b.diagnostics.length ? b.diagnostics.slice(0, 8) : [b.log.slice(-1500)] }
+        : b.diagnostics.length
+          ? { ok: false, errors: b.diagnostics.slice(0, 8) }
+          : { ok: false, errors: [HICCUP, tail(b.log)] }
     }
 
     case 'run_test': {
       if (!ws.diagram || !ws.sketch || !ws.test) return { ok: false, errors: [`missing: ${[!ws.diagram && 'circuit', !ws.sketch && 'sketch', !ws.test && 'test'].filter(Boolean).join(', ')}`] }
-      if (!ws.build) ws.build = await compile(boardOf(ws), { 'sketch.ino': ws.sketch })
-      if (!ws.build.ok) return { ok: false, compile_errors: ws.build.diagnostics.slice(0, 8) }
+      // a build that failed with no compiler error was the build server, not the code: try once more before giving up
+      if (!ws.build || (!ws.build.ok && !ws.build.diagnostics.length)) ws.build = await compile(boardOf(ws), { 'sketch.ino': ws.sketch })
+      if (!ws.build.ok)
+        return ws.build.diagnostics.length
+          ? { ok: false, compile_errors: ws.build.diagnostics.slice(0, 8), next: 'the sketch does not compile: fix these, then run_test again' }
+          : { ok: false, compile_errors: [HICCUP, tail(ws.build.log)] }
       const bench = new Bench(Circuit.parse(ws.diagram).circuit!, ws.build.hex ?? ws.build.uf2!, ws.build.symbols)
       const report = run(bench, parseScenario(ws.test).scenario!)
       ws.report = report
