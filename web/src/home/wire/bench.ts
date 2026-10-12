@@ -1,4 +1,4 @@
-import { box, cyl, grid, mesh, ring, rotX, seg, translate, type Edge, type Mesh, type V3 } from './vec'
+import { box, cyl, grid, mesh, rotX, seg, translate, type Edge, type Mesh, type V3 } from './vec'
 
 // the parking sensor on the bench: an uno, a half breadboard, the sonar standing at its front edge,
 // the oled standing at the back, the led ring lifted on its pins and a buzzer, with jumpers arcing
@@ -108,7 +108,7 @@ function oled(): Mesh[] {
 // the 16 pixel ring lifted on three pins, flat, its pixels as little boxes
 function ledRing(): Mesh[] {
   const y = BB_TOP + 0.55
-  const out: Mesh[] = [translate(cyl(0.6, 0.06, 32, 0, 0), [0, y - 0.03, 0])]
+  const out: Mesh[] = [{ ...translate(cyl(0.6, 0.06, 32, 0, 0), [0, y - 0.03, 0]), bias: 0.5 }]
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2
     out.push(translate(box(0.1, 0.05, 0.1), [Math.cos(a) * 0.49, y + 0.03, Math.sin(a) * 0.49]))
@@ -119,7 +119,7 @@ function ledRing(): Mesh[] {
 
 function buzzer(): Mesh[] {
   const y = BB_TOP + 0.17
-  return at([cyl(0.3, 0.3, 22, 0, 8), translate(ring(0.08, 12), [0, 0.15, 0]), pins(2, [-0.06, -0.15, 0], [0.12, 0, 0], 0.05)], [BB.x + 1.15, y, BB.z + 0.45])
+  return at([cyl(0.3, 0.3, 22, 0, 8), pins(2, [-0.06, -0.15, 0], [0.12, 0, 0], 0.05)], [BB.x + 1.15, y, BB.z + 0.45])
 }
 
 // the uno's headers to the breadboard, each a jumper arcing over the gap
@@ -141,7 +141,7 @@ function jumpers(): Mesh[] {
 
 // the desk, faint, so the build has a floor to sit on
 function desk(): Mesh[] {
-  return [{ ...translate(grid(7.2, 3.6, 6, 3, 1), [0, DESK, 0]), base: true }]
+  return [{ ...translate(grid(7.2, 3.6, 6, 3, 1), [0, DESK, 0]), floor: true }]
 }
 
 export function benchMeshes(): Mesh[] {
