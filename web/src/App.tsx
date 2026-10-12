@@ -48,18 +48,22 @@ type Float = 'prompt' | 'parts' | null
 function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     try {
-      const saved = localStorage.getItem('blinkproof:theme')
+      // the old blinkproof:theme key got written on every load, so it holds the os setting, not a choice
+      const saved = localStorage.getItem('blinkproof:theme-picked')
       if (saved === 'light' || saved === 'dark') return saved
     } catch {}
-    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return 'light'
   })
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    try {
-      localStorage.setItem('blinkproof:theme', theme)
-    } catch {}
   }, [theme])
-  return [theme, setTheme] as const
+  const pick = (t: Theme) => {
+    setTheme(t)
+    try {
+      localStorage.setItem('blinkproof:theme-picked', t)
+    } catch {}
+  }
+  return [theme, pick] as const
 }
 
 // an icon button inside a toolbar pill
