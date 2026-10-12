@@ -122,7 +122,7 @@ function Symbol({ s, top, lit, onPick }: { s: Sym; top?: string; lit: boolean; o
   )
 }
 
-function Drawing({ sheet, state, zoom }: { sheet: Sheet; state: SheetState; zoom: number }) {
+function Drawing({ sheet, state, zoom, fill = false }: { sheet: Sheet; state: SheetState; zoom: number; fill?: boolean }) {
   const { net, setNet, part, setPart } = state
   // a picked net stands out and the rest steps back
   const fade = (n: string) => (net && n !== net ? 0.3 : 1)
@@ -134,7 +134,7 @@ function Drawing({ sheet, state, zoom }: { sheet: Sheet; state: SheetState; zoom
   }
   const topOf = (id: string) => sheet.pins.find((p) => p.part === id && p.side === 'u')?.pin
   return (
-    <svg width={sheet.w * SCALE * zoom} height={sheet.h * SCALE * zoom} viewBox={`0 0 ${sheet.w} ${sheet.h}`} className="block font-mono" style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}>
+    <svg width={fill ? '100%' : sheet.w * SCALE * zoom} height={fill ? undefined : sheet.h * SCALE * zoom} viewBox={`0 0 ${sheet.w} ${sheet.h}`} className="block font-mono" style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}>
       {sheet.wires.map((w, i) => (
         <g key={`w${i}`} opacity={fade(w.net)} onClick={pickNet(w.net)} className="cursor-pointer">
           <polyline points={w.pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="transparent" strokeWidth="6" />
@@ -314,6 +314,35 @@ export function NetsPanel({ state }: { state: SheetState }) {
           </div>
         </Section>
       )}
+    </div>
+  )
+}
+
+// the small version for onboarding: the whole sheet fitted to the panel, its nets as chips under it
+export function SheetCard({ diagram, title }: { diagram: Diagram; title: string }) {
+  const state = useSheet(diagram, 'onboard')
+  const { sheet, net, setNet, setPart } = state
+  if (!sheet) return <p className="text-[12px] text-dim">There is no board in this circuit yet.</p>
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between text-[12px] font-semibold text-ink">
+        <span className="truncate">{title}</span>
+        <span className="text-[11px] font-normal text-dim">{sheet.nets.length} nets</span>
+      </div>
+      <div className="rounded-[10px] p-2.5 shadow-[inset_0_0_0_1px_var(--divider)]" style={{ background: C.sheet }} onClick={() => (setNet(null), setPart(null))}>
+        <Drawing sheet={sheet} state={state} zoom={1} fill />
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-1">
+        {sheet.nets.map((n) => {
+          const at = n.kind === 'signal' ? netSays(n, sheet.symbols.find((s) => s.kind === 'board')!.id).split(' ')[0] : `${n.pins.length} pins`
+          return (
+            <button key={n.id} onClick={() => (setPart(null), setNet(net === n.id ? null : n.id))} className={`inline-flex h-[22px] items-center gap-[5px] rounded-[6px] px-2 text-[10.5px] text-ink shadow-[inset_0_0_0_1px_var(--divider)] ${net === n.id ? 'bg-input' : 'bg-frame hover:bg-hover'}`}>
+              {n.name}
+              <span className="text-dim">{at}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -1,12 +1,12 @@
 import { BaseEdge, EdgeLabelRenderer, applyNodeChanges, type NodeChange, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useNodesInitialized, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { connect, freePins, type Diagram, type PARTS } from '@blinkproof/sim'
+import { connect, freePins, proto, schematic, type Diagram, type PARTS } from '@blinkproof/sim'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, Logo, type IconName } from '../icons/Icon'
 import { PART_ICON, Status } from '../icons/Status'
-import { BreadboardGuide } from './Breadboard'
+import { BreadboardGuide, ShoppingList } from './Breadboard'
+import { SheetCard } from './Schematic'
 import { PartFacts } from './Facts'
-import { BuildGuide, bom } from './Guide'
 import { Account } from './Account'
 import { api, pending, type Saved, type useMe } from './library'
 import { useSampler, type Happening, type Live, type Point } from '../lib/live'
@@ -483,7 +483,7 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines, stops, sim }:
       // centred in the room that is left: with the panel open the path moves over beside it
       const r = box.current!.getBoundingClientRect()
       const b = flow.getNodesBounds(flow.getNodes())
-      const pad = { top: 80, bottom: 60, left: 60, right: picked ? (picked === 'wiring' ? 680 : 440) : 60 }
+      const pad = { top: 80, bottom: 60, left: 60, right: picked ? (picked === 'wiring' ? 680 : picked === 'schematic' ? 620 : 440) : 60 }
       const w = r.width - pad.left - pad.right
       const h = r.height - pad.top - pad.bottom
       // the open request card stays at reading size, a path gets fitted
@@ -491,7 +491,7 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines, stops, sim }:
       flow.setViewport({ x: pad.left + (w - b.width * zoom) / 2 - b.x * zoom, y: pad.top + (h - b.height * zoom) / 2 - b.y * zoom, zoom }, { duration: document.visibilityState === 'visible' ? 500 : 0 })
     }, 40)
     return () => clearTimeout(t)
-  }, [ready, nodes.length, picked === null, picked === 'wiring', hasBoard])
+  }, [ready, nodes.length, picked === null, picked === 'wiring', picked === 'schematic', hasBoard])
   return (
     <div ref={box} className="h-full w-full">
       <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} edgeTypes={edgeTypes} proOptions={{ hideAttribution: true }} nodesConnectable={false} elementsSelectable={false} panOnScroll minZoom={0.35} onNodeClick={(_, n) => (n.data as { onPick?: () => void }).onPick?.()} onPaneClick={() => onPick(null)} />
@@ -677,7 +677,20 @@ function LivePart({ id, type, live }: { id: string; type: string; live: Live }) 
 function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   const { diagram, source, test, runs, compiles, verdict, feed, request } = props
   const tools = feed.filter((f): f is Extract<FeedItem, { kind: 'tool' }> => f.kind === 'tool')
-  if (id === 'parts') return diagram ? <BuildGuide diagram={diagram} only="parts" /> : null
+  if (id === 'parts') return diagram ? <div className="-mx-4 -mt-1"><ShoppingList diagram={diagram} /></div> : null
+  if (id === 'schematic')
+    return diagram ? (
+      <>
+        <p className="mb-4 rounded-[9px] bg-input px-3 py-2.5 text-[12.5px] leading-[19px] text-ink">The same circuit drawn the way an engineer reads it: each part as its symbol, power and ground as marks, and signals joined by their names.</p>
+        <SheetCard diagram={diagram} title={cap(request.split(/[:.]/)[0])} />
+        {props.savedId && (
+          <a href={`/b/${props.savedId}/schematic`} className="mt-4 flex h-9 items-center justify-between rounded-[9px] border border-line px-3 text-[12.5px] font-medium text-ink hover:bg-hover">
+            Open the full schematic
+            <Icon name="chevron-right" size={12} />
+          </a>
+        )}
+      </>
+    ) : null
   if (id === 'wiring')
     return diagram ? (
       <>
@@ -923,6 +936,7 @@ const HEAD: Record<string, [IconName, string]> = {
   firmware: ['code', 'Firmware'],
   test: ['flask', 'Test'],
   proven: ['circle-check', 'Proven'],
+  schematic: ['resistor', 'See the schematic'],
   parts: ['box', 'Get the parts'],
   wiring: ['wire', 'Build it on a breadboard'],
   flash: ['bolt', 'Flash your board'],
@@ -1028,7 +1042,7 @@ export function Onboarding(props: Props) {
         <Logo size={18} />
         blinkproof
       </button>
-      <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out ${picked === 'wiring' ? 'mr-[620px]' : picked ? 'mr-[380px]' : ''}`}>
+      <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out ${picked === 'wiring' ? 'mr-[620px]' : picked === 'schematic' ? 'mr-[560px]' : picked ? 'mr-[380px]' : ''}`}>
         {(started || shown) && (
           <button onClick={() => onEditor(openId)} disabled={!openId} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink disabled:opacity-40">
             Open in the editor
@@ -1181,10 +1195,15 @@ export function Onboarding(props: Props) {
   // once it is proven the line keeps going, into what you do with it: get the parts, wire them, flash the board
   const after = (d?: Diagram | null): Stop[] => {
     if (!d) return []
-    const pieces = bom(d).reduce((a, l) => a + (l.type === 'wire' ? 0 : l.count), 0)
+    // counted the way the shopping list counts: the board, every part, and the breadboard
+    const p = proto(d)
+    const pieces = p ? p.placed.length + p.beside.length + 2 : 0
+    const sheet = schematic(d)
+    const parts = sheet ? sheet.symbols.filter((y) => y.kind !== 'board').length : 0
     const pico = d.parts.some((p) => p.type === 'wokwi-pi-pico')
     return [
-      { id: 'parts', title: 'Get the parts', icon: 'box', state: 'next', line: `${pieces} pieces` },
+      ...(sheet ? [{ id: 'schematic', title: 'See the schematic', icon: 'resistor', state: 'next', line: `${sheet.nets.length} nets, ${parts} ${parts === 1 ? 'part' : 'parts'}` } as Stop] : []),
+      { id: 'parts', title: 'Get the parts', icon: 'box', state: 'next', line: `${pieces} pieces, where to buy` },
       { id: 'wiring', title: 'Build it on a breadboard', icon: 'wire', state: 'next', line: 'step by step, hole by hole' },
       { id: 'flash', title: 'Flash your board', icon: 'bolt', state: 'next', line: pico ? 'drop the uf2 on it' : 'upload it over usb' },
       { id: 'keep', title: 'Keep it', icon: 'link', state: 'next', line: 'its own link, open it later' },
@@ -1264,7 +1283,7 @@ export function Onboarding(props: Props) {
           <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} stops={stops} sim={sim} />
         </ReactFlowProvider>
       </div>
-      <aside className={`absolute bottom-0 right-0 top-0 z-30 flex flex-col border-l border-line bg-panel transition-[transform,width] duration-300 ease-out ${picked === 'wiring' ? 'w-[620px]' : 'w-[380px]'} ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
+      <aside className={`absolute bottom-0 right-0 top-0 z-30 flex flex-col border-l border-line bg-panel transition-[transform,width] duration-300 ease-out ${picked === 'wiring' ? 'w-[620px]' : picked === 'schematic' ? 'w-[560px]' : 'w-[380px]'} ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
         {picked && (
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">
