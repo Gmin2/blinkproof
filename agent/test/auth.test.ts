@@ -57,22 +57,49 @@ describe('github sign in', () => {
     expect((await (await fetch(`${base}/me`, { headers: { cookie: forged } })).json()).user).toBeNull()
   })
 
-  it('needs you signed in to build, then lists only your builds', async () => {
+  it('builds signed out, shows it to that browser only, and keeps it for you once you sign in', async () => {
     const body = JSON.stringify({ request: 'a night light' })
-    const anon = await fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
-    expect(anon.status).toBe(401)
+    const anon = await fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.0.0.1' }, body })
+    expect(anon.status).toBe(200)
+    const made = cookieOf(anon, 'bp_made')
+    const id = JSON.parse((await anon.text()).split('\n\n')[0].slice(6)).id
+    expect((await store.get(id))?.owner).toBeUndefined()
 
-    const session = await signIn()
-    const res = await fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: session }, body })
-    const id = JSON.parse((await res.text()).split('\n\n')[0].slice(6)).id
-    expect(await store.get(id)).toMatchObject({ owner: '42', ownerLogin: 'octo' })
-
-    const mine = await (await fetch(`${base}/builds`, { headers: { cookie: session } })).json()
-    expect(mine.map((b: any) => b.id)).toContain(id)
+    // this browser sees it, another one does not
+    expect((await (await fetch(`${base}/builds`, { headers: { cookie: made } })).json()).map((b: any) => b.id)).toEqual([id])
     expect(await (await fetch(`${base}/builds`)).json()).toEqual([])
 
+    // signing in hands it over and forgets the cookie
+    const start = await fetch(`${base}/auth/github?next=/b/${id}`, { redirect: 'manual' })
+    const state = new URL(start.headers.get('location')!).searchParams.get('state')!
+    const back = await fetch(`${base}/auth/github/callback?code=c&state=${state}`, { redirect: 'manual', headers: { cookie: `${cookieOf(start, 'bp_state')}; ${made}` } })
+    expect(back.headers.get('location')).toBe(`/b/${id}`)
+    expect(cookieOf(back, 'bp_made')).toBe('bp_made=')
+    expect(await store.get(id)).toMatchObject({ owner: '42', ownerLogin: 'octo' })
+    const session = cookieOf(back, 'bp_session')
+    expect((await (await fetch(`${base}/builds`, { headers: { cookie: session } })).json()).map((b: any) => b.id)).toContain(id)
+
+    // now it is someone's, a stranger cannot rename it
     const rename = await fetch(`${base}/builds/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'mine now' }) })
     expect(rename.status).toBe(403)
+  })
+
+  it('does not let a cookie claim builds it never made', async () => {
+    const b = await store.create({ kind: 'build', title: 'someone else', status: 'proven' })
+    const forged = `bp_made=${Buffer.from(JSON.stringify([b.id])).toString('base64url')}.nope`
+    expect(await (await fetch(`${base}/builds`, { headers: { cookie: forged } })).json()).toEqual([])
+  })
+
+  it('gives a browser two free builds a day signed out, then asks it to sign in', async () => {
+    const body = JSON.stringify({ request: 'a blinker' })
+    const go = (cookie = '') => fetch(`${base}/build`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.0.0.2', cookie }, body })
+    expect((await (await go()).text()).length).toBeGreaterThan(0)
+    expect((await (await go()).text()).length).toBeGreaterThan(0)
+    const third = await go()
+    expect(third.status).toBe(429)
+    expect(await third.text()).toMatch(/sign in/)
+    // signed in it carries on
+    expect((await go(await signIn())).status).toBe(200)
   })
 
   it('never sends you off to another site after signing in', async () => {

@@ -29,6 +29,8 @@ type Props = {
   compiles: Compiled[]
   verdict: Verdict | null
   savedId?: string
+  // an example opened from the list, not a build of yours
+  example?: boolean
   recent: Saved[]
   examples: Saved[]
   onEditor: (id?: string) => void
@@ -759,8 +761,20 @@ function Panel({ id, props, live }: { id: string; props: Props; live: Live }) {
   if (id === 'keep') {
     const link = props.savedId ? `${location.origin}/b/${props.savedId}` : ''
     const guide = link && `${link}/build`
+    const me = props.me
     return (
       <>
+        {me.needs && props.savedId && !props.example && (
+          <div className="mb-4 rounded-[10px] border border-line bg-input p-3">
+            <p className="text-[12.5px] font-medium text-ink">Save it to your account</p>
+            <p className="mt-1 text-[12px] leading-[18px] text-dim">It is kept in this browser for now. Sign in and it is yours, with everything else you build, in the editor on any device.</p>
+            <button onClick={() => me.signIn(`/b/${props.savedId}`)} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-[9px] bg-accent text-[12.5px] font-semibold text-on-accent hover:bg-accent-hover">
+              <Icon name="logo-github" size={14} />
+              Sign in with GitHub to save
+            </button>
+          </div>
+        )}
+        {me.user && !props.example && <p className="mb-3 text-[12px] leading-[18px] text-ink">Saved to your account, {me.user.login}. It is in the editor's list with your other builds.</p>}
         <p className="text-[12px] leading-[18px] text-dim">Every build gets its own link. Open it later, send it to someone, or keep changing it in the editor.</p>
         <div className="mt-3 flex items-center gap-1.5 rounded-[9px] border border-line bg-input py-1 pl-3 pr-1">
           <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">{link || 'saving...'}</span>
@@ -1193,7 +1207,8 @@ export function Onboarding(props: Props) {
     : { label: cap(request.split(/[:.]/)[0]), sub: ideaLines[ideaLines.length - 1] ?? (verdict ? (verdict.ok ? 'proven' : 'not proven') : 'the agent is building it'), lines: ideaLines, badge: 'Building' }
   const pathDiagram = shown ? (shown.diagram ?? null) : diagram
   // once it is proven the line keeps going, into what you do with it: get the parts, wire them, flash the board
-  const after = (d?: Diagram | null): Stop[] => {
+  // an example someone opened is not theirs to save, a build they ran is
+  const after = (d?: Diagram | null, example = false): Stop[] => {
     if (!d) return []
     // counted the way the shopping list counts: the board, every part, and the breadboard
     const p = proto(d)
@@ -1206,7 +1221,9 @@ export function Onboarding(props: Props) {
       { id: 'parts', title: 'Get the parts', icon: 'box', state: 'next', line: `${pieces} pieces, where to buy` },
       { id: 'wiring', title: 'Build it on a breadboard', icon: 'wire', state: 'next', line: 'step by step, hole by hole' },
       { id: 'flash', title: 'Flash your board', icon: 'bolt', state: 'next', line: pico ? 'drop the uf2 on it' : 'upload it over usb' },
-      { id: 'keep', title: 'Keep it', icon: 'link', state: 'next', line: 'its own link, open it later' },
+      props.me.needs && !example
+        ? { id: 'keep', title: 'Save it', icon: 'link', state: 'next', line: 'sign in with github to keep it' }
+        : { id: 'keep', title: 'Keep it', icon: 'link', state: 'next', line: props.me.user ? `saved to ${props.me.user.login}` : 'its own link, open it later' },
     ]
   }
   // the stops after the board, each saying what is happening there right now
@@ -1218,7 +1235,7 @@ export function Onboarding(props: Props) {
         { id: 'firmware', title: 'Firmware', icon: 'code', state: shown.sketch ? 'done' : 'wait', line: running ?? (shown.sketch ? `${shown.sketch.split('\n').length} lines` : 'none yet') },
         { id: 'test', title: 'Test', icon: 'flask', state: shown.test ? 'done' : 'wait', line: shown.test ? `${n} steps, all pass` : 'no test for this one' },
         { id: 'proven', title: shown.test ? 'Proven' : 'No test yet', icon: shown.test ? 'circle-check' : 'circle-info', state: shown.test ? 'done' : 'wait', line: shown.test ? 'it does what it says' : 'write one in the editor' },
-        ...after(shown.diagram),
+        ...after(shown.diagram, true),
       ]
     }
     const source = props.source
@@ -1289,14 +1306,14 @@ export function Onboarding(props: Props) {
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">
               <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-medium text-ink">
                 <Icon name={HEAD[picked]?.[0] ?? PART_ICON[(shown?.diagram ?? diagram)?.parts.find((p) => p.id === picked)?.type ?? ''] ?? 'chip'} size={15} className="text-icon" />
-                <span className="truncate">{HEAD[picked]?.[1] ?? picked}</span>
+                <span className="truncate">{picked === 'keep' && props.me.needs && !shown ? 'Save it' : (HEAD[picked]?.[1] ?? picked)}</span>
               </span>
               <button onClick={() => setPicked(null)} title="close" className="flex h-7 w-7 items-center justify-center rounded-full text-icon-2 hover:bg-hover hover:text-ink">
                 <Icon name="xmark" size={12} />
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-4">
-              <Panel id={picked} live={live} props={shown ? { ...props, diagram: shown.diagram ?? null, source: shown.sketch, test: shown.test, request: shown.title, runs: [], compiles: [], verdict: null, feed: [], savedId: shown.id, onReset: startOver } : { ...props, onReset: startOver }} />
+              <Panel id={picked} live={live} props={shown ? { ...props, diagram: shown.diagram ?? null, source: shown.sketch, test: shown.test, request: shown.title, runs: [], compiles: [], verdict: null, feed: [], savedId: shown.id, example: true, onReset: startOver } : { ...props, onReset: startOver }} />
             </div>
             {openId && (
               <div className="border-t border-sep p-3">

@@ -4,7 +4,7 @@ import { flush, init, shutdown } from 'neatlogs'
 import { build as agentBuild, type Event } from './agent.ts'
 import { auth as githubAuth } from './auth.ts'
 import { listModels } from './models.ts'
-import { dynamoStore, memoryStore, type Build, type Store } from './store.ts'
+import { dynamoStore, memoryStore, newId, type Build, type Store } from './store.ts'
 
 type BuildFn = (request: string, opts: { model?: string; sessionId: string; tags: string[]; onEvent: (e: Event) => void; circuit?: unknown }) => ReturnType<typeof agentBuild>
 
@@ -18,6 +18,28 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
   const by = (req: express.Request) => {
     const u = auth.user(req)
     return u ? { owner: u.id, ownerLogin: u.login } : {}
+  }
+  // made signed out: this browser remembers it, so the sidebar shows it and signing in keeps it
+  const keep = (req: express.Request, res: express.Response, id: string) => {
+    if (auth.on && !auth.user(req)) auth.remember(req, res, id)
+  }
+  auth.claim = async (u, ids) => {
+    for (const id of ids) {
+      const b = await store.get(id)
+      if (b && b.kind === 'build' && !b.owner) await store.update(id, { owner: u.id, ownerLogin: u.login })
+    }
+  }
+  // the agent spends tokens: signed out, a browser gets a few builds a day, then it is asked to sign in
+  const FREE = 2
+  const tries = new Map<string, { day: string; n: number }>()
+  const spend = (req: express.Request) => {
+    const day = new Date().toISOString().slice(0, 10)
+    const key = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim()
+    const t = tries.get(key)
+    const n = t && t.day === day ? t.n : 0
+    if (n >= FREE) return false
+    tries.set(key, { day, n: n + 1 })
+    return true
   }
   let busy = false
 
@@ -34,7 +56,13 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     const kind = req.query.kind === 'example' ? 'example' : 'build'
     const limit = Math.min(100, Number(req.query.limit ?? 30))
     const user = auth.user(req)
-    const list = kind === 'build' && auth.on ? (user ? await store.mine(user.id, limit) : []) : await store.list(kind, limit)
+    // signed out, the builds are the ones this browser made
+    const list =
+      kind === 'build' && auth.on
+        ? user
+          ? await store.mine(user.id, limit)
+          : (await Promise.all(auth.made(req).reverse().slice(0, limit).map((id) => store.get(id)))).filter((b): b is Build => !!b && !b.owner)
+        : await store.list(kind, limit)
     res.json(list.map(({ diagram, sketch, test, ...rest }) => rest))
   })
 
@@ -72,6 +100,7 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     const diagram = { version: 1, author: 'blinkproof', editor: 'blinkproof', parts: [{ type: blank.type, id: blank.id, left: 0, top: 0 }], connections: [] }
     const sketch = `void setup() {\n  Serial.begin(${blank.baud});\n}\n\nvoid loop() {\n}\n`
     const b = await store.create({ kind: 'build', title: blank.title, status: 'edited', diagram, sketch, ...by(req) })
+    keep(req, res, b.id)
     res.status(201).json(b)
   })
 
@@ -86,6 +115,7 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     if (!circuit) return void res.status(400).json({ error: `the circuit does not parse: ${errors[0]}` })
     const name = (title?.trim() || `${parent.title}, edited`).slice(0, 80)
     const b = await store.create({ kind: 'build', title: name, request: parent.request, model: parent.model, status: 'edited', diagram, sketch, test, forkOf: { id: parent.id, title: parent.title }, ...by(req) })
+    keep(req, res, b.id)
     res.status(201).json(b)
   })
 
@@ -94,11 +124,13 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     const { request, model, circuit } = (req.body ?? {}) as { request?: string; model?: string; circuit?: unknown }
     if (circuit !== undefined && !Circuit.parse(circuit).circuit) return void res.status(400).send('that circuit does not parse')
     if (!request?.trim()) return void res.status(400).send('say what to build')
-    // the agent spends tokens, so building with it needs an account
-    if (auth.on && !auth.user(req)) return void res.status(401).send('sign in with github to build with the agent')
     // one build at a time, the budget is shared
     if (busy) return void res.status(409).send('a build is already running')
+    if (auth.on && !auth.user(req) && !spend(req)) return void res.status(429).send('that is the free builds for today, sign in with github to keep building')
     busy = true
+    // the id is picked now so the cookie that remembers it can go out with the headers
+    const id = newId()
+    keep(req, res, id)
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
     const events: unknown[] = []
     const send = (data: unknown) => {
@@ -109,7 +141,7 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     const ping = setInterval(() => res.write(': ping\n\n'), 20_000)
     let record: Build | undefined
     try {
-      record = await store.create({ kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}), ...by(req) })
+      record = await store.create({ id, kind: 'build', title: titleOf(request), request, model, status: 'building', ...(circuit ? { diagram: circuit } : {}), ...by(req) })
       res.write(`data: ${JSON.stringify({ type: 'saved', id: record.id })}\n\n`)
       const result = await build(request, { model, sessionId: record.id, tags: circuit ? ['web', 'hand-wired'] : ['web'], onEvent: send, circuit })
       const ws = result.workspace

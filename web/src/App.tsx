@@ -102,8 +102,8 @@ export default function App() {
   const [route, go] = useRoute()
   const lib = useLibrary()
   const me = useMe()
-  // the agent needs an account: without one, keep what you were building and go sign in
-  const withAccount = (p: Parameters<typeof pending.save>[0], run: () => void) => (me.needs ? (pending.save(p), me.signIn()) : run())
+  // building needs no account: what you make signed out is kept in this browser, and signing in at the end saves it to you
+  const withAccount = (_p: Parameters<typeof pending.save>[0], run: () => void) => run()
   // the stored build or example the link points at, when it is not the one being built live
   const [doc, setDoc] = useState<Saved | null>()
   const [toast, setToast] = useState('')
