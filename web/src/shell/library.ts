@@ -79,12 +79,12 @@ export function useLibrary() {
   return { builds, examples, offline, loading, refresh, upsert }
 }
 
-// three pages: / is onboarding, /new is the editor with nothing open, /b/:id is anything stored
-export type Route = { kind: 'onboard' } | { kind: 'new' } | { kind: 'doc'; id: string; view?: 'build' | 'schematic' }
+// four pages: / is the homepage, /start is onboarding, /new is the editor with nothing open, /b/:id is anything stored
+export type Route = { kind: 'home' } | { kind: 'onboard' } | { kind: 'new' } | { kind: 'doc'; id: string; view?: 'build' | 'schematic' }
 
 const parse = (path: string): Route => {
   const m = path.match(/^\/b\/([\w-]+)(?:\/(build|schematic))?/)
-  return m ? { kind: 'doc', id: m[1], ...(m[2] ? { view: m[2] as 'build' | 'schematic' } : {}) } : path.startsWith('/new') ? { kind: 'new' } : { kind: 'onboard' }
+  return m ? { kind: 'doc', id: m[1], ...(m[2] ? { view: m[2] as 'build' | 'schematic' } : {}) } : path.startsWith('/new') ? { kind: 'new' } : path.startsWith('/start') ? { kind: 'onboard' } : { kind: 'home' }
 }
 
 export function useRoute() {
@@ -96,7 +96,7 @@ export function useRoute() {
   }, [])
   // replace keeps the back button sane when a new build gets its id
   const go = useCallback((r: Route, replace = false) => {
-    const path = r.kind === 'doc' ? `/b/${r.id}${r.view ? `/${r.view}` : ''}` : r.kind === 'new' ? '/new' : '/'
+    const path = r.kind === 'doc' ? `/b/${r.id}${r.view ? `/${r.view}` : ''}` : r.kind === 'new' ? '/new' : r.kind === 'onboard' ? '/start' : '/'
     if (location.pathname !== path) history[replace ? 'replaceState' : 'pushState'](null, '', path)
     setRoute(r)
   }, [])
