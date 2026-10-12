@@ -160,11 +160,13 @@ export async function compile(board: Board, files: Record<string, string>): Prom
         `arduino-cli compile -b ${target.fqbn} --warnings default --output-dir /w/sketch/build /w/sketch`,
         avr && '/root/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-nm /w/sketch/build/sketch.ino.elf > /w/sketch/build/symbols.txt',
       ].filter(Boolean).join(' && ')
+      // on linux the container writes as root, so open the build up again or the cleanup below cannot remove it
+      const wrapped = `(${script}); c=$?; chmod -R a+rwX /w/sketch; exit $c`
       const { code, out } = await run('docker', [
         'run', '--rm', '--network', 'none', '--memory', '1g', '--cpus', '2',
         // arduino-cli keeps compiled cores here, so a new sketch only compiles itself
         '-v', `${CORES}/${target.image}:/root/.cache/arduino`,
-        '-v', `${sketch}:/w/sketch`, target.image, 'sh', '-c', script,
+        '-v', `${sketch}:/w/sketch`, target.image, 'sh', '-c', wrapped,
       ], 90_000)
       const built = (f: string) => readFile(join(sketch, 'build', f)).catch(() => undefined)
       if (!avr) {
