@@ -781,7 +781,7 @@ export function Workbench({ diagram: given, editable = false, onDiagram, onHint,
 
       {/* the minimap, a little card in the corner with every part as a block */}
       {frame.w > 0 && !compact && (
-        <div className="pill absolute bottom-3 left-3 overflow-hidden p-1.5" style={{ borderRadius: 12 }}>
+        <div className="pill absolute bottom-3 left-3 overflow-hidden p-1.5 max-md:hidden" style={{ borderRadius: 12 }}>
           <svg width={112} height={112 * Math.min(0.7, frame.h / frame.w)} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`} preserveAspectRatio="xMidYMid meet" className="block">
             <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="var(--frame)" />
             {Object.entries(rects).map(([id, r]) => (

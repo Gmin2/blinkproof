@@ -175,6 +175,8 @@ body {
 
 .part {
   position: absolute;
+  /* a finger dragging a part moves the part, not the page */
+  touch-action: none;
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
 }
 

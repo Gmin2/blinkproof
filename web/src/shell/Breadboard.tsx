@@ -409,7 +409,7 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
           <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || !!picked} title="the step before" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-40">
             <Icon name="chevron-left" size={12} />
           </button>
-          <span className="min-w-[150px] px-1 text-center font-sans text-[12px] text-ink">
+          <span className="min-w-[150px] truncate px-1 text-center font-sans text-[12px] text-ink max-md:min-w-0 max-md:max-w-[150px]">
             {picked ? (
               picked
             ) : (
@@ -424,8 +424,8 @@ export function BuildView({ guide, diagram, title }: { guide: Guide; diagram: Di
           <button onClick={() => setStep(Math.min(last, step + 1))} disabled={step === last || !!picked} title="the next step" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-40">
             <Icon name="chevron-right" size={12} />
           </button>
-          <span className="mx-1.5 h-4 w-px bg-sep" />
-          <span className="px-1">{p.jumpers.length} wires</span>
+          <span className="mx-1.5 h-4 w-px bg-sep max-md:hidden" />
+          <span className="whitespace-nowrap px-1 max-md:hidden">{p.jumpers.length} wires</span>
           <span className="mx-1.5 h-4 w-px bg-sep" />
           <button onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.2).toFixed(1)))} title="zoom out" className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover">
             <Icon name="minus" size={12} />

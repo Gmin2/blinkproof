@@ -1,4 +1,18 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+// a phone, or any window too narrow for the panels beside the canvas
+const NARROW = '(max-width: 1023px)'
+
+export function useNarrow() {
+  const [narrow, setNarrow] = useState(() => matchMedia(NARROW).matches)
+  useEffect(() => {
+    const q = matchMedia(NARROW)
+    const on = () => setNarrow(q.matches)
+    q.addEventListener('change', on)
+    return () => q.removeEventListener('change', on)
+  }, [])
+  return narrow
+}
 
 // a width someone set by dragging, kept for next time
 export function useWidth(key: string, initial: number, min: number, max: number) {

@@ -15,6 +15,7 @@ import { api, drafts, useLibrary, useRoute, type Draft, type Saved, useMe, pendi
 import { KIND, Sidebar } from './shell/Sidebar'
 import { IDEAS, useBuild } from './shell/useBuild'
 import { Workbench, type BenchState } from './Workbench'
+import { useNarrow } from './shell/Resize'
 
 type Theme = 'light' | 'dark'
 
@@ -93,6 +94,20 @@ function Panel({ title, onClose, children, className = '', right }: { title: str
   )
 }
 
+// on a phone the sidebar and the inspector slide in over the canvas instead of sitting beside it
+function Drawer({ side, open, onClose, children }: { side: 'left' | 'right'; open: boolean; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className={`fixed inset-0 z-50 ${open ? '' : 'pointer-events-none'}`} inert={!open}>
+      <div className={`absolute inset-0 bg-black/30 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`} onClick={onClose} />
+      <div
+        className={`absolute inset-y-0 flex transition-transform duration-300 ease-out ${side === 'left' ? 'left-0 w-[min(300px,85vw)]' : 'right-0 w-[min(420px,100vw)]'} ${open ? 'translate-x-0' : side === 'left' ? '-translate-x-full' : 'translate-x-full'}`}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function download(name: string, text: string) {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
@@ -104,6 +119,9 @@ function download(name: string, text: string) {
 export default function App() {
   const [theme, setTheme] = useTheme()
   const [route, go] = useRoute()
+  const narrow = useNarrow()
+  const [drawer, setDrawer] = useState<'left' | 'right' | null>(null)
+  useEffect(() => setDrawer(null), [route, narrow])
   const lib = useLibrary()
   const me = useMe()
   // building needs no account: what you make signed out is kept in this browser, and signing in at the end saves it to you
@@ -444,7 +462,7 @@ export default function App() {
                 Revert
               </button>
               <button onClick={saveFork} disabled={saving} title="save your edit as a new build with its own link, cmd s" className="h-6 rounded-[7px] bg-input px-2 text-[11px] font-semibold text-ink disabled:opacity-40">
-                {saving ? 'Saving...' : 'Save as New Build'}
+                {saving ? 'Saving...' : narrow ? 'Save' : 'Save as New Build'}
               </button>
             </>
           )}
@@ -477,7 +495,7 @@ export default function App() {
   if (route.kind === 'home')
     return (
       <Suspense fallback={null}>
-        <Home me={me} onStart={() => go({ kind: 'onboard' })} onExample={() => open('parking')} onEditor={openNew} />
+        <Home />
       </Suspense>
     )
   if (route.kind === 'onboard')
@@ -506,9 +524,53 @@ export default function App() {
       />
     )
 
+  const sidebar = (
+    <Sidebar me={me} loading={lib.loading} meta={mode === 'build' ? stepOf : undefined} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={mode === 'build' ? guide.picked : mode === 'schematic' ? sheet.part : selected} onSelect={(id) => (setDrawer(null), mode === 'build' ? guide.setPicked(id) : mode === 'schematic' ? (sheet.setNet(null), sheet.setPart(id)) : select(id))} busy={build.busy} onParts={() => (setDrawer(null), toggle('parts'))} onClose={narrow ? () => setDrawer(null) : undefined} />
+  )
+  const inspector = (
+    <Inspector
+      mode={mode}
+      onMode={setMode}
+      guide={guide}
+      sheet={sheet}
+      diagram={diagram}
+      selected={selected}
+      bench={bench}
+      feed={build.feed}
+      verdict={build.verdict}
+      request={request}
+      test={test}
+      testRun={testRun}
+      onRunTest={runTest}
+      model={model}
+      models={models}
+      onModel={setModel}
+      forkOf={live ? undefined : doc?.forkOf}
+      wire={selectedWire && diagram ? diagram.connections.find((c) => `${c[0]}|${c[1]}` === selectedWire) : undefined}
+      onRecolorWire={(c) => selectedWire && recolorWire(selectedWire, c)}
+      onRemoveWire={() => selectedWire && removeWire(selectedWire)}
+      editable={!(build.busy && live)}
+      onRemovePart={removePart}
+      onSetAttr={setAttr}
+      code={codePanel}
+      serial={serialPanel}
+      onOpen={open}
+      canShare={route.kind === 'doc'}
+      onShare={share}
+      onDownload={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}
+      onClose={narrow ? () => setDrawer(null) : undefined}
+    />
+  )
+
   return (
     <div className="flex h-full">
-      <Sidebar me={me} loading={lib.loading} meta={mode === 'build' ? stepOf : undefined} route={route} onOpen={open} onNew={openNew} onRename={rename} builds={lib.builds} examples={lib.examples} drafts={draftIds} diagram={diagram} title={title} selected={mode === 'build' ? guide.picked : mode === 'schematic' ? sheet.part : selected} onSelect={mode === 'build' ? guide.setPicked : mode === 'schematic' ? (id) => (sheet.setNet(null), sheet.setPart(id)) : select} busy={build.busy} onParts={() => toggle('parts')} />
+      {narrow ? (
+        <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
+          {sidebar}
+        </Drawer>
+      ) : (
+        sidebar
+      )}
 
       <main className="relative min-w-0 flex-1 bg-canvas" onPointerDown={() => setZoomMenu(false)}>
         {/* building it for real: the breadboard takes the stage, the simulator stops until you come back */}
@@ -546,10 +608,10 @@ export default function App() {
             <Start examples={lib.examples} busy={build.busy} prompt={prompt} onPrompt={setPrompt} onDescribe={start} onOpen={open} onBlank={blank} />
           ) : (
           // a stored build with nothing to draw yet
-          <div className="flex h-full items-center justify-center pb-[120px]">
+          <div className="flex h-full items-center justify-center pb-[120px] max-lg:pb-0">
             <div className="relative">
               <span className="absolute -top-[18px] left-0 text-[11px] text-[var(--frame-label)]">{title}</span>
-              <div className="flex h-[260px] w-[440px] items-center justify-center bg-frame px-16 text-center text-[12px] leading-[18px] text-dim">
+              <div className="flex h-[260px] w-[min(440px,calc(100vw-40px))] items-center justify-center bg-frame px-16 text-center text-[12px] leading-[18px] text-dim">
                 {doc === null && !live
                   ? 'There is no build at this link. It may have been made on another server.'
                   : !live && doc
@@ -567,12 +629,18 @@ export default function App() {
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-between px-2.5">
           <div className="pointer-events-auto flex gap-[9px]">
-            <div className="pill flex items-center">
-              <Tool label="describe a gadget" onClick={openNew} active={route.kind === 'new'}>
-                <Logo size={24} />
-              </Tool>
-              <Tool icon="plus" label="new build" onClick={openNew} />
-            </div>
+            {narrow ? (
+              <div className="pill flex items-center">
+                <Tool icon="menu" label="builds and layers" onClick={() => setDrawer('left')} />
+              </div>
+            ) : (
+              <div className="pill flex items-center">
+                <Tool label="describe a gadget" onClick={openNew} active={route.kind === 'new'}>
+                  <Logo size={24} />
+                </Tool>
+                <Tool icon="plus" label="new build" onClick={openNew} />
+              </div>
+            )}
             <div className="pill flex items-center">
               <Tool icon={sim === 'stop' ? 'play' : 'square-stop'} label={sim === 'stop' ? 'start the simulation' : 'stop the simulation'} onClick={() => (sim === 'stop' ? runEdited() : setSim('stop'))} disabled={!diagram || stage} active={sim !== 'stop' && !stage} />
               <Tool icon={sim === 'pause' ? 'play' : 'pause'} label={sim === 'pause' ? 'resume' : 'pause'} onClick={() => setSim((s) => (s === 'pause' ? 'run' : 'pause'))} disabled={!diagram || sim === 'stop' || stage} />
@@ -580,13 +648,13 @@ export default function App() {
             </div>
             <div className="pill flex items-center">
               <Tool icon="flask" label="run the test" onClick={runTest} disabled={!test || build.busy} active={mode === 'test'} />
-              <Tool icon="refresh-2" label="replay how the agent built it" onClick={replay} disabled={route.kind !== 'doc' || build.busy || lib.examples.some((e) => e.id === route.id) || (!live && !!doc?.forkOf)} />
+              {!narrow && <Tool icon="refresh-2" label="replay how the agent built it" onClick={replay} disabled={route.kind !== 'doc' || build.busy || lib.examples.some((e) => e.id === route.id) || (!live && !!doc?.forkOf)} />}
               <Tool icon={sound ? 'volume-up' : 'volume'} label={sound ? 'sound on' : 'sound off'} onClick={() => setSound((s) => !s)} active={sound} />
             </div>
           </div>
           {/* the views of one gadget, the way a pcb editor has pcb, schematic and 3d: the circuit running, or built on a breadboard */}
           {diagram && (
-            <div role="tablist" aria-label="view" className="pointer-events-auto relative mx-3 grid shrink-0 grid-cols-3 rounded-[11px] bg-input p-[3px]">
+            <div role="tablist" aria-label="view" className={`pointer-events-auto grid shrink-0 grid-cols-3 rounded-[11px] bg-input p-[3px] ${narrow ? 'absolute left-1/2 top-[52px] w-max -translate-x-1/2' : 'relative mx-3'}`}>
               <span
                 aria-hidden="true"
                 className="absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-[8px] bg-frame shadow-[0_0_0_1px_rgba(0,0,0,.07),0_1px_2px_rgba(0,0,0,.06)] transition-transform duration-300 ease-out"
@@ -602,7 +670,7 @@ export default function App() {
                 const to: Mode = v === 'breadboard' ? 'build' : v === 'schematic' ? 'schematic' : 'design'
                 const on = (stage ? mode : 'design') === to
                 return (
-                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(to)} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
+                  <button key={v} role="tab" aria-selected={on} title={hint} onClick={() => setMode(to)} className={`relative z-10 flex h-[30px] items-center justify-center gap-1.5 px-3.5 text-[12.5px] max-lg:px-2.5 font-medium transition-colors ${on ? 'text-ink' : 'text-dim hover:text-ink'}`}>
                     <Icon name={icon} size={13} />
                     {label}
                   </button>
@@ -613,8 +681,9 @@ export default function App() {
           <div className="pointer-events-auto flex gap-[9px]">
             <div className="pill flex items-center">
               <Tool icon={theme === 'dark' ? 'sun' : 'moon'} label={theme === 'dark' ? 'light mode' : 'dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
+              {narrow && <Tool icon="sidebar-right" label="inspector" onClick={() => setDrawer('right')} />}
             </div>
-            <div className={`relative ${stage ? 'hidden' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`relative ${stage || narrow ? 'hidden' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <button onClick={() => setZoomMenu((o) => !o)} className="pill flex h-9 items-center gap-3 pl-3.5 pr-2.5 text-[13px] font-medium text-ink">
                 {bench && diagram ? `${Math.round(bench.zoom * 100)}%` : '100%'}
                 <Icon name="chevron-down" size={12} className="text-icon" />
@@ -641,7 +710,7 @@ export default function App() {
         </div>
 
         {float === 'parts' && (
-          <Panel title="Parts" onClose={() => setFloat(null)} className="left-2.5 top-[56px] w-[260px]" right={<span className="text-[11px] font-normal text-dim">{Object.keys(PARTS).length}</span>}>
+          <Panel title="Parts" onClose={() => setFloat(null)} className="left-2.5 top-[56px] w-[260px] max-lg:top-[100px]" right={<span className="text-[11px] font-normal text-dim">{Object.keys(PARTS).length}</span>}>
             <div className="max-h-[420px] space-y-px overflow-auto px-1.5 pb-1.5">
               {Object.keys(PARTS).map((t) => {
                 const isBoard = 'board' in PARTS[t as keyof typeof PARTS]
@@ -664,9 +733,9 @@ export default function App() {
         )}
 
         {edited && route.kind === 'doc' && (
-          <div className="pill absolute left-1/2 top-[58px] z-20 flex h-9 -translate-x-1/2 items-center gap-1 pl-3.5 pr-1 text-[12px]" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="pill absolute left-1/2 top-[58px] z-20 flex h-9 -translate-x-1/2 max-lg:top-[100px] items-center gap-1 pl-3.5 pr-1 text-[12px]" onPointerDown={(e) => e.stopPropagation()}>
             <Icon name="pen-3" size={13} className="text-icon-2" />
-            <span className="mr-1.5 text-ink">Unsaved changes</span>
+            <span className="mr-1.5 text-ink max-md:hidden">Unsaved changes</span>
             <button title="undo, cmd z" onClick={undo} disabled={!edits.past.length} className="flex h-7 w-7 items-center justify-center rounded-full text-icon hover:bg-hover disabled:opacity-30">
               <Icon name="rotate" size={14} className="-scale-x-100" />
             </button>
@@ -707,40 +776,16 @@ export default function App() {
           </div>
         )}
 
-        {toast && <div className="pill absolute left-1/2 top-[102px] z-30 -translate-x-1/2 px-4 py-2 text-[12px] font-medium text-ink">{toast}</div>}
+        {toast && <div className="pill absolute left-1/2 top-[102px] z-30 -translate-x-1/2 px-4 max-lg:top-[146px] max-lg:w-max max-lg:max-w-[calc(100vw-24px)] py-2 text-[12px] font-medium text-ink">{toast}</div>}
       </main>
 
-      <Inspector
-        mode={mode}
-        onMode={setMode}
-        guide={guide}
-        sheet={sheet}
-        diagram={diagram}
-        selected={selected}
-        bench={bench}
-        feed={build.feed}
-        verdict={build.verdict}
-        request={request}
-        test={test}
-        testRun={testRun}
-        onRunTest={runTest}
-        model={model}
-        models={models}
-        onModel={setModel}
-        forkOf={live ? undefined : doc?.forkOf}
-        wire={selectedWire && diagram ? diagram.connections.find((c) => `${c[0]}|${c[1]}` === selectedWire) : undefined}
-        onRecolorWire={(c) => selectedWire && recolorWire(selectedWire, c)}
-        onRemoveWire={() => selectedWire && removeWire(selectedWire)}
-        editable={!(build.busy && live)}
-        onRemovePart={removePart}
-        onSetAttr={setAttr}
-        code={codePanel}
-        serial={serialPanel}
-        onOpen={open}
-        canShare={route.kind === 'doc'}
-        onShare={share}
-        onDownload={() => diagram && download(`${title.toLowerCase().replace(/\W+/g, '-')}.json`, JSON.stringify({ diagram, sketch: source, test }, null, 2))}
-      />
+      {narrow ? (
+        <Drawer side="right" open={drawer === 'right'} onClose={() => setDrawer(null)}>
+          {inspector}
+        </Drawer>
+      ) : (
+        inspector
+      )}
     </div>
   )
 }
