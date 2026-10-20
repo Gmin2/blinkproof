@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Lenis from 'lenis'
 import { Logo } from '../icons/Icon'
 import { BEATS, camAt, clamp01, window01 } from './beats'
@@ -6,6 +6,7 @@ import { ANCHORS, PING_FROM, RING, benchMeshes, boardCorners, boardPoint } from 
 import { projector, type Tracked } from './wire/camera'
 import type { V3 } from './wire/vec'
 import { Wire, type WireHandle } from './wire/Wire'
+import { Early } from './Early'
 import './home.css'
 
 const MESHES = benchMeshes()
@@ -29,9 +30,9 @@ const PINGS = 4
 // how many of the ring's 16 pixels light up while it runs
 const LIT = 11
 
-type Me = { auth: boolean; user: { login: string; avatar?: string } | null; signIn: (next?: string) => void }
-
-export function Home({ me, onStart, onExample, onEditor }: { me: Me; onStart: () => void; onExample: () => void; onEditor: () => void }) {
+export function Home() {
+  const [asking, setAsking] = useState(false)
+  const ask = () => setAsking(true)
   const wire = useRef<WireHandle>(null)
   const pin = useRef<HTMLDivElement>(null)
   const hero = useRef<HTMLElement>(null)
@@ -176,21 +177,8 @@ export function Home({ me, onStart, onExample, onEditor }: { me: Me; onStart: ()
           <span>blinkproof</span>
         </a>
         <div className="nav__right">
-          <button type="button" className="nav__link" onClick={onEditor}>
-            Open the editor
-          </button>
-          {me.user ? (
-            <span className="nav__me" title={`signed in as ${me.user.login}`}>
-              {me.user.avatar && <img src={me.user.avatar} alt="" />}
-              {me.user.login}
-            </span>
-          ) : me.auth ? (
-            <button type="button" className="nav__link" onClick={() => me.signIn('/start')}>
-              Sign in
-            </button>
-          ) : null}
-          <button type="button" className="btn" onClick={onStart}>
-            Start building
+          <button type="button" className="btn" onClick={ask}>
+            Request early access
           </button>
         </div>
       </header>
@@ -247,14 +235,11 @@ export function Home({ me, onStart, onExample, onEditor }: { me: Me; onStart: ()
           ))}
 
           <div className="hero__foot">
-            <button type="button" className="btn btn--lg" onClick={onStart}>
-              Describe a gadget
+            <button type="button" className="btn btn--lg" onClick={ask}>
+              Request early access
               <svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden="true">
                 <path d="M1 4.5h8M6 1.2 9.4 4.5 6 7.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </button>
-            <button type="button" className="cue" onClick={onExample}>
-              See this one running
             </button>
           </div>
         </div>
@@ -287,14 +272,8 @@ export function Home({ me, onStart, onExample, onEditor }: { me: Me; onStart: ()
           <span>blinkproof</span>
         </a>
         <nav>
-          <button type="button" onClick={onStart}>
-            Start building
-          </button>
-          <button type="button" onClick={onExample}>
-            The parking sensor
-          </button>
-          <button type="button" onClick={onEditor}>
-            The editor
+          <button type="button" onClick={ask}>
+            Request early access
           </button>
           <a href="https://github.com/Gmin2/blinkproof" target="_blank" rel="noopener noreferrer">
             GitHub
@@ -302,6 +281,7 @@ export function Home({ me, onStart, onExample, onEditor }: { me: Me; onStart: ()
         </nav>
         <span className="foot__note">Built for neatHack 2026</span>
       </footer>
+      {asking && <Early onClose={() => setAsking(false)} />}
     </div>
   )
 }

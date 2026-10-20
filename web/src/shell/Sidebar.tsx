@@ -161,6 +161,8 @@ type Props = {
   onSelect: (id: string | null) => void;
   busy: boolean;
   onParts: () => void;
+  // set when it slides in over the canvas on a phone
+  onClose?: () => void;
 };
 
 const STATUS: Record<Saved["status"], IconName> = {
@@ -187,6 +189,7 @@ export function Sidebar({
   onSelect,
   busy,
   onParts,
+  onClose,
 }: Props) {
   const [query, setQuery] = useState("");
   const [width, setWidth] = useWidth("sidebar", 240, 200, 420);
@@ -216,20 +219,27 @@ export function Sidebar({
   const example = examples.find((e) => e.id === openId);
 
   return (
-    <aside className="relative flex shrink-0 flex-col border-r border-line bg-panel" style={{ width }}>
-      <Grip side="right" width={width} onWidth={setWidth} onReset={() => setWidth(240)} />
+    <aside className={`relative flex shrink-0 flex-col border-r border-line bg-panel ${onClose ? 'w-full' : ''}`} style={onClose ? undefined : { width }}>
+      {!onClose && <Grip side="right" width={width} onWidth={setWidth} onReset={() => setWidth(240)} />}
       <div className="flex h-[52px] shrink-0 items-center justify-between pl-[18px] pr-[10px]">
         <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-ink">
           <Logo size={22} />
           blinkproof
         </span>
-        <button
-          title="parts"
-          onClick={onParts}
-          className="pill flex h-9 w-9 items-center justify-center text-icon"
-        >
-          <Icon name="box" size={19} />
-        </button>
+        <span className="flex items-center gap-2">
+          <button
+            title="parts"
+            onClick={onParts}
+            className="pill flex h-9 w-9 items-center justify-center text-icon"
+          >
+            <Icon name="box" size={19} />
+          </button>
+          {onClose && (
+            <button title="close" onClick={onClose} className="pill flex h-9 w-9 items-center justify-center text-icon">
+              <Icon name="xmark" size={14} />
+            </button>
+          )}
+        </span>
       </div>
 
       <div className="h-1.5" />

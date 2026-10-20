@@ -47,6 +47,16 @@ export function createApp({ store, build = agentBuild, after = flush, auth = git
     res.json({ ok: true, busy })
   })
 
+  // the early access list. name, email and what they do, nothing else
+  app.post('/early', async (req, res) => {
+    const { name, email, what } = (req.body ?? {}) as Record<string, unknown>
+    const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+    const e = { name: clean(name, 120), email: clean(email, 200), what: clean(what, 1000), at: new Date().toISOString() }
+    if (!e.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return void res.status(400).send('a name and an email please')
+    await store.early(e)
+    res.json({ ok: true })
+  })
+
   app.get('/models', async (_req, res) => {
     res.json(await listModels())
   })

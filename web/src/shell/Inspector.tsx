@@ -103,6 +103,8 @@ type Props = {
   // the code and serial tabs are made by the page, they need its state
   code: React.ReactNode
   serial: React.ReactNode
+  // set when it slides in over the canvas on a phone
+  onClose?: () => void
 }
 
 export function Inspector({
@@ -124,6 +126,7 @@ export function Inspector({
   onModel,
   onShare,
   onDownload,
+  onClose,
   canShare,
   forkOf,
   onOpen,
@@ -162,9 +165,14 @@ export function Inspector({
   const peers = (pin: string) => (circuit && part ? circuit.peers(`${part.id}:${pin}`).filter((r) => !r.startsWith(`${part.id}:`)) : [])
 
   return (
-    <aside className={`relative flex shrink-0 flex-col border-l border-line bg-panel ${dragging ? '' : 'transition-[width] duration-300 ease-out'}`} style={{ width: w }}>
-      <Grip side="left" width={w} onWidth={setW} onReset={() => setW(reset)} onDrag={setDragging} />
+    <aside className={`relative flex shrink-0 flex-col border-l border-line bg-panel ${onClose ? 'w-full' : dragging ? '' : 'transition-[width] duration-300 ease-out'}`} style={onClose ? undefined : { width: w }}>
+      {!onClose && <Grip side="left" width={w} onWidth={setW} onReset={() => setW(reset)} onDrag={setDragging} />}
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-2.5">
+        {onClose && (
+          <button title="close" onClick={onClose} className="pill flex h-9 w-9 items-center justify-center text-icon">
+            <Icon name="xmark" size={14} />
+          </button>
+        )}
         <div className="flex-1" />
         {/* who builds it */}
         <ModelMenu model={model} models={models} onModel={onModel} />

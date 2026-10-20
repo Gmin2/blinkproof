@@ -36,7 +36,11 @@ export type Store = {
   mine(owner: string, limit?: number): Promise<Build[]>
   putEvents(id: string, events: unknown[]): Promise<void>
   getEvents(id: string): Promise<unknown[]>
+  // someone asking for early access, from the homepage
+  early(e: Early): Promise<void>
 }
+
+export type Early = { name: string; email: string; what: string; at: string }
 
 // short, url safe, no lookalike letters: k3x9q2mf
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
@@ -93,6 +97,9 @@ export function dynamoStore({ table = 'blinkproof-builds', bucket = 'blinkproof-
         throw e
       }
     },
+    async early(e) {
+      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: `early/${e.at}-${newId(4)}.json`, Body: JSON.stringify(e), ContentType: 'application/json' }))
+    },
   }
 }
 
@@ -100,6 +107,7 @@ export function dynamoStore({ table = 'blinkproof-builds', bucket = 'blinkproof-
 export function memoryStore(): Store {
   const builds = new Map<string, Build>()
   const events = new Map<string, unknown[]>()
+  const asks: Early[] = []
   return {
     async create(b) {
       const item: Build = { ...b, id: b.id ?? newId(), createdAt: now(), updatedAt: now() }
@@ -124,6 +132,9 @@ export function memoryStore(): Store {
     },
     async getEvents(id) {
       return events.get(id) ?? []
+    },
+    async early(e) {
+      asks.push(e)
     },
   }
 }

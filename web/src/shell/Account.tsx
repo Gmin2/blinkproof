@@ -6,7 +6,7 @@ export function Account({ me, compact = false }: { me: ReturnType<typeof useMe>;
   if (!me.loaded || !me.auth) return null
   if (!me.user)
     return (
-      <button onClick={() => me.signIn()} className="flex h-8 items-center gap-1.5 rounded-[8px] border border-line bg-panel px-2.5 text-[12px] font-medium text-ink hover:bg-hover">
+      <button onClick={() => me.signIn()} className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[8px] border border-line bg-panel px-2.5 text-[12px] font-medium text-ink hover:bg-hover">
         <Icon name="logo-github" size={14} />
         Sign in
       </button>

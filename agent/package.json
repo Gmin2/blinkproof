@@ -10,7 +10,8 @@
     "test": "vitest run",
     "serve": "tsx --env-file=../.env src/server.ts",
     "eval": "tsx --env-file=../.env evals/run.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "early": "tsx scripts/early.ts"
   },
   "devDependencies": {
     "@types/express": "5.0.3",

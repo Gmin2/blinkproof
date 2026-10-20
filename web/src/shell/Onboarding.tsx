@@ -485,12 +485,17 @@ function Path({ diagram, idea, picked, onPick, state, hand, lines, stops, sim }:
       // centred in the room that is left: with the panel open the path moves over beside it
       const r = box.current!.getBoundingClientRect()
       const b = flow.getNodesBounds(flow.getNodes())
-      const pad = { top: 80, bottom: 60, left: 60, right: picked ? (picked === 'wiring' ? 680 : picked === 'schematic' ? 620 : 440) : 60 }
+      // on a phone the panel covers the whole canvas, and a fitted path would be too small to read
+      const narrow = r.width < 768
+      const pad = narrow ? { top: 100, bottom: 90, left: 16, right: 16 } : { top: 80, bottom: 60, left: 60, right: picked ? (picked === 'wiring' ? 680 : picked === 'schematic' ? 620 : 440) : 60 }
       const w = r.width - pad.left - pad.right
       const h = r.height - pad.top - pad.bottom
       // the open request card stays at reading size, a path gets fitted
-      const zoom = Math.min(1.1, w / b.width, h / b.height)
-      flow.setViewport({ x: pad.left + (w - b.width * zoom) / 2 - b.x * zoom, y: pad.top + (h - b.height * zoom) / 2 - b.y * zoom, zoom }, { duration: document.visibilityState === 'visible' ? 500 : 0 })
+      const fit = Math.min(1.1, w / b.width, h / b.height)
+      const zoom = narrow ? Math.min(1.1, Math.max(0.5, fit)) : fit
+      // too long to fit: keep the newest end in view, the rest is a drag away
+      const x = narrow && b.width * zoom > w ? pad.left + w - (b.x + b.width) * zoom : pad.left + (w - b.width * zoom) / 2 - b.x * zoom
+      flow.setViewport({ x, y: pad.top + (h - b.height * zoom) / 2 - b.y * zoom, zoom }, { duration: document.visibilityState === 'visible' ? 500 : 0 })
     }, 40)
     return () => clearTimeout(t)
   }, [ready, nodes.length, picked === null, picked === 'wiring', picked === 'schematic', hasBoard])
@@ -1047,7 +1052,7 @@ export function Onboarding(props: Props) {
     onReset()
   }
   const top = (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-14 items-center justify-between px-5">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-14 items-center justify-between px-5 max-md:px-3">
       <button
         onClick={startOver}
         title={busy ? 'the agent is building' : 'start over'}
@@ -1056,10 +1061,11 @@ export function Onboarding(props: Props) {
         <Logo size={22} />
         blinkproof
       </button>
-      <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out ${picked === 'wiring' ? 'mr-[620px]' : picked === 'schematic' ? 'mr-[560px]' : picked ? 'mr-[380px]' : ''}`}>
+      <span className={`pointer-events-auto flex items-center gap-1.5 transition-[margin] duration-300 ease-out max-md:mr-0 ${picked === 'wiring' ? 'mr-[620px]' : picked === 'schematic' ? 'mr-[560px]' : picked ? 'mr-[380px]' : ''}`}>
         {(started || shown) && (
           <button onClick={() => onEditor(openId)} disabled={!openId} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink disabled:opacity-40">
-            Open in the editor
+            <span className="md:hidden">Editor</span>
+            <span className="max-md:hidden">Open in the editor</span>
           </button>
         )}
         <Account me={props.me} />
@@ -1276,7 +1282,7 @@ export function Onboarding(props: Props) {
             <span className="text-[12.5px] text-ink">
               Opening it in the editor in <span className="font-mono">{left}s</span>
             </span>
-            <button onClick={stay} className="flex h-8 items-center rounded-[8px] px-2.5 text-[12px] font-medium text-dim hover:bg-hover hover:text-ink">
+            <button onClick={stay} className="flex h-8 items-center rounded-[8px] px-2.5 max-md:hidden text-[12px] font-medium text-dim hover:bg-hover hover:text-ink">
               Stay here
             </button>
             <button onClick={() => target && onEditor(target)} className="flex h-8 items-center gap-1 rounded-[8px] bg-accent hover:bg-accent-hover px-3 text-[12px] font-semibold text-on-accent">
@@ -1287,11 +1293,11 @@ export function Onboarding(props: Props) {
         </div>
       )}
       {!shown && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center max-md:top-14">
           <button onClick={() => verdict?.ok && setPicked('parts')} className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full border bg-panel px-3.5 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)] ${verdict ? (verdict.ok ? 'border-ok/40' : 'border-bad/40') : 'border-line'}`}>
             {verdict ? <Status ok={verdict.ok} size={14} /> : <span className="h-2 w-2 animate-pulse rounded-full bg-accent hover:bg-accent-hover" />}
             {phase}
-            {verdict?.ok && <span className="text-dim">· now build it for real</span>}
+            {verdict?.ok && <span className="text-dim max-md:hidden">· now build it for real</span>}
           </button>
         </div>
       )}
@@ -1300,7 +1306,7 @@ export function Onboarding(props: Props) {
           <Path diagram={pathDiagram} idea={idea} picked={picked} onPick={setPicked} state={pathState} lines={liveLines} stops={stops} sim={sim} />
         </ReactFlowProvider>
       </div>
-      <aside className={`absolute bottom-0 right-0 top-0 z-30 flex flex-col border-l border-line bg-panel transition-[transform,width] duration-300 ease-out ${picked === 'wiring' ? 'w-[620px]' : picked === 'schematic' ? 'w-[560px]' : 'w-[380px]'} ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
+      <aside className={`absolute bottom-0 right-0 top-0 z-30 flex max-w-full flex-col max-md:z-50 border-l border-line bg-panel transition-[transform,width] duration-300 ease-out ${picked === 'wiring' ? 'w-[620px]' : picked === 'schematic' ? 'w-[560px]' : 'w-[380px]'} ${picked ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,.06)]' : 'translate-x-full'}`}>
         {picked && (
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-sep px-4">

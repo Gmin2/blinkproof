@@ -225,7 +225,7 @@ export function SchematicView({ state, title }: { state: SheetState; title: stri
           <Drawing sheet={sheet} state={state} zoom={z} />
         </div>
       </div>
-      <div className="pill pointer-events-none absolute bottom-3 left-3 flex h-9 items-center gap-2 px-3 text-[12px]">
+      <div className="pill pointer-events-none absolute bottom-3 left-3 flex h-9 items-center gap-2 px-3 text-[12px] max-md:hidden">
         <span className="max-w-[220px] truncate font-medium text-ink">{title}</span>
         <span className="font-mono text-[11px] text-dim">
           {parts} {parts === 1 ? 'part' : 'parts'}
